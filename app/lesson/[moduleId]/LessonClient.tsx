@@ -6,14 +6,15 @@ import QuizEngine from "@/components/quiz/quiz-engine";
 import { addUserXP } from "@/lib/progress-service";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { Loader2, AlertCircle } from "lucide-react";
+import { onAuthStateChanged } from "firebase/auth"; // Import listener auth
+import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { QuizQuestion } from "@/lib/types/course.types";
+import { LessonContent } from "@/lib/types/course.types";
 
 interface LessonData {
   title: string;
   xp: number;
-  questions: QuizQuestion[];
+  content: LessonContent[];
 }
 
 interface LessonClientProps {
@@ -27,7 +28,22 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [userId, setUserId] = useState<string | null>(null); // Simpan userID di state
 
+  // 1. Cek Auth State secara real-time
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        // Jika tidak login, jangan redirect paksa dulu, biarkan user belajar tapi nanti ingatkan saat selesai
+        console.warn("User belum login.");
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Fetch Module Data
   useEffect(() => {
     const fetchModule = async () => {
       if (!moduleId) return;
@@ -38,19 +54,31 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
         if (docSnap.exists()) {
           const data = docSnap.data();
+          let combinedContent: LessonContent[] = [];
+
+          // Support struktur baru (lessons -> interactiveContent)
+          if (data.lessons && Array.isArray(data.lessons)) {
+            data.lessons.forEach((l: any) => {
+              if (l.interactiveContent) combinedContent.push(...l.interactiveContent);
+              else if (l.quizData) combinedContent.push(...l.quizData);
+            });
+          } 
+          // Support struktur lama (questions)
+          else if (data.questions && Array.isArray(data.questions)) {
+            combinedContent = data.questions;
+          }
           
-          // Validasi apakah modul memiliki soal
-          if (data.questions && data.questions.length > 0) {
+          if (combinedContent.length > 0) {
             setLesson({
               title: data.title,
               xp: data.xpReward || 50,
-              questions: data.questions as QuizQuestion[] 
+              content: combinedContent
             });
           } else {
-            setError("Modul ini belum memiliki soal. Harap lapor ke admin.");
+            setError("Modul ini belum memiliki konten belajar. Harap lapor ke admin.");
           }
         } else {
-          setError("Modul tidak ditemukan.");
+          setError("Modul tidak ditemukan di database.");
         }
       } catch (err) {
         console.error("Error fetching lesson:", err);
@@ -63,28 +91,45 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
     fetchModule();
   }, [moduleId]);
 
+  // 3. Handle Penyelesaian
   const handleLessonComplete = async (score: number) => {
-    setIsSaving(true);
-    const user = auth.currentUser;
-    
-    if (user && lesson) {
-      // Logic XP: Jika score > 50%, dapat full XP. Jika tidak, dapat setengah.
-      const passingGrade = lesson.questions.length / 2;
-      const earnedXP = score >= passingGrade ? lesson.xp : Math.floor(lesson.xp / 2);
+    console.log("🏁 Lesson Complete! Score:", score); // Debug log
 
-      try {
-        await addUserXP(user.uid, earnedXP);
-        
-        // Delay sedikit agar user melihat indikator saving
-        setTimeout(() => {
-          router.push("/learn");
-        }, 1000);
-      } catch (err) {
-        console.error("Gagal save XP:", err);
-        router.push("/learn"); // Tetap redirect meski error save (bisa dihandle lebih baik nanti)
-      }
-    } else {
-      router.push("/");
+    // Validasi User
+    if (!userId) {
+      alert("Anda belum login! Progres tidak dapat disimpan. Silakan login terlebih dahulu.");
+      router.push("/auth/login"); // Redirect ke login jika user null
+      return;
+    }
+
+    if (!lesson) return;
+
+    setIsSaving(true);
+
+    // Hitung XP (Score >= 60% dapat Full XP, di bawah itu dapat 25%)
+    const passingScore = 60;
+    const earnedXP = score >= passingScore ? lesson.xp : Math.floor(lesson.xp / 4);
+    
+    console.log(`💰 Calculating XP: Reward=${lesson.xp}, Score=${score}%, Earned=${earnedXP}`);
+
+    try {
+      // Simpan ke Firestore
+      await addUserXP(userId, earnedXP);
+      console.log("✅ XP Saved Successfully to Firestore!");
+      
+      // Delay visual agar user melihat loading
+      setTimeout(() => {
+        // FIX: Tambahkan router.refresh() agar cache client dibersihkan 
+        // dan halaman /learn mengambil data terbaru (XP yang sudah bertambah)
+        router.refresh();
+        router.push("/learn");
+      }, 1000);
+
+    } catch (err) {
+      console.error("❌ Gagal save XP:", err);
+      alert("Terjadi kesalahan saat menyimpan XP. Pastikan koneksi internet lancar.");
+      setIsSaving(false); // Kembalikan state agar tidak stuck
+      router.push("/learn");
     }
   };
 
@@ -98,7 +143,7 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-500">
         <Loader2 className="animate-spin w-10 h-10 text-sky-500 mb-4" />
-        <p>Memuat Pelajaran...</p>
+        <p className="font-medium animate-pulse">Memuat Materi...</p>
       </div>
     );
   }
@@ -111,8 +156,8 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
         </div>
         <h2 className="text-xl font-bold text-gray-800 mb-2">Ups, Ada Masalah</h2>
         <p className="text-gray-500 mb-8 max-w-xs">{error}</p>
-        <Button onClick={() => router.push("/learn")} className="bg-sky-500 hover:bg-sky-600">
-          Kembali ke Peta Belajar
+        <Button onClick={() => router.push("/learn")} className="bg-gray-800 hover:bg-gray-900 text-white gap-2">
+          <ArrowLeft size={18} /> Kembali ke Peta Belajar
         </Button>
       </div>
     );
@@ -122,17 +167,17 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-500">
         <Loader2 className="animate-spin w-10 h-10 text-green-500 mb-4" />
-        <p>Menyimpan Progres Kamu...</p>
+        <p className="font-bold text-green-600 animate-pulse">Menyimpan Progres Kamu...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {lesson && (
         <QuizEngine 
           lessonTitle={lesson.title}
-          questions={lesson.questions}
+          content={lesson.content}
           xpReward={lesson.xp}
           onComplete={handleLessonComplete}
           onExit={handleExit}

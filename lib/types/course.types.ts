@@ -1,5 +1,6 @@
 // Tipe soal quiz yang didukung
-export type QuestionType = 'multiple-choice' | 'fill-blank' | 'drag-match' | 'listening';
+// UPDATE: Menambahkan 'arrange' agar tidak error saat seeding BIPA 2
+export type QuestionType = 'multiple-choice' | 'fill-blank' | 'drag-match' | 'listening' | 'arrange';
 
 // Struktur Data untuk Soal Quiz
 export interface QuizQuestion {
@@ -19,18 +20,34 @@ export interface QuizQuestion {
   points: number;
 }
 
+// --- Tambahan untuk BIPA 1 (Materi Bacaan/Flashcard) ---
+export interface FlashcardContent {
+  id: string;
+  type: 'flashcard';
+  front: string;
+  back: string;
+  image?: string;
+  audio?: string;
+  explanation?: string;
+}
+
+// Union Type untuk konten interaktif
+export type LessonContent = QuizQuestion | FlashcardContent;
+
 // Struktur untuk Lesson (Materi Belajar)
 export interface Lesson {
   id: string;
   title: string;
   description?: string;
   order: number; // Urutan lesson dalam module
-  type: 'video' | 'article' | 'quiz';
+  type: 'video' | 'article' | 'quiz' | 'interactive'; // 'interactive' ditambahkan untuk BIPA
   
   // Konten (tergantung tipe)
   content?: string; // Markdown/HTML content
   videoUrl?: string;
-  quizData?: QuizQuestion[]; // Jika tipe = quiz
+  
+  quizData?: QuizQuestion[]; // Legacy: Jika tipe = quiz
+  interactiveContent?: LessonContent[]; // New: Jika tipe = interactive
   
   // Estimasi waktu pengerjaan (menit)
   duration: number;
