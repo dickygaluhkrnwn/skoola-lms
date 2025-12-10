@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion"; // FIX: Import AnimatePresence
+import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Map, Star, Lock, Flame, User, School, Plus, LogOut, BookOpen, ChevronRight
+  Map, Star, Lock, Flame, User, School, Plus, LogOut, BookOpen, ChevronRight, Briefcase
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
@@ -14,14 +14,17 @@ import {
 import { StudentSidebar } from "@/components/layout/student-sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/lib/theme-context"; // Import Theme Hook
+import { cn } from "@/lib/utils";
 
 export default function StudentDashboard() {
   const router = useRouter();
+  const { theme } = useTheme(); // Ambil tema aktif
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
   // State Data Dinamis
-  const [modules, setModules] = useState<any[]>([]); // Modul dari Firestore
+  const [modules, setModules] = useState<any[]>([]); 
   const [myClasses, setMyClasses] = useState<any[]>([]);
   
   const [activeTab, setActiveTab] = useState<"map" | "classes">("map");
@@ -38,28 +41,24 @@ export default function StudentDashboard() {
       }
 
       try {
-        // 1. Fetch User
         const docRef = doc(db, "users", user.uid);
         const docSnap = await getDoc(docRef);
-        let userData: any = {}; // FIX: Tambahkan tipe 'any' agar tidak error properti
+        let userData: any = {}; 
         
         if (docSnap.exists()) {
           userData = docSnap.data();
           setUserProfile(userData);
           
-          // Fetch Kelas
           if (userData.enrolledClasses && userData.enrolledClasses.length > 0) {
             const classesPromises = userData.enrolledClasses.map(async (classId: string) => {
               const classDoc = await getDoc(doc(db, "classrooms", classId));
               return classDoc.exists() ? { id: classDoc.id, ...classDoc.data() } : null;
             });
             const classes = await Promise.all(classesPromises);
-            // FIX: Tambahkan tipe (c: any) pada filter
             setMyClasses(classes.filter((c: any) => c !== null));
           }
         }
 
-        // 2. Fetch Modules Global dari Firestore (Dibuat Admin)
         const modQ = query(collection(db, "global_modules"), orderBy("order", "asc"));
         const modSnap = await getDocs(modQ);
         
@@ -67,7 +66,6 @@ export default function StudentDashboard() {
           const fetchedModules = modSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           setModules(fetchedModules);
         } else {
-          // Fallback jika belum ada modul dari admin (Tampilkan dummy agar tidak kosong)
           setModules([
             { id: "dummy1", title: "Selamat Datang!", desc: "Modul pertama dari Admin", xpReward: 50, icon: "👋", status: "active" }
           ]);
@@ -83,7 +81,6 @@ export default function StudentDashboard() {
     setTimeout(() => initData(), 800);
   }, [router]);
 
-  // LOGIC JOIN (Sama seperti sebelumnya)
   const handleJoinClass = async (e: React.FormEvent) => {
     e.preventDefault();
     setJoining(true);
@@ -129,57 +126,83 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.push("/");
-  };
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-sky-50">Loading SKOOLA...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-background text-foreground animate-pulse">Loading SKOOLA...</div>;
 
   return (
-    <div className="flex min-h-screen bg-sky-50 font-sans text-gray-800">
+    <div className="flex min-h-screen bg-background font-sans text-foreground transition-colors duration-500">
       <StudentSidebar />
 
       <div className="flex-1 md:ml-64 relative pb-24">
         {/* HEADER */}
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-sky-100 shadow-sm px-4 py-3">
+        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-border shadow-sm px-4 py-3 transition-colors duration-300">
           <div className="max-w-2xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1 bg-yellow-100 px-3 py-1 rounded-full border border-yellow-200">
-                <Star size={16} className="text-yellow-600 fill-yellow-600" />
-                <span className="font-bold text-yellow-700 text-xs">{userProfile?.xp || 0} XP</span>
+              <div className={cn(
+                "flex items-center gap-1 px-3 py-1 rounded-full border transition-all",
+                theme === "kids" ? "bg-yellow-100 border-yellow-200 text-yellow-700" : "bg-secondary border-border text-foreground"
+              )}>
+                <Star size={16} className={cn("fill-current", theme === "kids" ? "text-yellow-600" : "text-primary")} />
+                <span className="font-bold text-xs">{userProfile?.xp || 0} XP</span>
               </div>
-              <div className="flex items-center gap-1 bg-orange-100 px-3 py-1 rounded-full border border-orange-200">
-                <Flame size={16} className="text-orange-600 fill-orange-600" />
-                <span className="font-bold text-orange-700 text-xs">{userProfile?.streak || 0}</span>
+              <div className={cn(
+                "flex items-center gap-1 px-3 py-1 rounded-full border transition-all",
+                theme === "kids" ? "bg-orange-100 border-orange-200 text-orange-700" : "bg-secondary border-border text-foreground"
+              )}>
+                <Flame size={16} className={cn("fill-current", theme === "kids" ? "text-orange-600" : "text-red-500")} />
+                <span className="font-bold text-xs">{userProfile?.streak || 0}</span>
               </div>
             </div>
-            <button onClick={() => setIsJoinModalOpen(true)} className="flex items-center gap-2 bg-sky-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-sky-700 transition-all shadow-sm">
+            <button 
+              onClick={() => setIsJoinModalOpen(true)} 
+              className={cn(
+                "flex items-center gap-2 px-4 py-1.5 text-xs font-bold transition-all shadow-sm active:scale-95",
+                theme === "kids" 
+                  ? "bg-sky-500 text-white hover:bg-sky-600 rounded-full" 
+                  : "bg-primary text-primary-foreground hover:bg-primary/90 rounded-md"
+              )}
+            >
               <Plus size={16} /> Join Kelas
             </button>
           </div>
         </header>
 
         {/* TABS */}
-        <div className="max-w-md mx-auto px-4 mt-6 mb-4">
-          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-sky-100">
-            <button onClick={() => setActiveTab("map")} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "map" ? "bg-sky-100 text-sky-700 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}>Peta Belajar</button>
-            <button onClick={() => setActiveTab("classes")} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "classes" ? "bg-sky-100 text-sky-700 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}>Kelas Saya</button>
+        <div className="max-w-md mx-auto px-4 mt-8 mb-6">
+          <div className={cn(
+            "flex p-1 shadow-sm border transition-all",
+            theme === "kids" ? "bg-white rounded-2xl border-sky-100" : "bg-secondary/50 rounded-lg border-border"
+          )}>
+            <button onClick={() => setActiveTab("map")} className={cn(
+              "flex-1 py-2.5 text-sm font-bold transition-all",
+              theme === "kids" ? "rounded-xl" : "rounded-md",
+              activeTab === "map" 
+                ? (theme === "kids" ? "bg-sky-100 text-sky-700 shadow-sm" : "bg-background text-foreground shadow-sm")
+                : "text-gray-400 hover:text-gray-600"
+            )}>Peta Belajar</button>
+            <button onClick={() => setActiveTab("classes")} className={cn(
+              "flex-1 py-2.5 text-sm font-bold transition-all",
+              theme === "kids" ? "rounded-xl" : "rounded-md",
+              activeTab === "classes" 
+                ? (theme === "kids" ? "bg-sky-100 text-sky-700 shadow-sm" : "bg-background text-foreground shadow-sm")
+                : "text-gray-400 hover:text-gray-600"
+            )}>Kelas Saya</button>
           </div>
         </div>
 
         {/* MAIN CONTENT */}
         <main className="max-w-lg mx-auto px-4 relative min-h-[50vh]">
           
-          {/* TAB 1: PETA BELAJAR (DINAMIS DARI FIRESTORE) */}
+          {/* TAB 1: PETA BELAJAR */}
           {activeTab === "map" && (
             <div className="space-y-12 py-8">
-              <div className="absolute left-1/2 top-10 bottom-10 w-2 bg-sky-200 -ml-1 rounded-full -z-10" />
+              {/* Garis Jalur (Path) */}
+              <div className={cn(
+                "absolute left-1/2 top-10 bottom-10 w-2 -ml-1 rounded-full -z-10 transition-colors",
+                theme === "kids" ? "bg-sky-200" : "bg-border"
+              )} />
               
               {modules.map((modul, index) => {
                 const isLeft = index % 2 === 0;
-                // Logic Status (Sederhana dulu: Basic terbuka, yang lain terkunci)
-                // Nanti bisa dikembangkan cek userProfile.completedModules
                 const isLocked = modul.level !== "basic" && index > 0; 
                 
                 return (
@@ -190,23 +213,49 @@ export default function StudentDashboard() {
                     transition={{ delay: index * 0.1 }}
                     className={`flex ${isLeft ? "justify-start" : "justify-end"} relative`}
                   >
-                    <div className={`absolute top-1/2 w-1/2 h-2 bg-sky-200 -z-10 ${isLeft ? "left-1/2 rounded-r-full" : "right-1/2 rounded-l-full"}`} />
+                    {/* Connector Horizontal */}
+                    <div className={cn(
+                      "absolute top-1/2 w-1/2 h-2 -z-10 transition-colors",
+                      theme === "kids" ? "bg-sky-200" : "bg-border",
+                      isLeft ? "left-1/2 rounded-r-full" : "right-1/2 rounded-l-full"
+                    )} />
+                    
                     <div className="relative group">
                       <button
                         onClick={() => router.push(`/lesson/${modul.id}`)}
-                        className={`
-                          w-24 h-24 rounded-full flex items-center justify-center shadow-[0_6px_0_rgb(0,0,0,0.2)] transition-all active:shadow-none active:translate-y-[6px] border-4 border-white bg-green-500
-                          ${isLocked ? "bg-gray-200 grayscale cursor-not-allowed" : "hover:bg-green-400"}
-                        `}
+                        className={cn(
+                          "w-24 h-24 flex items-center justify-center transition-all border-4 relative overflow-hidden",
+                          theme === "kids" 
+                            ? "rounded-full shadow-[0_6px_0_rgb(0,0,0,0.2)] active:translate-y-[6px] active:shadow-none border-white"
+                            : "rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 border-white bg-white",
+                          !isLocked 
+                            ? (theme === "kids" ? "bg-green-500 hover:bg-green-400" : "bg-white border-primary/20")
+                            : "bg-gray-200 grayscale cursor-not-allowed"
+                        )}
                       >
-                        <span className="text-4xl filter drop-shadow-md">{modul.icon}</span>
+                        {isLocked && (
+                          <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                            <Lock className="text-gray-500 opacity-50" size={32} />
+                          </div>
+                        )}
+                        <span className={cn("text-4xl filter drop-shadow-md", isLocked && "opacity-20")}>
+                          {modul.icon}
+                        </span>
                       </button>
                       
                       {/* Tooltip Dinamis */}
-                      <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 w-44 bg-white p-3 rounded-2xl shadow-xl text-center z-20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none mb-2 border border-gray-100 transform scale-90 group-hover:scale-100 duration-200">
-                        <p className="font-bold text-gray-800 text-sm">{modul.title}</p>
-                        <p className="text-[10px] text-gray-500 mb-1">{modul.desc}</p>
-                        <div className="text-[10px] bg-yellow-100 text-yellow-700 font-bold px-2 py-0.5 rounded-full inline-block">+{modul.xpReward} XP</div>
+                      <div className={cn(
+                        "absolute -bottom-16 left-1/2 -translate-x-1/2 w-48 bg-white p-3 shadow-xl text-center z-20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none mb-2 border transform scale-90 group-hover:scale-100 duration-200",
+                        theme === "kids" ? "rounded-2xl border-gray-100" : "rounded-lg border-border"
+                      )}>
+                        <p className="font-bold text-foreground text-sm">{modul.title}</p>
+                        <p className="text-[10px] text-muted-foreground mb-1.5 line-clamp-2">{modul.desc}</p>
+                        <div className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 inline-block",
+                          theme === "kids" ? "bg-yellow-100 text-yellow-700 rounded-full" : "bg-secondary text-primary rounded"
+                        )}>
+                          +{modul.xpReward} XP
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -219,11 +268,26 @@ export default function StudentDashboard() {
           {activeTab === "classes" && (
             <div className="space-y-4">
               {myClasses.length === 0 ? (
-                <div className="text-center py-10">
-                  <div className="w-20 h-20 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4 text-sky-400"><School size={40} /></div>
-                  <h3 className="font-bold text-gray-700">Belum masuk kelas apapun</h3>
-                  <p className="text-sm text-gray-500 mt-2 mb-4">Minta Kode Kelas ke gurumu untuk bergabung.</p>
-                  <Button onClick={() => setIsJoinModalOpen(true)} className="bg-sky-500 hover:bg-sky-600">Join Kelas</Button>
+                <div className={cn(
+                  "text-center py-12 px-6 border-2 border-dashed rounded-3xl",
+                  theme === "kids" ? "border-sky-200 bg-sky-50" : "border-border bg-secondary/20 rounded-xl"
+                )}>
+                  <div className={cn(
+                    "w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors",
+                    theme === "kids" ? "bg-sky-100 text-sky-400" : "bg-white text-gray-400 shadow-sm"
+                  )}>
+                    <School size={40} />
+                  </div>
+                  <h3 className="font-bold text-lg text-foreground">Belum masuk kelas</h3>
+                  <p className="text-sm text-muted-foreground mt-2 mb-6">Minta Kode Kelas ke gurumu untuk mulai belajar bersama.</p>
+                  <Button 
+                    onClick={() => setIsJoinModalOpen(true)} 
+                    className={cn(
+                      theme === "kids" ? "bg-sky-500 hover:bg-sky-600 rounded-full px-8" : "bg-primary hover:bg-primary/90"
+                    )}
+                  >
+                    Join Kelas Sekarang
+                  </Button>
                 </div>
               ) : (
                 myClasses.map((cls) => (
@@ -232,17 +296,43 @@ export default function StudentDashboard() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     onClick={() => router.push(`/classroom/${cls.id}`)}
-                    className="bg-white p-5 rounded-2xl border border-sky-100 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+                    className={cn(
+                      "bg-white p-5 border shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden",
+                      theme === "kids" ? "rounded-3xl border-sky-100" : "rounded-xl border-border"
+                    )}
                   >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="p-2 bg-sky-50 rounded-lg text-sky-600"><School size={24} /></div>
-                      <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-mono">{cls.code}</span>
+                    <div className={cn(
+                      "absolute top-0 right-0 w-24 h-24 rounded-full -mr-10 -mt-10 opacity-10 transition-colors",
+                      theme === "kids" ? "bg-sky-400" : "bg-primary"
+                    )}/>
+                    
+                    <div className="flex justify-between items-start mb-3 relative z-10">
+                      <div className={cn(
+                        "p-2.5 rounded-xl transition-colors",
+                        theme === "kids" ? "bg-sky-50 text-sky-600" : "bg-secondary text-primary"
+                      )}>
+                        <School size={24} />
+                      </div>
+                      <span className="text-[10px] bg-secondary text-muted-foreground px-2 py-1 rounded-md font-mono border border-border">
+                        {cls.code}
+                      </span>
                     </div>
-                    <h3 className="font-bold text-lg text-gray-800 group-hover:text-sky-600 transition-colors">{cls.name}</h3>
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-1">{cls.description}</p>
-                    <div className="mt-4 pt-3 border-t border-gray-50 flex justify-between items-center text-xs text-gray-400">
-                      <span>Guru: {cls.teacherName}</span>
-                      <ChevronRight size={16} />
+                    
+                    <h3 className="font-bold text-lg text-foreground group-hover:text-primary transition-colors relative z-10">
+                      {cls.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 h-8 relative z-10">
+                      {cls.description || "Tidak ada deskripsi kelas."}
+                    </p>
+                    
+                    <div className="mt-4 pt-3 border-t border-border flex justify-between items-center text-xs text-muted-foreground relative z-10">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[8px] font-bold">
+                          {cls.teacherName?.[0]}
+                        </div>
+                        <span>{cls.teacherName}</span>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-300 group-hover:text-primary transition-colors" />
                     </div>
                   </motion.div>
                 ))
@@ -258,16 +348,64 @@ export default function StudentDashboard() {
       <AnimatePresence>
         {isJoinModalOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div onClick={() => setIsJoinModalOpen(false)} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-            <motion.div className="bg-white rounded-2xl p-6 w-full max-w-sm relative z-10 shadow-2xl">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsJoinModalOpen(false)} 
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className={cn(
+                "bg-white p-6 w-full max-w-sm relative z-10 shadow-2xl",
+                theme === "kids" ? "rounded-3xl" : "rounded-xl"
+              )}
+            >
               <div className="text-center mb-6">
-                <h2 className="text-xl font-bold text-gray-900">Gabung Kelas</h2>
-                <p className="text-gray-500 text-sm">Masukkan kode unik dari gurumu.</p>
+                <div className={cn(
+                  "w-16 h-16 mx-auto mb-4 flex items-center justify-center rounded-full",
+                  theme === "kids" ? "bg-sky-100 text-sky-600" : "bg-primary/10 text-primary"
+                )}>
+                  <Plus size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-foreground">Gabung Kelas Baru</h2>
+                <p className="text-muted-foreground text-sm mt-1">Masukkan 6 digit kode unik dari gurumu.</p>
               </div>
+              
               <form onSubmit={handleJoinClass} className="space-y-4">
-                <input required placeholder="Kode (Misal: A1B2C)" className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-sky-500 text-center font-mono text-lg uppercase tracking-widest outline-none transition-all" value={classCode} onChange={e => setClassCode(e.target.value)} />
-                <Button type="submit" disabled={joining} className="w-full bg-sky-600 hover:bg-sky-700 text-white">{joining ? "Memproses..." : "Gabung Sekarang"}</Button>
-                <button type="button" onClick={() => setIsJoinModalOpen(false)} className="w-full text-sm text-gray-400 hover:text-gray-600 py-2">Batal</button>
+                <input 
+                  required 
+                  placeholder="A1B2C3" 
+                  className={cn(
+                    "w-full px-4 py-4 border-2 focus:border-primary text-center font-mono text-2xl uppercase tracking-[0.5em] outline-none transition-all placeholder:tracking-normal placeholder:text-base placeholder:text-gray-300",
+                    theme === "kids" ? "rounded-2xl border-gray-200" : "rounded-lg border-border bg-secondary/30"
+                  )}
+                  value={classCode} 
+                  maxLength={6}
+                  onChange={e => setClassCode(e.target.value)} 
+                />
+                
+                <div className="flex gap-3 pt-2">
+                  <Button 
+                    type="button" 
+                    onClick={() => setIsJoinModalOpen(false)} 
+                    className={cn(
+                      "flex-1 bg-transparent hover:bg-gray-100 text-gray-500 border-2 border-transparent",
+                      theme === "kids" ? "rounded-xl" : "rounded-lg"
+                    )}
+                  >
+                    Batal
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={joining || classCode.length < 3} 
+                    className={cn(
+                      "flex-1",
+                      theme === "kids" ? "bg-sky-600 hover:bg-sky-700 rounded-xl" : "bg-primary hover:bg-primary/90 rounded-lg"
+                    )}
+                  >
+                    {joining ? "Memproses..." : "Gabung"}
+                  </Button>
+                </div>
               </form>
             </motion.div>
           </div>

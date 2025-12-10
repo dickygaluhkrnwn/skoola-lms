@@ -2,100 +2,73 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import QuizEngine, { Question } from "@/components/quiz/quiz-engine"; // Pastikan path ini benar
-import { addUserXP } from "@/lib/progress-service"; // Import logic XP
-import { auth } from "@/lib/firebase";
-import { Loader2 } from "lucide-react";
-
-// --- MOCK DATA SOAL (Nanti bisa dipindah ke database) ---
-// Kita buat dictionary soal berdasarkan Module ID
-const lessonData: Record<string, { title: string; xp: number; questions: Question[] }> = {
-  "1": {
-    title: "Sapaan Dasar",
-    xp: 100,
-    questions: [
-      {
-        id: "q1",
-        type: "multiple-choice",
-        question: "Apa bahasa Indonesia dari 'Good Morning'?",
-        options: ["Selamat Malam", "Selamat Pagi", "Selamat Tidur", "Halo"],
-        correctAnswer: "Selamat Pagi"
-      },
-      {
-        id: "q2",
-        type: "multiple-choice",
-        question: "Manakah kata sapaan yang sopan?",
-        options: ["Woi", "Heh", "Permisi", "Minggir"],
-        correctAnswer: "Permisi"
-      },
-      {
-        id: "q3",
-        type: "multiple-choice",
-        question: "Lengkapi kalimat: '___ kabar?'",
-        options: ["Apa", "Siapa", "Kapan", "Kenapa"],
-        correctAnswer: "Apa"
-      }
-    ]
-  },
-  "2": {
-    title: "Benda Sekitar",
-    xp: 150,
-    questions: [
-      {
-        id: "q1",
-        type: "multiple-choice",
-        question: "Benda untuk duduk adalah...",
-        options: ["Meja", "Kursi", "Lemari", "Lantai"],
-        correctAnswer: "Kursi"
-      },
-      {
-        id: "q2",
-        type: "multiple-choice",
-        question: "Kita menulis menggunakan...",
-        options: ["Sendok", "Pensil", "Gelas", "Sepatu"],
-        correctAnswer: "Pensil"
-      }
-    ]
-  }
-};
+import QuizEngine, { Question } from "@/components/quiz/quiz-engine";
+import { addUserXP } from "@/lib/progress-service";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function LessonPage() {
   const router = useRouter();
   const params = useParams();
-  // Pastikan params.moduleId adalah string, jika array ambil yang pertama
-  const moduleId = Array.isArray(params?.moduleId) ? params.moduleId[0] : params?.moduleId as string;
+  const moduleId = params.moduleId as string;
   
   const [lesson, setLesson] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    // Validasi Module ID
-    if (moduleId && lessonData[moduleId]) {
-      setLesson(lessonData[moduleId]);
-    } else {
-      // Jika modul tidak ditemukan, kembalikan ke dashboard
-      // router.push("/learn");
-    }
-  }, [moduleId, router]);
+    const fetchModule = async () => {
+      if (!moduleId) return;
+
+      try {
+        const docRef = doc(db, "global_modules", moduleId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          // Cek apakah modul punya soal
+          if (data.questions && data.questions.length > 0) {
+            setLesson({
+              title: data.title,
+              xp: data.xpReward || 50,
+              questions: data.questions
+            });
+          } else {
+            setError("Modul ini belum memiliki soal. Harap lapor ke admin.");
+          }
+        } else {
+          setError("Modul tidak ditemukan.");
+        }
+      } catch (err) {
+        console.error("Error fetching lesson:", err);
+        setError("Gagal memuat pelajaran. Periksa koneksi internet.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchModule();
+  }, [moduleId]);
 
   const handleLessonComplete = async (score: number) => {
     setIsSaving(true);
     const user = auth.currentUser;
     
     if (user && lesson) {
-      // Hitung XP yang didapat (Bisa dibuat dinamis berdasarkan score)
-      // Misal: Jika benar semua dapat full XP
-      const finalXP = lesson.xp; 
+      // Logic XP: Jika score > 50%, dapat full XP. Jika tidak, dapat setengah.
+      const passingGrade = lesson.questions.length / 2;
+      const earnedXP = score >= passingGrade ? lesson.xp : Math.floor(lesson.xp / 2);
 
-      // 1. Simpan ke Database
-      await addUserXP(user.uid, finalXP);
+      await addUserXP(user.uid, earnedXP);
       
-      // 2. Redirect ke Dashboard (dengan sedikit delay agar user sadar sudah selesai)
+      // Delay sedikit agar user melihat notifikasi (bisa ditambahkan toast nanti)
       setTimeout(() => {
         router.push("/learn");
       }, 1000);
     } else {
-      // Fallback jika user reload halaman dan auth state hilang
       router.push("/");
     }
   };
@@ -106,11 +79,35 @@ export default function LessonPage() {
     }
   };
 
-  if (!lesson || isSaving) {
+  if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-500">
         <Loader2 className="animate-spin w-10 h-10 text-sky-500 mb-4" />
-        <p>{isSaving ? "Menyimpan Progres..." : "Memuat Pelajaran..."}</p>
+        <p>Memuat Pelajaran...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6 text-center">
+        <div className="w-20 h-20 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6">
+          <AlertCircle size={40} />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800 mb-2">Ups, Ada Masalah</h2>
+        <p className="text-gray-500 mb-8 max-w-xs">{error}</p>
+        <Button onClick={() => router.push("/learn")} className="bg-sky-500 hover:bg-sky-600">
+          Kembali ke Peta Belajar
+        </Button>
+      </div>
+    );
+  }
+
+  if (isSaving) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-500">
+        <Loader2 className="animate-spin w-10 h-10 text-green-500 mb-4" />
+        <p>Menyimpan Progres Kamu...</p>
       </div>
     );
   }

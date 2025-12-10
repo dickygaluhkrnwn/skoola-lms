@@ -5,14 +5,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, XCircle, ArrowRight, RefreshCcw, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import confetti from "canvas-confetti"; // Efek perayaan (perlu install nanti, tapi kode aman tanpanya)
+import confetti from "canvas-confetti";
+import { useSound } from "@/hooks/use-sound"; // Import Hook Suara
 
 // Tipe Data untuk Soal
 export type Question = {
   id: string;
-  type: "multiple-choice" | "arrange"; // Bisa dikembangkan nanti
+  type: "multiple-choice" | "arrange";
   question: string;
-  image?: string; // Opsional: untuk soal tebak gambar
+  image?: string; 
   options: string[];
   correctAnswer: string;
 };
@@ -21,11 +22,13 @@ interface QuizEngineProps {
   lessonTitle: string;
   questions: Question[];
   xpReward: number;
-  onComplete: (score: number) => void; // Callback saat selesai
+  onComplete: (score: number) => void;
   onExit: () => void;
 }
 
 export default function QuizEngine({ lessonTitle, questions, xpReward, onComplete, onExit }: QuizEngineProps) {
+  const { playSound } = useSound(); // Init Sound
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "correct" | "wrong">("idle");
@@ -42,15 +45,16 @@ export default function QuizEngine({ lessonTitle, questions, xpReward, onComplet
     if (selectedOption === currentQuestion.correctAnswer) {
       setStatus("correct");
       setScore(prev => prev + 1);
-      // Efek suara "Ting!" bisa ditambahkan di sini
+      playSound("correct"); // SOUND ON!
     } else {
       setStatus("wrong");
-      // Efek suara "Tetot!"
+      playSound("wrong"); // SOUND ON!
     }
   };
 
   // Handle Lanjut Soal
   const handleNext = () => {
+    playSound("click"); // Efek klik
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1);
       setSelectedOption(null);
@@ -62,6 +66,8 @@ export default function QuizEngine({ lessonTitle, questions, xpReward, onComplet
 
   const finishQuiz = () => {
     setIsCompleted(true);
+    playSound("levelUp"); // Suara Selesai
+    
     // Trigger Confetti jika nilai bagus
     if (score > questions.length / 2) {
       confetti({
@@ -99,7 +105,7 @@ export default function QuizEngine({ lessonTitle, questions, xpReward, onComplet
       
       {/* 1. Header & Progress Bar */}
       <div className="flex items-center gap-4 p-4 md:p-6">
-        <button onClick={onExit} className="text-gray-400 hover:text-gray-600">
+        <button onClick={onExit} className="text-gray-400 hover:text-gray-600 transition-colors">
           <XCircle size={24} />
         </button>
         <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
@@ -120,7 +126,7 @@ export default function QuizEngine({ lessonTitle, questions, xpReward, onComplet
 
         {/* Gambar Soal (Jika Ada) */}
         {currentQuestion.image && (
-           <div className="mb-6 rounded-2xl overflow-hidden border-2 border-gray-100 max-h-60 w-fit mx-auto">
+           <div className="mb-6 rounded-2xl overflow-hidden border-2 border-gray-100 max-h-60 w-fit mx-auto shadow-sm">
               <img src={currentQuestion.image} alt="Soal" className="object-cover h-full" />
            </div>
         )}
@@ -129,15 +135,13 @@ export default function QuizEngine({ lessonTitle, questions, xpReward, onComplet
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {currentQuestion.options.map((option, idx) => {
             const isSelected = selectedOption === option;
-            // Logic warna tombol saat status "correct" atau "wrong"
-            let btnColor = "border-gray-200 hover:bg-gray-50 bg-white";
+            let btnColor = "border-gray-200 hover:bg-gray-50 bg-white hover:border-gray-300";
             
             if (isSelected) {
               btnColor = "border-sky-500 bg-sky-50 text-sky-700 ring-2 ring-sky-200";
               if (status === "correct") btnColor = "border-green-500 bg-green-100 text-green-800 ring-2 ring-green-200";
               if (status === "wrong") btnColor = "border-red-500 bg-red-100 text-red-800 ring-2 ring-red-200";
             } else if (status === "wrong" && option === currentQuestion.correctAnswer) {
-               // Tunjukkan jawaban benar jika user salah
                btnColor = "border-green-500 bg-white text-green-600 border-dashed"; 
             }
 
@@ -145,7 +149,12 @@ export default function QuizEngine({ lessonTitle, questions, xpReward, onComplet
               <motion.button
                 key={idx}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => status === "idle" && setSelectedOption(option)}
+                onClick={() => {
+                   if (status === 'idle') {
+                     setSelectedOption(option);
+                     playSound("click");
+                   }
+                }}
                 disabled={status !== "idle"}
                 className={cn(
                   "p-4 rounded-xl border-2 text-left font-medium text-lg transition-all shadow-sm",
@@ -154,7 +163,6 @@ export default function QuizEngine({ lessonTitle, questions, xpReward, onComplet
               >
                 <div className="flex items-center justify-between">
                   {option}
-                  {/* Icon Feedback di Tombol */}
                   {isSelected && status === "correct" && <CheckCircle2 className="text-green-600" />}
                   {isSelected && status === "wrong" && <XCircle className="text-red-600" />}
                 </div>
@@ -164,15 +172,14 @@ export default function QuizEngine({ lessonTitle, questions, xpReward, onComplet
         </div>
       </div>
 
-      {/* 3. Footer Action (Sticky Bottom) */}
+      {/* 3. Footer Action */}
       <div className={cn(
-        "p-4 md:p-6 border-t transition-colors duration-300",
+        "p-4 md:p-6 border-t transition-colors duration-300 pb-8",
         status === "correct" ? "bg-green-100 border-green-200" : 
         status === "wrong" ? "bg-red-100 border-red-200" : "bg-white border-gray-100"
       )}>
         <div className="flex justify-between items-center max-w-2xl mx-auto">
           
-          {/* Feedback Text */}
           <div className="flex-1">
             {status === "correct" && (
               <div className="flex items-center gap-2 text-green-800 font-bold text-xl animate-in slide-in-from-bottom-2">
@@ -191,7 +198,6 @@ export default function QuizEngine({ lessonTitle, questions, xpReward, onComplet
             )}
           </div>
 
-          {/* Action Button */}
           <Button 
             size="lg" 
             className={cn(

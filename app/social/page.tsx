@@ -1,169 +1,303 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Users, Trophy, Heart, MessageCircle } from "lucide-react";
+import { Users, Trophy, Heart, MessageCircle, Crown, Medal, User } from "lucide-react";
 import { StudentSidebar } from "@/components/layout/student-sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { useTheme } from "@/lib/theme-context"; 
+import { cn } from "@/lib/utils";
+import { db, auth } from "@/lib/firebase";
+import { collection, query, orderBy, limit, getDocs, where } from "firebase/firestore";
 
-// --- MOCK DATA ---
+// Tipe Data User untuk Leaderboard
+interface LeaderboardUser {
+  uid: string;
+  displayName: string;
+  xp: number;
+  level: string;
+  photoURL?: string;
+}
+
+// Mock Feed (Sementara, karena belum ada tabel 'activities')
 const mockFeed = [
   {
     id: 1,
-    user: "Budi Santoso",
-    avatar: "👨‍🎓",
-    action: "naik ke Level 2!",
-    time: "2 jam yang lalu",
-    likes: 12,
-    comments: 2,
-    type: "levelup"
-  },
-  {
-    id: 2,
-    user: "Siti Aminah",
-    avatar: "👩‍🏫",
-    action: "menyelesaikan modul 'Keluargaku'",
-    time: "5 jam yang lalu",
-    likes: 24,
-    comments: 5,
-    type: "module_complete"
-  },
-  {
-    id: 3,
-    user: "Joko Anwar",
-    avatar: "🧑‍🎨",
-    action: "mendapat lencana 'Api Semangat' 🔥",
-    time: "1 hari yang lalu",
-    likes: 8,
+    user: "Sistem Skoola",
+    avatar: "🤖",
+    action: "menyambut semua murid baru!",
+    time: "Baru saja",
+    likes: 99,
     comments: 0,
-    type: "badge"
-  }
-];
-
-const mockLeaderboard = [
-  { id: 1, name: "Siti Aminah", xp: 2400, avatar: "👩‍🏫" },
-  { id: 2, name: "Budi Santoso", xp: 1850, avatar: "👨‍🎓" },
-  { id: 3, name: "Asep Knalpot", xp: 1200, avatar: "👨‍🔧" },
-  { id: 4, name: "Dewi Sri", xp: 900, avatar: "👩‍🌾" },
+    type: "system"
+  },
 ];
 
 export default function SocialPage() {
-  const [activeTab, setActiveTab] = useState<"feed" | "leaderboard">("feed");
+  const { theme } = useTheme();
+  const [activeTab, setActiveTab] = useState<"feed" | "leaderboard">("leaderboard"); // Default ke Leaderboard biar rame
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentUserData, setCurrentUserData] = useState<LeaderboardUser | null>(null);
+
+  // FETCH DATA
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 1. Ambil Top 10 User berdasarkan XP
+        const q = query(
+          collection(db, "users"), 
+          where("role", "==", "student"), // Hanya murid yg masuk leaderboard
+          orderBy("xp", "desc"), 
+          limit(10)
+        );
+        const querySnapshot = await getDocs(q);
+        const users: LeaderboardUser[] = [];
+        
+        querySnapshot.forEach((doc) => {
+          users.push(doc.data() as LeaderboardUser);
+        });
+        setLeaderboardData(users);
+
+        // 2. Ambil data user yang sedang login (untuk highlight posisi sendiri)
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+           const myData = users.find(u => u.uid === currentUser.uid);
+           if (myData) {
+             setCurrentUserData(myData);
+           }
+        }
+
+      } catch (error) {
+        console.error("Error fetching leaderboard:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   return (
-    <div className="flex min-h-screen bg-sky-50 font-sans text-gray-800">
+    <div className="flex min-h-screen bg-background font-sans text-foreground transition-colors duration-500">
       
-      {/* 1. SIDEBAR (Desktop) */}
       <StudentSidebar />
 
-      {/* 2. CONTENT WRAPPER */}
       <div className="flex-1 md:ml-64 relative pb-24">
         
         {/* HEADER */}
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-sky-100 shadow-sm px-4 py-3 flex justify-between items-center">
-          <h1 className="text-xl font-bold text-sky-900 flex items-center gap-2">
-            <Users className="text-sky-500" /> Komunitas
+        <header className={cn(
+          "sticky top-0 z-40 backdrop-blur-md border-b shadow-sm px-4 py-3 flex justify-between items-center transition-colors",
+          theme === "kids" 
+            ? "bg-white/80 border-sky-100" 
+            : "bg-background/80 border-border"
+        )}>
+          <h1 className={cn(
+            "text-xl font-bold flex items-center gap-2",
+            theme === "kids" ? "text-sky-900" : "text-foreground"
+          )}>
+            <Users className={cn(theme === "kids" ? "text-sky-500" : "text-primary")} /> Komunitas
           </h1>
-          <div className="w-10 h-10 bg-sky-100 rounded-full flex items-center justify-center border-2 border-white shadow-sm text-xl">
-             😎
+          <div className={cn(
+            "w-10 h-10 rounded-full flex items-center justify-center border-2 shadow-sm text-xl transition-all",
+            theme === "kids" ? "bg-sky-100 border-white" : "bg-secondary border-border"
+          )}>
+             🏆
           </div>
         </header>
 
         <div className="max-w-md mx-auto px-4 pt-6">
           
-          {/* TABS NAVIGATION */}
-          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-sky-100 mb-6">
+          {/* TABS */}
+          <div className={cn(
+            "flex p-1 shadow-sm border mb-6 transition-all",
+            theme === "kids" ? "bg-white rounded-2xl border-sky-100" : "bg-secondary/30 rounded-lg border-border"
+          )}>
+            <button
+              onClick={() => setActiveTab("leaderboard")}
+              className={cn(
+                "flex-1 py-2 text-sm font-bold transition-all",
+                theme === "kids" ? "rounded-xl" : "rounded-md",
+                activeTab === "leaderboard" 
+                  ? (theme === "kids" ? "bg-yellow-100 text-yellow-700 shadow-sm" : "bg-background text-foreground shadow-sm") 
+                  : "text-gray-400 hover:text-gray-600"
+              )}
+            >
+              Peringkat Global
+            </button>
             <button
               onClick={() => setActiveTab("feed")}
-              className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "feed" ? "bg-sky-100 text-sky-700 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+              className={cn(
+                "flex-1 py-2 text-sm font-bold transition-all",
+                theme === "kids" ? "rounded-xl" : "rounded-md",
+                activeTab === "feed" 
+                  ? (theme === "kids" ? "bg-sky-100 text-sky-700 shadow-sm" : "bg-background text-foreground shadow-sm") 
+                  : "text-gray-400 hover:text-gray-600"
+              )}
             >
               Kabar Teman
             </button>
-            <button
-              onClick={() => setActiveTab("leaderboard")}
-              className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "leaderboard" ? "bg-yellow-100 text-yellow-700 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
-            >
-              Peringkat
-            </button>
           </div>
 
-          {/* VIEW 1: FEED */}
+          {/* VIEW 1: LEADERBOARD (REAL) */}
+          {activeTab === "leaderboard" && (
+            <div className="space-y-4">
+               {/* Top 3 Podium (Visual Only for Kids Mode maybe? Or general) */}
+               {/* Untuk simplisitas fase ini, kita pakai list dulu */}
+               
+               {loading ? (
+                 <div className="text-center py-10 text-gray-400">Memuat data juara...</div>
+               ) : leaderboardData.length === 0 ? (
+                 <div className="text-center py-10 text-gray-400">Belum ada data. Jadilah yang pertama!</div>
+               ) : (
+                 <div className="space-y-3">
+                    {leaderboardData.map((user, idx) => {
+                      // Logic Styling Juara 1, 2, 3
+                      let rankStyle = "bg-white border-gray-100";
+                      let rankIcon = null;
+                      
+                      if (idx === 0) {
+                        rankStyle = theme === "kids" ? "bg-yellow-50 border-yellow-200" : "bg-yellow-500/10 border-yellow-500/30";
+                        rankIcon = <Crown size={20} className="text-yellow-500" fill="currentColor" />;
+                      } else if (idx === 1) {
+                        rankStyle = theme === "kids" ? "bg-gray-50 border-gray-200" : "bg-slate-500/10 border-slate-500/30";
+                        rankIcon = <Medal size={20} className="text-gray-400" fill="currentColor" />;
+                      } else if (idx === 2) {
+                        rankStyle = theme === "kids" ? "bg-orange-50 border-orange-200" : "bg-orange-500/10 border-orange-500/30";
+                        rankIcon = <Medal size={20} className="text-orange-500" fill="currentColor" />;
+                      } else {
+                        rankStyle = theme === "kids" ? "bg-white border-gray-100" : "bg-card border-border";
+                      }
+
+                      return (
+                        <motion.div 
+                          key={idx}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.05 }}
+                          className={cn(
+                            "flex items-center gap-4 p-4 border transition-all relative overflow-hidden",
+                            theme === "kids" ? "rounded-2xl shadow-sm" : "rounded-lg",
+                            rankStyle,
+                            // Highlight user sendiri
+                            currentUserData?.uid === user.uid && (theme === "kids" ? "ring-2 ring-sky-400" : "ring-1 ring-primary")
+                          )}
+                        >
+                          <div className={cn(
+                            "font-bold text-lg w-8 text-center",
+                            idx < 3 ? "text-yellow-600" : "text-gray-400"
+                          )}>
+                            {idx + 1}
+                          </div>
+                          
+                          <div className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center text-xl border",
+                            theme === "kids" ? "bg-white border-gray-100" : "bg-secondary border-border"
+                          )}>
+                            {user.photoURL ? (
+                               // Placeholder for real image later
+                               <span>😎</span> 
+                            ) : (
+                               // Default Avatar based on Name Initials
+                               <span className="text-sm font-bold text-gray-500">{user.displayName?.charAt(0).toUpperCase()}</span>
+                            )}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <p className={cn(
+                              "font-bold truncate",
+                              theme === "kids" ? "text-gray-800" : "text-foreground",
+                              currentUserData?.uid === user.uid && "text-primary"
+                            )}>
+                              {user.displayName} {currentUserData?.uid === user.uid && "(Saya)"}
+                            </p>
+                            <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
+                              Level {user.level || "Novice"}
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                             <span className={cn(
+                               "font-bold text-sm",
+                               theme === "kids" ? "text-sky-600" : "text-primary"
+                             )}>
+                               {user.xp} XP
+                             </span>
+                             <div className="absolute right-2 top-2">
+                                {rankIcon}
+                             </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                 </div>
+               )}
+            </div>
+          )}
+
+          {/* VIEW 2: FEED (MOCKUP UNTUK FASE LANJUT) */}
           {activeTab === "feed" && (
             <div className="space-y-4">
-              {/* Input Post */}
-              <div className="bg-white p-4 rounded-2xl shadow-sm border border-sky-50 flex gap-3 items-center">
-                 <div className="w-10 h-10 bg-gray-100 rounded-full flex-shrink-0 flex items-center justify-center">😎</div>
-                 <input placeholder="Bagikan pencapaianmu..." className="flex-1 bg-gray-50 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-sky-200 outline-none transition-all" />
+              <div className={cn(
+                "p-4 shadow-sm border flex gap-3 items-center transition-all",
+                theme === "kids" ? "bg-white rounded-2xl border-sky-50" : "bg-card rounded-xl border-border"
+              )}>
+                 <div className="w-10 h-10 bg-secondary rounded-full flex-shrink-0 flex items-center justify-center">📢</div>
+                 <input 
+                    placeholder="Apa yang kamu pelajari hari ini?" 
+                    className={cn(
+                      "flex-1 border-none px-4 py-2 text-sm outline-none transition-all placeholder:text-muted-foreground",
+                      theme === "kids" 
+                        ? "bg-gray-50 rounded-full focus:ring-2 focus:ring-sky-200" 
+                        : "bg-secondary/50 rounded-md focus:ring-1 focus:ring-primary"
+                    )} 
+                  />
               </div>
 
-              {/* Posts List */}
               {mockFeed.map((post, idx) => (
                 <motion.div 
                   key={post.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.1 }}
-                  className="bg-white p-4 rounded-2xl shadow-sm border border-sky-50"
+                  className={cn(
+                    "p-4 shadow-sm border transition-all",
+                    theme === "kids" ? "bg-white rounded-2xl border-sky-50" : "bg-card rounded-xl border-border"
+                  )}
                 >
                   <div className="flex items-start gap-3 mb-3">
-                    <div className="w-10 h-10 bg-sky-100 rounded-full flex items-center justify-center text-xl">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-xl">
                       {post.avatar}
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-gray-900">{post.user}</p>
-                      <p className="text-xs text-gray-500">{post.time}</p>
+                      <p className="text-sm font-bold text-foreground">{post.user}</p>
+                      <p className="text-xs text-muted-foreground">{post.time}</p>
                     </div>
-                    {post.type === "levelup" && <Trophy size={16} className="ml-auto text-yellow-500" />}
                   </div>
                   
-                  <p className="text-gray-700 text-sm mb-4">
-                    Baru saja <span className="font-bold text-sky-600">{post.action}</span>
+                  <p className="text-foreground text-sm mb-4">
+                    {post.action}
                   </p>
 
-                  <div className="flex items-center gap-4 border-t border-gray-100 pt-3">
+                  <div className="flex items-center gap-4 border-t border-border pt-3">
                     <button className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-pink-500 transition-colors">
                       <Heart size={16} /> {post.likes}
                     </button>
-                    <button className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-sky-500 transition-colors">
+                    <button className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-primary transition-colors">
                       <MessageCircle size={16} /> {post.comments}
                     </button>
                   </div>
                 </motion.div>
               ))}
-            </div>
-          )}
-
-          {/* VIEW 2: LEADERBOARD */}
-          {activeTab === "leaderboard" && (
-            <div className="space-y-3">
-              {mockLeaderboard.map((user, idx) => (
-                <motion.div 
-                  key={user.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.1 }}
-                  className={`flex items-center gap-4 p-4 rounded-2xl border ${idx === 0 ? "bg-yellow-50 border-yellow-200" : "bg-white border-gray-100 shadow-sm"}`}
-                >
-                  <div className={`font-bold text-lg w-6 text-center ${idx === 0 ? "text-yellow-600" : "text-gray-400"}`}>
-                    {idx + 1}
-                  </div>
-                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-xl">
-                    {user.avatar}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-bold text-gray-800">{user.name}</p>
-                    <p className="text-xs text-gray-500 font-mono">{user.xp} XP</p>
-                  </div>
-                  {idx < 3 && <Trophy size={20} className={idx === 0 ? "text-yellow-500" : idx === 1 ? "text-gray-400" : "text-orange-500"} />}
-                </motion.div>
-              ))}
+              
+              <div className="text-center py-8 text-muted-foreground text-xs">
+                 Fitur Feed lengkap akan hadir segera! 🚀
+              </div>
             </div>
           )}
 
         </div>
       </div>
 
-      {/* 3. BOTTOM NAV (Mobile) */}
       <MobileNav />
 
     </div>

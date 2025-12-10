@@ -4,39 +4,33 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Eye, EyeOff, Loader2, Mail, Lock, User, 
-  GraduationCap, Presentation, ArrowRight
+  GraduationCap, Presentation, ArrowRight, Sun, Briefcase
 } from "lucide-react";
-// UPDATE: Kita pakai import dari lib/firebase yang baru kamu buat!
 import { auth, db } from "@/lib/firebase"; 
 import { 
   createUserWithEmailAndPassword, signInWithEmailAndPassword, 
-  onAuthStateChanged, User as FirebaseUser 
+  onAuthStateChanged 
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
-import { useRouter } from "next/navigation"; // Router untuk pindah halaman
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { useTheme } from "@/lib/theme-context"; // Pakai Hook Tema
 
-// --- UTILITIES ---
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
-// --- COMPONENTS (UI) ---
+// --- COMPONENTS ---
 const InputField = ({ label, icon, type = "text", value, onChange, placeholder }: any) => {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === "password";
 
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</label>
+      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">{label}</label>
       <div className="relative group">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors">
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
           {icon}
         </div>
         <input
           type={isPassword && showPassword ? "text" : type}
-          className="w-full pl-10 pr-10 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-medium"
+          className="w-full pl-12 pr-12 py-3.5 rounded-xl bg-secondary/30 border-2 border-transparent focus:border-primary/20 focus:bg-white text-gray-900 focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all font-medium placeholder:text-gray-400"
           placeholder={placeholder}
           value={value}
           onChange={onChange}
@@ -45,7 +39,7 @@ const InputField = ({ label, icon, type = "text", value, onChange, placeholder }
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 transition-all"
           >
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
@@ -58,42 +52,40 @@ const InputField = ({ label, icon, type = "text", value, onChange, placeholder }
 // --- MAIN PAGE ---
 export default function AuthPage() {
   const router = useRouter();
+  const { theme, toggleTheme } = useTheme(); // Ambil kontrol tema
+  
   const [view, setView] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(true);
-  const [authLoading, setAuthLoading] = useState(false); // Loading khusus tombol
+  const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState("");
   const [role, setRole] = useState<"student" | "teacher" | null>(null);
 
-  // Form State
+  // Form Data
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // 1. CEK LOGIN & REDIRECT OTOMATIS
+  // Cek Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        // Jika user ada, cek role-nya di database
         try {
           const docRef = doc(db, "users", currentUser.uid);
           const docSnap = await getDoc(docRef);
-          
           if (docSnap.exists()) {
             const userData = docSnap.data();
-            // Redirect sesuai role
             if (userData.role === "teacher") {
-              router.push("/teacher"); // Nanti kita buat
+              router.push("/teacher");
             } else {
-              router.push("/learn"); // Ke Dashboard Murid
+              router.push("/learn");
             }
           }
         } catch (error) {
-          console.error("Gagal mengambil data user:", error);
+          console.error("Gagal load user:", error);
         }
       } 
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, [router]);
 
@@ -103,28 +95,22 @@ export default function AuthPage() {
     setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Tidak perlu redirect manual disini, useEffect di atas akan menangani-nya
     } catch (err: any) {
-      setError("Login gagal. Periksa email atau password Anda.");
+      setError("Login gagal. Email atau password salah.");
       setAuthLoading(false);
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!role) {
-      setError("Silakan pilih peran Anda (Murid atau Guru)!");
-      return;
-    }
+    if (!role) return setError("Pilih peran dulu ya!");
     setAuthLoading(true);
     setError("");
 
     try {
-      // 1. Buat User di Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newUser = userCredential.user;
 
-      // 2. Simpan Data Role ke Firestore
       await setDoc(doc(db, "users", newUser.uid), {
         uid: newUser.uid,
         displayName: name,
@@ -132,67 +118,117 @@ export default function AuthPage() {
         role: role,
         xp: 0,
         level: "basic",
-        streak: 1, // Bonus streak awal
-        createdAt: new Date().toISOString()
+        streak: 1,
+        createdAt: new Date().toISOString(),
+        themePreference: theme // Simpan preferensi tema user
       });
-
-      // Redirect akan ditangani oleh useEffect
     } catch (err: any) {
       setError(err.message || "Gagal mendaftar.");
       setAuthLoading(false);
     }
   };
 
-  // Tampilan Loading Awal (Full Screen)
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
-        <div className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-gray-500 font-medium animate-pulse">Menyiapkan SKOOLA...</p>
-      </div>
-    );
-  }
+  if (loading) return null; // Hilangkan flicker loading
 
   return (
-    <div className="min-h-screen flex bg-white font-sans overflow-hidden">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-background font-sans overflow-hidden transition-colors duration-500">
       
-      {/* LEFT SIDE: Visual */}
-      <div className="hidden lg:flex w-1/2 bg-red-700 relative items-center justify-center text-white p-12 overflow-hidden">
+      {/* 1. THEME TOGGLE (Floating Top Right) */}
+      <div className="fixed top-6 right-6 z-50 flex items-center bg-white/80 backdrop-blur-md p-1.5 rounded-full border border-gray-200 shadow-lg">
+        <button
+          onClick={() => toggleTheme("kids")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all",
+            theme === "kids" 
+              ? "bg-red-500 text-white shadow-md" 
+              : "text-gray-500 hover:bg-gray-100"
+          )}
+        >
+          <Sun size={14} /> Anak
+        </button>
+        <button
+          onClick={() => toggleTheme("pro")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all",
+            theme === "pro" 
+              ? "bg-sky-600 text-white shadow-md" 
+              : "text-gray-500 hover:bg-gray-100"
+          )}
+        >
+          <Briefcase size={14} /> Dewasa
+        </button>
+      </div>
+
+      {/* 2. LEFT SIDE: Visual Banner */}
+      <div className={cn(
+        "hidden lg:flex w-1/2 relative items-center justify-center text-white p-12 overflow-hidden transition-colors duration-500",
+        theme === "kids" ? "bg-red-600" : "bg-slate-900"
+      )}>
+        {/* Dynamic Pattern Opacity */}
         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/batik-rampung.png')]"></div>
-        <div className="absolute top-[-20%] left-[-20%] w-[600px] h-[600px] bg-red-600 rounded-full blur-[120px] animate-pulse"></div>
         
+        {/* Dynamic Blob Color */}
+        <div className={cn(
+          "absolute top-[-20%] left-[-20%] w-[600px] h-[600px] rounded-full blur-[120px] animate-pulse transition-colors duration-500",
+          theme === "kids" ? "bg-yellow-400" : "bg-sky-600"
+        )}></div>
+
         <div className="relative z-10 max-w-lg">
-          <div className="mb-8 inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/20 bg-white/10 backdrop-blur-sm">
-            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
-            <span className="text-xs font-medium tracking-wide uppercase">SKOOLA ID</span>
-          </div>
-          <h1 className="text-6xl font-bold mb-6 leading-tight font-heading">
-            Mulai Petualangan <span className="text-yellow-400 italic">Bahasa.</span>
-          </h1>
-          <p className="text-red-100 text-lg leading-relaxed mb-8">
-            Platform belajar sosial pertama di Indonesia. Kumpulkan XP, tantang teman, dan raih sertifikatmu.
-          </p>
+          <motion.div 
+            key={theme}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="mb-6 inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-sm">
+              <span className={cn("w-2.5 h-2.5 rounded-full animate-pulse", theme === "kids" ? "bg-yellow-400" : "bg-sky-400")}></span>
+              <span className="text-xs font-bold tracking-widest uppercase">SKOOLA {theme === 'kids' ? 'KIDS' : 'PRO'}</span>
+            </div>
+            
+            <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-tight">
+              {theme === "kids" ? (
+                <>Belajar Jadi <br/><span className="text-yellow-300 italic">Seru Banget!</span></>
+              ) : (
+                <>Master New <br/><span className="text-sky-400 italic">Skills Today.</span></>
+              )}
+            </h1>
+            
+            <p className="text-white/80 text-lg leading-relaxed max-w-md">
+              {theme === "kids" 
+                ? "Ayo kumpulkan poin, naik level, dan tantang temanmu dalam petualangan bahasa Indonesia!" 
+                : "Platform pembelajaran adaptif untuk meningkatkan kompetensi bahasa Anda secara efektif dan terstruktur."}
+            </p>
+          </motion.div>
         </div>
       </div>
 
-      {/* RIGHT SIDE: Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
-        <div className="max-w-md w-full space-y-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              {view === "login" ? "Halo, Sobat Skoola!" : "Gabung Sekarang"}
+      {/* 3. RIGHT SIDE: Form Area */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative bg-background">
+        <div className="max-w-md w-full">
+          
+          {/* Header Text */}
+          <div className="text-center mb-10">
+            <h2 className={cn("text-3xl font-bold mb-2 transition-colors", theme === 'kids' ? 'text-red-600' : 'text-slate-900')}>
+              {view === "login" 
+                ? (theme === "kids" ? "Halo, Petualang!" : "Welcome Back") 
+                : (theme === "kids" ? "Mulai Petualangan" : "Create Account")}
             </h2>
-            <p className="text-gray-500 text-sm">
-              {view === "login" ? "Lanjutkan progres belajarmu." : "Gratis dan seru selamanya."}
+            <p className="text-gray-500 font-medium">
+              {view === "login" 
+                ? "Lanjutkan progres belajarmu hari ini." 
+                : "Daftar gratis dan mulai belajar."}
             </p>
           </div>
 
-          <div className="bg-gray-100 p-1 rounded-xl flex">
+          {/* Toggle Login/Register */}
+          <div className="bg-secondary/50 p-1.5 rounded-xl flex mb-8">
             <button 
               onClick={() => { setView("login"); setError(""); }}
               className={cn(
-                "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
-                view === "login" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
+                view === "login" 
+                  ? "bg-white text-gray-900 shadow-sm" 
+                  : "text-gray-500 hover:text-gray-700 hover:bg-white/50"
               )}
             >
               Masuk
@@ -200,8 +236,10 @@ export default function AuthPage() {
             <button 
               onClick={() => { setView("register"); setError(""); }}
               className={cn(
-                "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
-                view === "register" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
+                view === "register" 
+                  ? "bg-white text-gray-900 shadow-sm" 
+                  : "text-gray-500 hover:text-gray-700 hover:bg-white/50"
               )}
             >
               Daftar
@@ -219,33 +257,41 @@ export default function AuthPage() {
               className="space-y-5"
             >
               {view === "register" && (
-                <div className="space-y-3">
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Pilih Peran</label>
+                <div className="space-y-4">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Pilih Peran</label>
                   <div className="grid grid-cols-2 gap-4">
                     <div 
                       onClick={() => setRole("student")}
                       className={cn(
-                        "cursor-pointer p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 text-center",
-                        role === "student" ? "border-red-600 bg-red-50 text-red-700 ring-2 ring-red-200" : "border-gray-200 hover:border-red-200"
+                        "cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 text-center group active:scale-95",
+                        role === "student" 
+                          ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/20" 
+                          : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
                       )}
                     >
-                      <GraduationCap size={20} />
-                      <span className="font-bold text-xs">Murid</span>
+                      <div className={cn("p-2 rounded-full", role === "student" ? "bg-primary text-white" : "bg-gray-100 text-gray-500")}>
+                        <GraduationCap size={20} />
+                      </div>
+                      <span className="font-bold text-sm">Murid</span>
                     </div>
                     <div 
                       onClick={() => setRole("teacher")}
                       className={cn(
-                        "cursor-pointer p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 text-center",
-                        role === "teacher" ? "border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-200" : "border-gray-200 hover:border-blue-200"
+                        "cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 text-center group active:scale-95",
+                        role === "teacher" 
+                          ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/20" 
+                          : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
                       )}
                     >
-                      <Presentation size={20} />
-                      <span className="font-bold text-xs">Guru</span>
+                      <div className={cn("p-2 rounded-full", role === "teacher" ? "bg-primary text-white" : "bg-gray-100 text-gray-500")}>
+                        <Presentation size={20} />
+                      </div>
+                      <span className="font-bold text-sm">Guru</span>
                     </div>
                   </div>
                   <InputField 
-                    label="Nama Panggilan" 
-                    placeholder="Budi"
+                    label="Nama Lengkap" 
+                    placeholder="Contoh: Budi Santoso"
                     icon={<User size={18} />} 
                     value={name} 
                     onChange={(e: any) => setName(e.target.value)}
@@ -254,7 +300,7 @@ export default function AuthPage() {
               )}
 
               <InputField 
-                label="Email" 
+                label="Alamat Email" 
                 type="email"
                 placeholder="nama@email.com"
                 icon={<Mail size={18} />} 
@@ -272,8 +318,8 @@ export default function AuthPage() {
               />
 
               {error && (
-                <div className="p-3 bg-red-50 text-red-600 text-xs font-medium rounded-lg flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-600" />
+                <div className="p-4 bg-red-50 text-red-600 text-sm font-bold rounded-xl flex items-start gap-3 border border-red-100 animate-in slide-in-from-top-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-600 mt-2 shrink-0" />
                   {error}
                 </div>
               )}
@@ -281,13 +327,18 @@ export default function AuthPage() {
               <button
                 type="submit"
                 disabled={authLoading}
-                className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-lg shadow-red-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                className={cn(
+                  "w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed hover:shadow-xl active:scale-[0.98]",
+                  theme === "kids" 
+                    ? "bg-red-600 hover:bg-red-700 shadow-red-500/30" 
+                    : "bg-sky-600 hover:bg-sky-700 shadow-sky-500/30"
+                )}
               >
                 {authLoading ? (
                   <Loader2 className="animate-spin w-5 h-5" />
                 ) : (
                   <>
-                    {view === "login" ? "Masuk" : "Buat Akun"} <ArrowRight size={18} />
+                    {view === "login" ? "Masuk Sekarang" : "Buat Akun Baru"} <ArrowRight size={20} />
                   </>
                 )}
               </button>

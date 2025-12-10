@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   LayoutDashboard, Users, Map, Plus, Trash2, Save, 
-  Edit, Loader2, LogOut, ShieldAlert
+  Edit, Loader2, LogOut, ShieldAlert, CheckCircle2, XCircle
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { 
@@ -12,9 +12,18 @@ import {
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { motion, AnimatePresence } from "framer-motion"; // FIX: Added AnimatePresence
+import { motion, AnimatePresence } from "framer-motion";
 
-// Tipe Data Modul Global
+// Tipe Data Soal
+interface Question {
+  id: string;
+  type: "multiple-choice";
+  question: string;
+  options: string[];
+  correctAnswer: string;
+}
+
+// Tipe Data Modul Global (Updated)
 interface GlobalModule {
   id: string;
   title: string;
@@ -23,6 +32,7 @@ interface GlobalModule {
   xpReward: number;
   icon: string;
   order: number;
+  questions: Question[]; // Array Soal
 }
 
 export default function SuperAdminPage() {
@@ -37,27 +47,35 @@ export default function SuperAdminPage() {
   // Form State (Untuk Edit/Add Modul)
   const [isEditing, setIsEditing] = useState(false);
   const [currentModule, setCurrentModule] = useState<Partial<GlobalModule>>({
-    title: "", desc: "", level: "basic", xpReward: 100, icon: "📚", order: 1
+    title: "", desc: "", level: "basic", xpReward: 100, icon: "📚", order: 1, questions: []
+  });
+
+  // State Lokal untuk Form Tambah Soal
+  const [tempQuestion, setTempQuestion] = useState<Partial<Question>>({
+    question: "",
+    options: ["", "", "", ""],
+    correctAnswer: ""
   });
 
   // 1. FETCH DATA
   useEffect(() => {
     const fetchData = async () => {
-      // Security Check Sederhana (Nanti bisa diperketat)
       const user = auth.currentUser;
       if (!user) {
-        // router.push("/"); 
-        // return; 
+        // router.push("/"); // Uncomment untuk proteksi
       }
 
       try {
-        // Fetch Modules
         const modQ = query(collection(db, "global_modules"), orderBy("order", "asc"));
         const modSnap = await getDocs(modQ);
-        const mods = modSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as GlobalModule[];
+        // FIX: Tambahkan 'as unknown' sebelum 'as GlobalModule[]' untuk bypass error TS
+        const mods = modSnap.docs.map(doc => ({ 
+          id: doc.id, 
+          questions: [], // Default empty array jika field belum ada
+          ...doc.data() 
+        })) as unknown as GlobalModule[]; 
         setModules(mods);
 
-        // Fetch Users (Hanya untuk statistik)
         const userSnap = await getDocs(collection(db, "users"));
         const usersData = userSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setUsers(usersData);
@@ -72,7 +90,46 @@ export default function SuperAdminPage() {
     fetchData();
   }, []);
 
-  // 2. CRUD MODULES
+  // 2. LOGIC SOAL (CLIENT SIDE ONLY SEBELUM SAVE)
+  const handleAddQuestion = () => {
+    if (!tempQuestion.question || !tempQuestion.correctAnswer) return alert("Soal dan Kunci Jawaban wajib diisi!");
+    if (tempQuestion.options?.some(opt => opt === "")) return alert("Semua opsi jawaban harus diisi!");
+
+    const newQ: Question = {
+      id: Date.now().toString(),
+      type: "multiple-choice",
+      question: tempQuestion.question!,
+      options: tempQuestion.options!,
+      correctAnswer: tempQuestion.correctAnswer!
+    };
+
+    setCurrentModule(prev => ({
+      ...prev,
+      questions: [...(prev.questions || []), newQ]
+    }));
+
+    // Reset Form Soal
+    setTempQuestion({
+      question: "",
+      options: ["", "", "", ""],
+      correctAnswer: ""
+    });
+  };
+
+  const handleDeleteQuestion = (qId: string) => {
+    setCurrentModule(prev => ({
+      ...prev,
+      questions: prev.questions?.filter(q => q.id !== qId)
+    }));
+  };
+
+  const updateOption = (index: number, value: string) => {
+    const newOptions = [...(tempQuestion.options || [])];
+    newOptions[index] = value;
+    setTempQuestion({ ...tempQuestion, options: newOptions });
+  };
+
+  // 3. CRUD MODULES
   const handleSaveModule = async () => {
     if (!currentModule.title) return alert("Judul wajib diisi!");
     
@@ -89,7 +146,7 @@ export default function SuperAdminPage() {
       }
       
       setIsEditing(false);
-      setCurrentModule({ title: "", desc: "", level: "basic", xpReward: 100, icon: "📚", order: modules.length + 1 });
+      setCurrentModule({ title: "", desc: "", level: "basic", xpReward: 100, icon: "📚", order: modules.length + 1, questions: [] });
       alert("Modul berhasil disimpan!");
     } catch (error) {
       console.error("Gagal simpan:", error);
@@ -183,6 +240,7 @@ export default function SuperAdminPage() {
                         <div className="flex gap-2 mt-1">
                           <span className="text-[10px] bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded border border-blue-900">XP: {mod.xpReward}</span>
                           <span className="text-[10px] bg-purple-900/50 text-purple-300 px-2 py-0.5 rounded border border-purple-900">Urutan: {mod.order}</span>
+                          <span className="text-[10px] bg-green-900/50 text-green-300 px-2 py-0.5 rounded border border-green-900">{mod.questions?.length || 0} Soal</span>
                         </div>
                       </div>
                     </div>
@@ -207,15 +265,16 @@ export default function SuperAdminPage() {
                     initial={{ x: 20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                     exit={{ x: 20, opacity: 0 }}
-                    className="bg-gray-800 p-6 rounded-2xl border border-gray-700 sticky top-8 shadow-xl"
+                    className="bg-gray-800 p-6 rounded-2xl border border-gray-700 sticky top-8 shadow-xl max-h-[90vh] overflow-y-auto"
                   >
                     <h3 className="font-bold text-xl mb-4 text-white border-b border-gray-700 pb-2">
                       {currentModule.id ? "Edit Modul" : "Modul Baru"}
                     </h3>
                     
-                    <div className="space-y-4">
+                    {/* Basic Info */}
+                    <div className="space-y-4 mb-6">
                       <div>
-                        <label className="text-xs font-bold text-gray-400 uppercase">Judul</label>
+                        <label className="text-xs font-bold text-gray-400 uppercase">Judul Modul</label>
                         <input 
                           className="admin-input" 
                           value={currentModule.title} 
@@ -278,13 +337,71 @@ export default function SuperAdminPage() {
                           </select>
                         </div>
                       </div>
+                    </div>
 
-                      <div className="flex gap-2 pt-4">
-                        <Button onClick={() => setIsEditing(false)} variant="secondary" className="flex-1 bg-gray-700 text-white border-none hover:bg-gray-600">Batal</Button>
-                        <Button onClick={handleSaveModule} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
-                          <Save size={16} className="mr-2" /> Simpan
-                        </Button>
+                    {/* Question Builder Area */}
+                    <div className="border-t border-gray-700 pt-4">
+                      <h4 className="font-bold text-white mb-3 text-sm uppercase">Manajemen Soal ({currentModule.questions?.length})</h4>
+                      
+                      {/* List Soal Existing */}
+                      <div className="space-y-2 mb-4">
+                        {currentModule.questions?.map((q, idx) => (
+                           <div key={q.id} className="bg-gray-700 p-3 rounded-lg flex justify-between items-start text-xs group">
+                              <div>
+                                <span className="font-bold text-blue-300">#{idx + 1}:</span> {q.question}
+                                <div className="text-gray-400 mt-1">Kunci: <span className="text-green-400">{q.correctAnswer}</span></div>
+                              </div>
+                              <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-400 hover:text-red-200"><Trash2 size={14}/></button>
+                           </div>
+                        ))}
                       </div>
+
+                      {/* Add New Question Form */}
+                      <div className="bg-gray-900 p-3 rounded-xl border border-gray-700 space-y-3">
+                         <div>
+                            <label className="text-[10px] text-gray-400 uppercase">Pertanyaan Baru</label>
+                            <textarea 
+                              className="admin-input text-sm h-16 resize-none" 
+                              placeholder="Tulis soal di sini..."
+                              value={tempQuestion.question}
+                              onChange={e => setTempQuestion({...tempQuestion, question: e.target.value})}
+                            />
+                         </div>
+                         <div className="grid grid-cols-2 gap-2">
+                            {tempQuestion.options?.map((opt, i) => (
+                               <input 
+                                  key={i}
+                                  className={`admin-input text-xs ${tempQuestion.correctAnswer === opt && opt !== "" ? "border-green-500 bg-green-900/20" : ""}`}
+                                  placeholder={`Opsi ${String.fromCharCode(65+i)}`}
+                                  value={opt}
+                                  onChange={e => updateOption(i, e.target.value)}
+                               />
+                            ))}
+                         </div>
+                         <div>
+                            <label className="text-[10px] text-gray-400 uppercase">Kunci Jawaban</label>
+                            <select 
+                               className="admin-input text-sm"
+                               value={tempQuestion.correctAnswer}
+                               onChange={e => setTempQuestion({...tempQuestion, correctAnswer: e.target.value})}
+                            >
+                               <option value="">Pilih Jawaban Benar</option>
+                               {tempQuestion.options?.map((opt, i) => (
+                                 opt && <option key={i} value={opt}>{opt}</option>
+                               ))}
+                            </select>
+                         </div>
+                         <Button onClick={handleAddQuestion} variant="secondary" size="sm" className="w-full bg-blue-600 text-white border-none hover:bg-blue-700">
+                            <Plus size={14} className="mr-1"/> Tambah Soal
+                         </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-6 border-t border-gray-700 mt-4">
+                      <Button onClick={() => setIsEditing(false)} variant="secondary" className="flex-1 bg-gray-700 text-white border-none hover:bg-gray-600">Batal</Button>
+                      <Button onClick={handleSaveModule} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                        <Save size={16} className="mr-2" /> Simpan Modul
+                      </Button>
                     </div>
                   </motion.div>
                 )}
