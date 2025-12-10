@@ -1,39 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* --- BASE SETTINGS --- */
+  --background: #fafafa; /* Zinc-50 for Pro base */
+  --foreground: #09090b; /* Zinc-950 */
   
-  /* DEFAULT THEME (PRO / DEWASA) - Clean & Professional */
-  --radius: 0.75rem; /* 12px - Slightly Rounded */
+  /* DEFAULT THEME (PRO / DEWASA) - Clean, Corporate, & Serious */
+  /* Radius: Kecil/Tajam untuk kesan profesional */
+  --radius: 0.5rem; /* 8px */
+  
+  /* Font: Menggunakan font default sistem yang bersih */
   --font-heading: var(--font-geist-sans);
   
-  /* Colors - Pro (Blue/Slate) */
-  --color-primary: #0284c7; /* Sky-600 */
+  /* Colors - Pro (Zinc & Indigo Accent) */
+  /* Primary: Indigo-600 (Warna kepercayaan & intelek) */
+  --color-primary: #4f46e5; 
   --color-primary-fg: #ffffff;
-  --color-secondary: #f1f5f9; /* Slate-100 */
-  --color-secondary-fg: #0f172a;
-  --color-border: #e2e8f0; /* Slate-200 */
-  --color-ring: #0ea5e9;
   
-  /* Background Patterns */
-  --bg-pattern: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230f172a' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  /* Secondary: Zinc-100 (Netral) */
+  --color-secondary: #f4f4f5; 
+  --color-secondary-fg: #18181b;
+  
+  /* Muted/Border: Zinc-200 */
+  --color-border: #e4e4e7; 
+  --color-ring: #4f46e5;
+  
+  /* Card Surface */
+  --color-card: #ffffff;
+  --color-card-fg: #09090b;
+
+  /* Background: Clean White/Gray, No Patterns */
+  --bg-pattern: none;
+  
+  /* Shadow: Soft & Diffused (Modern SaaS look) */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-button: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
 [data-theme="kids"] {
-  /* KIDS THEME - Playful & Bouncy */
-  --radius: 2rem; /* 32px - Super Rounded */
+  /* KIDS THEME - Playful, Bouncy, & Vibrant */
+  /* Radius: Besar/Bulat untuk kesan ramah & aman */
+  --radius: 1.5rem; /* 24px */
   
   /* Colors - Kids (Red/Yellow/Paper) */
   --color-primary: #dc2626; /* Red-600 */
   --color-primary-fg: #ffffff;
+  
   --color-secondary: #fef9c3; /* Yellow-100 */
   --color-secondary-fg: #854d0e; /* Yellow-800 */
-  --color-border: #fca5a5; /* Red-300 */
+  
+  --color-border: #fca5a5; /* Red-300 - Tebal */
   --color-ring: #fca5a5;
+  
+  --color-card: #ffffff;
+  --color-card-fg: #171717;
 
-  /* Background Patterns (Polka/Doodles) */
+  /* Background: Polka Dot Pattern */
   --bg-pattern: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23dc2626' fill-opacity='0.05' fill-rule='evenodd'%3E%3Ccircle cx='3' cy='3' r='3'/%3E%3Ccircle cx='13' cy='13' r='3'/%3E%3C/g%3E%3C/svg%3E");
+  --background: #fff1f2; /* Rose-50 base override */
+  
+  /* Shadow: Hard Edge (Cartoonish/Pop) */
+  --shadow-card: 4px 4px 0px 0px rgba(0,0,0,0.1);
+  --shadow-button: 0 4px 0 rgb(220,38,38); /* Efek tombol timbul */
 }
 
 @theme inline {
@@ -46,11 +74,17 @@
   --color-secondary: var(--color-secondary);
   --color-secondary-fg: var(--color-secondary-fg);
   --color-border: var(--color-border);
+  --color-card: var(--color-card);
+  --color-card-fg: var(--color-card-fg);
   
-  --radius-xl: var(--radius); /* Kita gunakan class 'rounded-xl' agar dinamis */
+  --radius-xl: var(--radius);
   
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  
+  /* Custom Utilities */
+  --shadow-card: var(--shadow-card);
+  --shadow-button: var(--shadow-button);
 }
 
 body {
@@ -60,9 +94,9 @@ body {
   transition: background-color 0.5s ease, color 0.3s ease;
 }
 
-/* Tombol transisi halus saat ganti tema */
+/* Transisi halus */
 *, *::before, *::after {
-  transition-property: border-radius, background-color, border-color, color, transform;
+  transition-property: border-radius, background-color, border-color, color, box-shadow, transform;
   transition-duration: 0.3s;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }

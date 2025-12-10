@@ -2,7 +2,7 @@
 
 import React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Map, Trophy, BookOpen, LogOut, User } from "lucide-react";
+import { Map, Trophy, User, LogOut, LayoutDashboard } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
@@ -23,13 +23,13 @@ export function MobileNav() {
       "fixed bottom-0 left-0 right-0 border-t px-6 py-2 flex justify-between items-center md:hidden z-50 pb-safe transition-colors duration-300",
       theme === "kids" 
         ? "bg-white border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]" 
-        : "bg-slate-900 border-slate-800"
+        : "bg-zinc-900 border-zinc-800" // Match Sidebar Pro Dark
     )}>
       <NavItem 
         theme={theme}
         active={pathname === "/learn"} 
         onClick={() => router.push("/learn")} 
-        icon={<Map size={24} />} 
+        icon={<LayoutDashboard size={24} />} 
         label="Belajar" 
       />
       <NavItem 
@@ -39,7 +39,6 @@ export function MobileNav() {
         icon={<Trophy size={24} />} 
         label="Sosial" 
       />
-      {/* Tambahan Menu Profil di Mobile */}
       <NavItem 
         theme={theme}
         active={pathname === "/profile"} 
@@ -51,7 +50,7 @@ export function MobileNav() {
         onClick={handleLogout} 
         className={cn(
           "flex flex-col items-center gap-1 transition-colors p-2 rounded-lg",
-          theme === "kids" ? "text-gray-400 hover:text-red-500" : "text-slate-500 hover:text-red-400"
+          theme === "kids" ? "text-gray-400 hover:text-red-500" : "text-zinc-500 hover:text-red-400"
         )}
       >
         <LogOut size={24} />
@@ -73,8 +72,8 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
         theme === "kids" && !active && "text-gray-400 hover:text-sky-400",
         
         // Pro Theme
-        theme === "pro" && active && "text-primary bg-slate-800",
-        theme === "pro" && !active && "text-slate-500 hover:text-slate-300"
+        theme === "pro" && active && "text-indigo-400 bg-zinc-800",
+        theme === "pro" && !active && "text-zinc-500 hover:text-zinc-300"
       )}
     >
       <div className={cn("transition-transform", active && theme === "kids" && "scale-110")}>
