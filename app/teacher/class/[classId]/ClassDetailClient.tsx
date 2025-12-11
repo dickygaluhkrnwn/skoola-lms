@@ -3,16 +3,22 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  ArrowLeft, Users, BookOpen, Copy, Plus, 
-  Video, FileText, Trash2, Link as LinkIcon, Loader2 
+  ArrowLeft, Users, BookOpen, LayoutDashboard, 
+  CalendarCheck, Loader2, ClipboardList
 } from "lucide-react";
-import { db } from "@/lib/firebase";
+import { db } from "../../../../lib/firebase";
 import { 
-  doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, deleteDoc, serverTimestamp, Timestamp 
+  doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, deleteDoc, serverTimestamp, Timestamp, getCountFromServer 
 } from "firebase/firestore";
-import { Button } from "@/components/ui/button";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { cn } from "../../../../lib/utils";
+
+// --- IMPORT KOMPONEN PECAHAN ---
+import DashboardView from "../../../../components/teacher/class-detail/DashboardView";
+import AttendanceView from "../../../../components/teacher/class-detail/AttendanceView";
+import StudentListView from "../../../../components/teacher/class-detail/StudentListView";
+import MaterialsView from "../../../../components/teacher/class-detail/MaterialsView";
+import AssignmentsView, { AssignmentData } from "../../../../components/teacher/class-detail/AssignmentsView";
+import UploadMaterialModal from "../../../../components/teacher/class-detail/UploadMaterialModal";
 
 // --- TIPE DATA ---
 interface ClassData {
@@ -20,14 +26,19 @@ interface ClassData {
   name: string;
   description: string;
   code: string;
-  students: string[]; // Array of UID
+  students: string[]; 
 }
 
 interface StudentData {
   uid: string;
   displayName: string;
   email: string;
+  photoURL?: string;
   xp?: number;
+  level?: number;
+  completedModules?: string[];
+  lastActiveModule?: string;
+  lastStudyTimestamp?: any;
 }
 
 interface MaterialData {
@@ -45,29 +56,34 @@ interface ClassDetailClientProps {
 export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
   const router = useRouter();
 
+  // --- STATE UTAMA ---
   const [classData, setClassData] = useState<ClassData | null>(null);
-  const [activeTab, setActiveTab] = useState<"students" | "materials">("students");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "attendance" | "students" | "materials" | "assignments">("dashboard");
   const [loading, setLoading] = useState(true);
 
-  // Data Real dari Firebase
+  // Data Real
   const [materials, setMaterials] = useState<MaterialData[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentData[]>([]);
   const [students, setStudents] = useState<StudentData[]>([]);
+  const [totalModules, setTotalModules] = useState(0); 
 
-  // State Modal Upload
+  // Modal State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  
-  // Form State
-  const [matTitle, setMatTitle] = useState("");
-  const [matType, setMatType] = useState<"video" | "text">("video");
-  const [matContent, setMatContent] = useState(""); 
+  const [initialModalTab, setInitialModalTab] = useState<"material" | "assignment">("material");
 
-  // 1. FETCH DATA KELAS & STUDENTS
+  // --- 1. FETCH DATA (INIT) ---
   useEffect(() => {
     if (!classId) return;
 
-    const fetchClassInfo = async () => {
+    const initData = async () => {
       try {
+        // A. Hitung Total Modul Global (untuk progress bar)
+        const coll = collection(db, "global_modules");
+        const snapshot = await getCountFromServer(coll);
+        setTotalModules(snapshot.data().count || 10);
+
+        // B. Fetch Data Kelas
         const docRef = doc(db, "classrooms", classId);
         const docSnap = await getDoc(docRef);
         
@@ -75,11 +91,25 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
           const data = docSnap.data();
           setClassData({ id: docSnap.id, ...data } as ClassData);
           
-          // Fetch Students Data
+          // C. Fetch Detail Murid
           if (data.students && data.students.length > 0) {
             const studentPromises = data.students.map(async (uid: string) => {
                const userSnap = await getDoc(doc(db, "users", uid));
-               return userSnap.exists() ? { uid: userSnap.id, ...userSnap.data() } : null;
+               if (userSnap.exists()) {
+                 const uData = userSnap.data();
+                 return { 
+                   uid: userSnap.id, 
+                   displayName: uData.displayName,
+                   email: uData.email,
+                   photoURL: uData.photoURL,
+                   xp: uData.xp ?? uData.gamification?.xp ?? 0,
+                   level: uData.level ?? uData.gamification?.level ?? 1,
+                   completedModules: uData.completedModules || [],
+                   lastActiveModule: uData.lastActiveModule,
+                   lastStudyTimestamp: uData.lastStudyTimestamp
+                 } as StudentData;
+               }
+               return null;
             });
             const studentsData = await Promise.all(studentPromises);
             setStudents(studentsData.filter((s): s is StudentData => s !== null));
@@ -89,295 +119,266 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
           router.push("/teacher");
         }
       } catch (error) {
-        console.error("Error fetch class:", error);
+        console.error("Error init data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchClassInfo();
+    initData();
 
-    // Real-time Listener untuk Materi
+    // D. Real-time Listener: MATERI
     const materialsRef = collection(db, "classrooms", classId, "materials");
-    const q = query(materialsRef, orderBy("createdAt", "desc"));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const qMat = query(materialsRef, orderBy("createdAt", "desc"));
+    const unsubMat = onSnapshot(qMat, (snapshot) => {
       const mats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as MaterialData[];
       setMaterials(mats);
     });
 
-    return () => unsubscribe();
+    // E. Real-time Listener: TUGAS (Assignments)
+    const assignmentsRef = collection(db, "classrooms", classId, "assignments");
+    const qAss = query(assignmentsRef, orderBy("createdAt", "desc"));
+    const unsubAss = onSnapshot(qAss, (snapshot) => {
+      const asses = snapshot.docs.map(doc => ({ id: doc.id, status: "active", ...doc.data() })) as AssignmentData[];
+      setAssignments(asses);
+    });
+
+    return () => {
+      unsubMat();
+      unsubAss();
+    };
   }, [classId, router]);
 
-  // 2. FUNGSI UPLOAD MATERI
-  const handleAddMaterial = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // --- 2. ACTIONS / HANDLERS ---
+  
+  // Create Content (Materi atau Tugas)
+  const handleCreateContent = async (data: any) => {
     setIsUploading(true);
-
     try {
-      await addDoc(collection(db, "classrooms", classId, "materials"), {
-        title: matTitle,
-        type: matType,
-        content: matContent,
+      // Tentukan koleksi tujuan berdasarkan kategori
+      const collectionName = data.category === "assignment" ? "assignments" : "materials";
+      
+      // Hapus field 'category' sebelum simpan ke DB agar bersih
+      const { category, ...payload } = data;
+
+      // 1. SIMPAN KE FIRESTORE & TANGKAP REF DOKUMEN
+      const docRef = await addDoc(collection(db, "classrooms", classId, collectionName), {
+        ...payload,
         createdAt: serverTimestamp(),
       });
-
+      
       setIsUploadModalOpen(false);
-      setMatTitle("");
-      setMatContent("");
-      alert("Materi berhasil ditambahkan!");
+      
+      // 2. LOGIKA REDIRECT
+      if (category === "assignment") {
+        // Redirect ke halaman Assignment Builder untuk input soal
+        router.push(`/teacher/class/${classId}/assignment/${docRef.id}`);
+      } else {
+        alert("Materi berhasil ditambahkan!");
+      }
+
     } catch (error) {
-      console.error("Gagal upload:", error);
-      alert("Gagal menambahkan materi.");
+      console.error("Gagal buat konten:", error);
+      alert("Terjadi kesalahan.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  // 3. HAPUS MATERI
+  // Hapus Materi
   const handleDeleteMaterial = async (materialId: string) => {
-    if (confirm("Hapus materi ini secara permanen?")) {
+    if (confirm("Hapus materi ini?")) {
       await deleteDoc(doc(db, "classrooms", classId, "materials", materialId));
     }
   };
 
-  const copyCode = () => {
+  // Hapus Tugas
+  const handleDeleteAssignment = async (assignmentId: string) => {
+    if (confirm("Hapus tugas ini? Semua pengumpulan siswa akan hilang.")) {
+      await deleteDoc(doc(db, "classrooms", classId, "assignments", assignmentId));
+    }
+  };
+
+  // Salin Kode Kelas
+  const handleCopyCode = () => {
     if (classData?.code) {
         navigator.clipboard.writeText(classData.code);
         alert("Kode kelas disalin!");
     }
   };
 
+  // Hapus Murid (Placeholder)
+  const handleDeleteStudent = (studentId: string) => {
+    if(confirm("Keluarkan murid ini dari kelas?")) {
+      alert("Fitur segera aktif!");
+    }
+  };
+
+  // Helper Stats
+  const averageXP = students.length > 0 
+    ? Math.round(students.reduce((acc, curr) => acc + (curr.xp || 0), 0) / students.length)
+    : 0;
+
+  // --- RENDER UTAMA ---
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-blue-50 text-blue-600">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 text-blue-600">
         <Loader2 className="animate-spin w-8 h-8 mr-2"/> 
         <span>Memuat Kelas...</span>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8">
+    <div className="flex min-h-screen bg-slate-50 font-sans">
       
-      {/* HEADER NAV */}
-      <div className="max-w-4xl mx-auto mb-8">
-        <button 
-          onClick={() => router.push("/teacher")} 
-          className="flex items-center gap-2 text-slate-500 hover:text-blue-600 mb-4 transition-colors font-medium"
-        >
-          <ArrowLeft size={18} /> Kembali ke Dashboard
-        </button>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{classData?.name}</h1>
-            <p className="text-slate-500">{classData?.description}</p>
-          </div>
-          <div className="flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors" onClick={copyCode}>
-            <div className="text-right">
-              <p className="text-[10px] uppercase text-blue-400 font-bold tracking-wider">Kode Kelas</p>
-              <p className="text-xl font-mono font-bold text-blue-700">{classData?.code}</p>
-            </div>
-            <Copy size={18} className="text-blue-600"/>
+      {/* 1. SIDEBAR NAVIGATION */}
+      <aside className="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col sticky top-0 h-screen">
+        <div className="p-6 border-b border-slate-100">
+          <div className="flex items-center gap-2 text-blue-600 font-bold text-xl">
+             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                <LayoutDashboard size={18} />
+             </div>
+             Guru<span className="text-slate-900">App</span>
           </div>
         </div>
-      </div>
+        
+        <nav className="flex-1 p-4 space-y-1">
+          <SidebarItem 
+            active={activeTab === "dashboard"} 
+            onClick={() => setActiveTab("dashboard")} 
+            icon={<LayoutDashboard size={20} />} 
+            label="Dashboard Kelas" 
+          />
+          <SidebarItem 
+            active={activeTab === "attendance"} 
+            onClick={() => setActiveTab("attendance")} 
+            icon={<CalendarCheck size={20} />} 
+            label="Presensi" 
+          />
+          <SidebarItem 
+            active={activeTab === "students"} 
+            onClick={() => setActiveTab("students")} 
+            icon={<Users size={20} />} 
+            label="Daftar Murid" 
+          />
+          <div className="pt-4 pb-2 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
+            Akademik
+          </div>
+          <SidebarItem 
+            active={activeTab === "materials"} 
+            onClick={() => setActiveTab("materials")} 
+            icon={<BookOpen size={20} />} 
+            label="Materi Belajar" 
+          />
+          <SidebarItem 
+            active={activeTab === "assignments"} 
+            onClick={() => setActiveTab("assignments")} 
+            icon={<ClipboardList size={20} />} 
+            label="Tugas & Ujian" 
+          />
+        </nav>
 
-      {/* TABS & CONTENT */}
-      <div className="max-w-4xl mx-auto">
-        <div className="flex gap-1 bg-white p-1 rounded-xl shadow-sm border border-slate-200 mb-6 w-fit">
+        <div className="p-4 border-t border-slate-100">
           <button 
-            onClick={() => setActiveTab("students")}
-            className={cn(
-                "px-6 py-2 rounded-lg text-sm font-bold transition-all",
-                activeTab === "students" ? "bg-blue-100 text-blue-700" : "text-slate-500 hover:bg-slate-50"
-            )}
+             onClick={() => router.push("/teacher")}
+             className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors px-4 py-2 text-sm font-medium w-full"
           >
-            Daftar Murid
-          </button>
-          <button 
-            onClick={() => setActiveTab("materials")}
-            className={cn(
-                "px-6 py-2 rounded-lg text-sm font-bold transition-all",
-                activeTab === "materials" ? "bg-blue-100 text-blue-700" : "text-slate-500 hover:bg-slate-50"
-            )}
-          >
-            Materi Belajar
+            <ArrowLeft size={18} /> Keluar Kelas
           </button>
         </div>
+      </aside>
 
-        {/* TAB: DAFTAR MURID */}
+      {/* 2. MAIN CONTENT AREA */}
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+        
+        {/* Mobile Header */}
+        <div className="md:hidden mb-6 flex items-center justify-between">
+           <button onClick={() => router.push("/teacher")}><ArrowLeft /></button>
+           <span className="font-bold">{classData?.name}</span>
+           <div />
+        </div>
+
+        {/* --- DYNAMIC VIEW SWITCHER --- */}
+        
+        {activeTab === "dashboard" && (
+          <DashboardView 
+            classData={classData}
+            students={students}
+            materials={materials}
+            averageXP={averageXP}
+            onCopyCode={handleCopyCode}
+            onChangeTab={(tab: any) => setActiveTab(tab)}
+          />
+        )}
+
+        {activeTab === "attendance" && (
+          <AttendanceView students={students} />
+        )}
+
         {activeTab === "students" && (
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-            {students.length === 0 ? (
-              <div className="text-center py-12 px-4">
-                <Users size={48} className="mx-auto text-slate-300 mb-3" />
-                <p className="text-slate-500 font-medium">Belum ada murid yang bergabung.</p>
-                <p className="text-sm text-slate-400">Bagikan kode <span className="font-mono font-bold text-slate-600">{classData?.code}</span> kepada murid Anda.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 border-b border-slate-100">
-                    <tr>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Nama Murid</th>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Email</th>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Progress</th>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {students.map((student) => (
-                      <tr key={student.uid} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 font-bold text-slate-700">{student.displayName}</td>
-                        <td className="px-6 py-4 text-slate-500 text-sm">{student.email}</td>
-                        <td className="px-6 py-4">
-                          <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold">
-                            {student.xp || 0} XP
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button className="text-slate-400 hover:text-red-500 transition-colors" title="Keluarkan Murid">
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <StudentListView 
+            students={students}
+            totalModules={totalModules}
+            onDeleteStudent={handleDeleteStudent}
+          />
         )}
 
-        {/* TAB: MATERI BELAJAR */}
         {activeTab === "materials" && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="font-bold text-slate-700">Daftar Materi</h3>
-              <Button onClick={() => setIsUploadModalOpen(true)} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
-                <Plus size={16} /> Tambah Materi
-              </Button>
-            </div>
-
-            {materials.length === 0 ? (
-                <div className="text-center py-10 border-2 border-dashed border-slate-200 rounded-xl">
-                    <p className="text-slate-400 text-sm">Belum ada materi yang diupload.</p>
-                </div>
-            ) : (
-                <div className="grid gap-3">
-                {materials.map((item) => (
-                    <motion.div 
-                    key={item.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between hover:shadow-md transition-all"
-                    >
-                    <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${item.type === "video" ? "bg-red-50 text-red-500" : "bg-blue-50 text-blue-500"}`}>
-                        {item.type === "video" ? <Video size={20} /> : <FileText size={20} />}
-                        </div>
-                        <div>
-                        <p className="font-bold text-slate-800">{item.title}</p>
-                        <p className="text-xs text-slate-400">
-                            {item.type === 'video' ? 'Video YouTube' : 'Teks Bacaan'} • {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : 'Baru saja'}
-                        </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => window.open(item.content, "_blank")} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">
-                            <LinkIcon size={18} />
-                        </button>
-                        <button onClick={() => handleDeleteMaterial(item.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                            <Trash2 size={18} />
-                        </button>
-                    </div>
-                    </motion.div>
-                ))}
-                </div>
-            )}
-          </div>
+          <MaterialsView 
+            materials={materials}
+            onOpenUploadModal={() => {
+              setInitialModalTab("material");
+              setIsUploadModalOpen(true);
+            }}
+            onDeleteMaterial={handleDeleteMaterial}
+          />
         )}
 
-      </div>
-
-      {/* MODAL UPLOAD MATERI */}
-      <AnimatePresence>
-        {isUploadModalOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setIsUploadModalOpen(false)}
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
-            />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-md relative z-10 shadow-2xl"
-            >
-              <h2 className="text-xl font-bold mb-4 text-slate-900">Tambah Materi Baru</h2>
-              <form onSubmit={handleAddMaterial} className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-slate-700 block mb-1">Judul Materi</label>
-                  <input 
-                    required 
-                    placeholder="Contoh: Video Pengenalan Pantun" 
-                    className="w-full px-4 py-2 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                    value={matTitle}
-                    onChange={e => setMatTitle(e.target.value)}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                    <div 
-                        onClick={() => setMatType("video")}
-                        className={`cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${matType === "video" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500"}`}
-                    >
-                        <Video size={20} />
-                        <span className="text-xs font-bold">Video YouTube</span>
-                    </div>
-                    <div 
-                        onClick={() => setMatType("text")}
-                        className={`cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${matType === "text" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500"}`}
-                    >
-                        <FileText size={20} />
-                        <span className="text-xs font-bold">Artikel / Teks</span>
-                    </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-slate-700 block mb-1">
-                    {matType === "video" ? "Link YouTube" : "Isi Materi / Link Dokumen"}
-                  </label>
-                  {matType === "video" ? (
-                      <input 
-                        required 
-                        placeholder="https://www.youtube.com/watch?v=..." 
-                        className="w-full px-4 py-2 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                        value={matContent}
-                        onChange={e => setMatContent(e.target.value)}
-                      />
-                  ) : (
-                      <textarea 
-                        required 
-                        placeholder="Tulis materi di sini..." 
-                        className="w-full px-4 py-2 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all min-h-[100px]"
-                        value={matContent}
-                        onChange={e => setMatContent(e.target.value)}
-                      />
-                  )}
-                </div>
-                
-                <div className="flex gap-3 pt-2">
-                  <Button type="button" variant="ghost" onClick={() => setIsUploadModalOpen(false)} className="flex-1">Batal</Button>
-                  <Button type="submit" disabled={isUploading} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
-                    {isUploading ? "Menyimpan..." : "Simpan Materi"}
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
+        {activeTab === "assignments" && (
+          <AssignmentsView 
+             assignments={assignments}
+             onOpenCreateModal={() => {
+                setInitialModalTab("assignment");
+                setIsUploadModalOpen(true);
+             }}
+             onDeleteAssignment={handleDeleteAssignment}
+             onViewDetail={(assignmentId) => {
+                router.push(`/teacher/class/${classId}/assignment/${assignmentId}`);
+             }}
+             // TAMBAHAN LOGIKA REDIRECT KE HALAMAN GRADING
+             onGradeAssignment={(assignmentId) => {
+                router.push(`/teacher/class/${classId}/assignment/${assignmentId}/grade`);
+             }}
+          />
         )}
-      </AnimatePresence>
+
+      </main>
+
+      {/* --- MODAL KOMPONEN --- */}
+      <UploadMaterialModal 
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUpload={handleCreateContent}
+        isUploading={isUploading}
+        initialTab={initialModalTab}
+      />
 
     </div>
+  );
+}
+
+// Sub-Component Kecil untuk Sidebar Item
+function SidebarItem({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all",
+        active 
+          ? "bg-blue-50 text-blue-700 font-bold shadow-sm" 
+          : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+      )}
+    >
+      {icon} {label}
+    </button>
   );
 }

@@ -3,99 +3,165 @@
 import React, { useState, useEffect } from "react";
 import { School, Layout, Map as MapIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "../../lib/firebase";
 import { 
-  doc, getDoc, updateDoc, arrayUnion, collection, query, where, getDocs, increment, orderBy 
+  doc, getDoc, updateDoc, arrayUnion, collection, query, where, getDocs, increment, orderBy, onSnapshot 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
-// --- IMPORTS: NEW COMPONENTS ---
-import { StudentSidebar } from "@/components/layout/student-sidebar";
-import { MobileNav } from "@/components/layout/mobile-nav";
-import { LearnHeader } from "@/components/learn/learn-header";
-import { AdventureMap } from "@/components/learn/adventure-map"; // Kids View
-import { ModuleList } from "@/components/learn/module-list";     // Pro View
-import { ClassList } from "@/components/learn/class-list";
-import { JoinClassModal } from "@/components/learn/join-class-modal";
+// --- IMPORTS: COMPONENTS (Relative Paths) ---
+import { StudentSidebar } from "../../components/layout/student-sidebar";
+import { MobileNav } from "../../components/layout/mobile-nav";
+import { LearnHeader } from "../../components/learn/learn-header";
+import { AdventureMap } from "../../components/learn/adventure-map"; // Kids View
+import { ModuleList } from "../../components/learn/module-list";     // Pro View
+import { ClassList } from "../../components/learn/class-list";
+import { JoinClassModal } from "../../components/learn/join-class-modal";
 
-import { useTheme } from "@/lib/theme-context";
-import { cn } from "@/lib/utils";
-import { UserProfile } from "@/lib/types/user.types";
-import { CourseModule } from "@/lib/types/course.types";
+import { useTheme } from "../../lib/theme-context";
+import { cn } from "../../lib/utils";
+import { UserProfile } from "../../lib/types/user.types";
+import { CourseModule } from "../../lib/types/course.types";
+
+// Extended interface untuk menangani completedModules secara lokal
+interface ExtendedUserProfile extends UserProfile {
+  completedModules?: string[]; // Array of Module IDs
+}
 
 export default function LearnClient() {
   const router = useRouter();
   const { theme } = useTheme(); 
   
   // --- STATE MANAGEMENT ---
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<ExtendedUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Raw modules dari DB
+  const [rawModules, setRawModules] = useState<CourseModule[]>([]);
+  // Processed modules (setelah dihitung locking logic-nya)
   const [modules, setModules] = useState<CourseModule[]>([]); 
-  const [myClasses, setMyClasses] = useState<any[]>([]); // TODO: Define Class Type
+  
+  const [myClasses, setMyClasses] = useState<any[]>([]);
   
   const [activeTab, setActiveTab] = useState<"map" | "classes">("map");
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joining, setJoining] = useState(false);
 
-  // --- DATA FETCHING ---
+  // --- 1. INITIAL FETCH (Modules & Auth) ---
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    // A. Fetch Global Modules Sekali Saja (Static Content)
+    const fetchModules = async () => {
+      try {
+        const modQ = query(collection(db, "global_modules"), orderBy("order", "asc"));
+        const modSnap = await getDocs(modQ);
+        
+        if (!modSnap.empty) {
+          const fetched = modSnap.docs.map(d => ({ id: d.id, ...d.data() })) as unknown as CourseModule[];
+          setRawModules(fetched);
+        } else {
+          // Fallback jika DB kosong
+          setRawModules([
+            { 
+              id: "dummy1", 
+              title: "Selamat Datang!", 
+              description: "Menunggu konten dari admin...", 
+              level: 1, 
+              order: 1, 
+              xpReward: 50, 
+              lessons: [] 
+            } as any
+          ]);
+        }
+      } catch (err) {
+        console.error("Gagal load modules:", err);
+      }
+    };
+    fetchModules();
+
+    // B. Listener Auth & User Data Real-time
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user) {
         router.push("/");
         return;
       }
 
-      try {
-        // 1. Fetch User Data
-        const docRef = doc(db, "users", user.uid);
-        const docSnap = await getDoc(docRef);
-        
+      // Listener User Profile (Real-time updates untuk XP/Level/Completed)
+      const unsubUser = onSnapshot(doc(db, "users", user.uid), async (docSnap) => {
         if (docSnap.exists()) {
-          const userData = docSnap.data() as UserProfile;
-          setUserProfile(userData);
+          const userData = docSnap.data() as ExtendedUserProfile;
           
-          // 2. Fetch Classes
+          // Normalisasi Data (Handle root vs nested gamification)
+          const normalizedUser = {
+            ...userData,
+            gamification: {
+              xp: userData.gamification?.xp ?? (userData as any).xp ?? 0,
+              level: userData.gamification?.level ?? (userData as any).level ?? 1,
+              currentStreak: userData.gamification?.currentStreak ?? (userData as any).streak ?? 0,
+              // ... copy properties lain jika perlu
+            }
+          } as ExtendedUserProfile;
+
+          setUserProfile(normalizedUser);
+
+          // Fetch Classes (Jika enrolledClasses berubah)
           const enrolled = (userData as any).enrolledClasses || [];
           if (enrolled.length > 0) {
-            const classesPromises = enrolled.map(async (classId: string) => {
-              const classDoc = await getDoc(doc(db, "classrooms", classId));
-              return classDoc.exists() ? { id: classDoc.id, ...classDoc.data() } : null;
-            });
-            const classes = await Promise.all(classesPromises);
-            setMyClasses(classes.filter((c: any) => c !== null));
+            try {
+              const classesPromises = enrolled.map(async (classId: string) => {
+                const classDoc = await getDoc(doc(db, "classrooms", classId));
+                return classDoc.exists() ? { id: classDoc.id, ...classDoc.data() } : null;
+              });
+              const classes = await Promise.all(classesPromises);
+              setMyClasses(classes.filter((c: any) => c !== null));
+            } catch (e) {
+              console.error("Error fetching classes:", e);
+            }
           }
         }
-
-        // 3. Fetch Modules
-        const modQ = query(collection(db, "global_modules"), orderBy("order", "asc"));
-        const modSnap = await getDocs(modQ);
-        
-        if (!modSnap.empty) {
-          const fetchedModules = modSnap.docs.map(d => ({ id: d.id, ...d.data() })) as unknown as CourseModule[];
-          setModules(fetchedModules);
-        } else {
-          // Fallback Dummy Data
-          setModules([
-            { 
-              id: "dummy1", 
-              title: "Selamat Datang!", 
-              description: "Modul pertama dari Admin", 
-              level: 1,
-              order: 1,
-              xpReward: 50,
-              lessons: [] 
-            } as any
-          ]);
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
         setLoading(false);
-      }
+      });
+
+      return () => unsubUser();
     });
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, [router]);
+
+  // --- 2. DYNAMIC LOCKING LOGIC (STRICT SEQUENTIAL) ---
+  useEffect(() => {
+    if (!userProfile || rawModules.length === 0) return;
+
+    const userLevel = userProfile.gamification?.level || 1;
+    const completedModules = userProfile.completedModules || []; // Array of Module IDs
+
+    const processedModules = rawModules.map((mod, index) => {
+      // 1. Modul Pertama selalu UNLOCKED
+      if (index === 0) {
+        return { ...mod, isLocked: false };
+      }
+
+      // 2. Ambil Modul Sebelumnya
+      const prevModule = rawModules[index - 1];
+      
+      // 3. Cek apakah Modul Sebelumnya sudah SELESAI
+      // Ini adalah kunci agar tidak bisa loncat meskipun level tinggi
+      const isPrevCompleted = completedModules.includes(prevModule.id);
+
+      // 4. Cek Syarat Level (Opsional tapi direkomendasikan)
+      // Modul level 2 butuh user level 2.
+      // Jika user level 10 tapi belum selesai modul level 1, tetap terkunci (karena poin 3)
+      const isLevelMet = userLevel >= mod.level;
+
+      // KESIMPULAN: UNLOCKED hanya jika Prev Selesai DAN Level Cukup
+      const isLocked = !(isPrevCompleted && isLevelMet);
+
+      return { ...mod, isLocked };
+    });
+
+    setModules(processedModules);
+
+  }, [userProfile, rawModules]);
+
 
   // --- ACTIONS ---
   const handleJoinClass = async (code: string) => {
@@ -106,14 +172,12 @@ export default function LearnClient() {
     try {
       const codeUpper = code.toUpperCase();
       
-      // Validasi Lokal
       if (myClasses.some(c => c.code === codeUpper)) {
         alert("Kamu sudah bergabung di kelas ini!");
         setJoining(false);
         return;
       }
 
-      // Cek Firestore
       const q = query(collection(db, "classrooms"), where("code", "==", codeUpper));
       const querySnapshot = await getDocs(q);
 
@@ -126,7 +190,6 @@ export default function LearnClient() {
       const classDoc = querySnapshot.docs[0];
       const classId = classDoc.id;
       
-      // Update Database
       await updateDoc(doc(db, "classrooms", classId), {
         students: arrayUnion(user.uid),
         studentCount: increment(1)
@@ -135,9 +198,6 @@ export default function LearnClient() {
         enrolledClasses: arrayUnion(classId)
       });
 
-      // Update State Lokal (Optimistic UI update)
-      setMyClasses(prev => [...prev, { id: classId, ...classDoc.data() }]);
-      
       alert("Berhasil bergabung!");
       setIsJoinModalOpen(false);
       setActiveTab("classes");
@@ -149,7 +209,7 @@ export default function LearnClient() {
     }
   };
 
-  // --- LOADING STATE ---
+  // --- RENDER ---
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-background text-foreground animate-pulse">
       <div className="flex flex-col items-center gap-2">
@@ -164,14 +224,14 @@ export default function LearnClient() {
       <StudentSidebar />
 
       <div className="flex-1 md:ml-64 relative pb-24">
-        {/* 1. Header Component */}
+        {/* Header */}
         <LearnHeader 
           theme={theme} 
           userProfile={userProfile} 
           onOpenJoinModal={() => setIsJoinModalOpen(true)} 
         />
 
-        {/* 2. Sub-Nav Tabs (Inline Navigation) */}
+        {/* Tab Navigation */}
         <div className="max-w-3xl mx-auto px-4 mt-8 mb-6">
           <div className={cn(
             "flex p-1 shadow-sm border transition-all w-full max-w-sm mx-auto",
@@ -199,16 +259,15 @@ export default function LearnClient() {
           </div>
         </div>
 
-        {/* 3. Main Content Area */}
+        {/* Content Area */}
         <main className={cn(
           "px-4 transition-all pb-20",
           theme === "kids" ? "max-w-xl mx-auto" : "max-w-3xl mx-auto"
         )}>
-          {/* LOGIC RENDERING BERDASARKAN TAB & TEMA */}
           
           {activeTab === "map" && (
             <>
-              {/* Jika Pro -> Tampilkan List, Jika Kids -> Tampilkan Peta */}
+              {/* Dynamic Module Rendering */}
               {theme === "pro" ? (
                 <ModuleList modules={modules} />
               ) : (
@@ -229,7 +288,7 @@ export default function LearnClient() {
 
       <MobileNav />
 
-      {/* 4. Modal Component */}
+      {/* Modal */}
       <JoinClassModal 
         isOpen={isJoinModalOpen} 
         onClose={() => setIsJoinModalOpen(false)} 

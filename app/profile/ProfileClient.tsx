@@ -3,66 +3,142 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  User, Shield, Star, Flame, ArrowLeft, Loader2, BookOpen, 
-  Settings, Award, Users, Activity, Lock
+  ArrowLeft, Loader2, BookOpen, 
+  Settings, Award, Users, Activity, Lock, Star, Flame, Zap
 } from "lucide-react";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { useTheme } from "@/lib/theme-context";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { UserProfile } from "@/lib/types/user.types";
-import { motion } from "framer-motion";
+import { auth, db } from "../../lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+import { useTheme } from "../../lib/theme-context";
+import { cn } from "../../lib/utils";
+import { Button } from "../../components/ui/button";
+import { UserProfile } from "../../lib/types/user.types";
 
-// --- MOCK DATA (SEMENTARA) ---
-const MOCK_BADGES = [
-  { id: 1, name: "Murid Teladan", icon: "🎓", description: "Menyelesaikan 10 pelajaran", unlocked: true },
-  { id: 2, name: "Jagoan Kuis", icon: "⚡", description: "Skor sempurna di 5 kuis", unlocked: true },
-  { id: 3, name: "Si Rajin", icon: "🔥", description: "Streak 7 hari berturut-turut", unlocked: false },
-  { id: 4, name: "Penyair Muda", icon: "✍️", description: "Menulis 3 pantun di feed", unlocked: false },
-];
+// --- SISTEM BADGE DINAMIS ---
+// Badge ini akan terbuka otomatis jika syarat (condition) terpenuhi oleh data user
+const BADGE_SYSTEM = [
+  // Kategori: Pemula
+  { 
+    id: "badge_newbie", 
+    name: "Pendatang Baru", 
+    icon: "🌱", 
+    desc: "Bergabung dengan Skoola", 
+    condition: (u: any) => true 
+  },
+  
+  // Kategori: Modul & Belajar
+  { 
+    id: "badge_first_step", 
+    name: "Langkah Pertama", 
+    icon: "👣", 
+    desc: "Menyelesaikan 1 Modul", 
+    condition: (u: any) => (u.completedModules?.length || 0) >= 1 
+  },
+  { 
+    id: "badge_scholar", 
+    name: "Si Kutu Buku", 
+    icon: "📚", 
+    desc: "Menyelesaikan 3 Modul", 
+    condition: (u: any) => (u.completedModules?.length || 0) >= 3 
+  },
+  { 
+    id: "badge_master", 
+    name: "Ahli Bahasa", 
+    icon: "🎓", 
+    desc: "Menyelesaikan 10 Modul", 
+    condition: (u: any) => (u.completedModules?.length || 0) >= 10 
+  },
 
-const MOCK_FRIENDS = [
-  { id: 1, name: "Budi Santoso", avatar: "👦", level: 5 },
-  { id: 2, name: "Siti Aminah", avatar: "👧", level: 7 },
-  { id: 3, name: "Rizky Billar", avatar: "🧑", level: 3 },
-];
+  // Kategori: XP (Grinding)
+  { 
+    id: "badge_rich", 
+    name: "Sultan XP", 
+    icon: "💎", 
+    desc: "Mengumpulkan 500 XP", 
+    condition: (u: any) => (u.xp || 0) >= 500 
+  },
+  { 
+    id: "badge_legend", 
+    name: "Legenda Skoola", 
+    icon: "👑", 
+    desc: "Mengumpulkan 2000 XP", 
+    condition: (u: any) => (u.xp || 0) >= 2000 
+  },
 
-const MOCK_ACTIVITIES = [
-  { id: 1, text: "Naik ke Level 2!", time: "2 jam lalu", type: "level_up" },
-  { id: 2, text: "Menyelesaikan Bab Pantun", time: "Hari ini", type: "finish_lesson" },
-  { id: 3, text: "Bergabung dengan Kelas 5A", time: "Kemarin", type: "join_class" },
+  // Kategori: Streak (Konsistensi)
+  { 
+    id: "badge_streak_3", 
+    name: "Si Rajin", 
+    icon: "🔥", 
+    desc: "Login 3 Hari Beruntun", 
+    condition: (u: any) => (u.streak || 0) >= 3 
+  },
+  { 
+    id: "badge_streak_7", 
+    name: "Api Membara", 
+    icon: "⚡", 
+    desc: "Login 7 Hari Beruntun", 
+    condition: (u: any) => (u.streak || 0) >= 7 
+  },
+
+  // Kategori: Sosial
+  { 
+    id: "badge_social", 
+    name: "Anak Gaul", 
+    icon: "👋", 
+    desc: "Bergabung dalam 1 Kelas", 
+    condition: (u: any) => (u.enrolledClasses?.length || 0) >= 1 
+  }
 ];
 
 export default function ProfileClient() {
   const router = useRouter();
   const { theme } = useTheme();
   const [loading, setLoading] = useState(true);
+  
+  // State User Profile (Any untuk fleksibilitas struktur data)
   const [userProfile, setUserProfile] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"achievements" | "friends" | "feed">("achievements");
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        router.push("/");
-        return;
-      }
+    const user = auth.currentUser;
+    if (!user) {
+      router.push("/");
+      return;
+    }
 
-      try {
-        const docRef = doc(db, "users", user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setUserProfile(docSnap.data());
-        }
-      } catch (error) {
-        console.error("Gagal load profil:", error);
-      } finally {
-        setLoading(false);
+    // Menggunakan onSnapshot agar update badge terjadi secara Real-Time
+    const unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        
+        // Normalisasi Data (Menangani struktur lama dan baru agar tidak error)
+        const normalizedData = {
+          ...data,
+          xp: data.xp ?? data.gamification?.xp ?? 0,
+          level: data.level ?? data.gamification?.level ?? 1,
+          streak: data.streak ?? data.gamification?.currentStreak ?? 0,
+          completedModules: data.completedModules || [],
+          enrolledClasses: data.enrolledClasses || []
+        };
+        
+        setUserProfile(normalizedData);
       }
-    };
-    fetchProfile();
+      setLoading(false);
+    }, (error) => {
+      console.error("Gagal load profil:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [router]);
+
+  // Fungsi Cek Status Badge
+  const checkBadge = (badge: typeof BADGE_SYSTEM[0]) => {
+    if (!userProfile) return false;
+    return badge.condition(userProfile);
+  };
+
+  const unlockedCount = BADGE_SYSTEM.filter(b => checkBadge(b)).length;
 
   if (loading) {
     return (
@@ -73,12 +149,9 @@ export default function ProfileClient() {
   }
 
   // Helper Stats
-  const getXP = () => userProfile?.xp || userProfile?.gamification?.xp || 0;
-  const getLevel = () => userProfile?.level || userProfile?.gamification?.level || 1;
-  const getStreak = () => {
-    const s = userProfile?.streak || userProfile?.gamification?.currentStreak;
-    return typeof s === 'object' ? s?.currentStreak || 0 : s || 0;
-  };
+  const getXP = () => userProfile?.xp || 0;
+  const getLevel = () => userProfile?.level || 1;
+  const getStreak = () => userProfile?.streak || 0;
 
   return (
     <div className={cn(
@@ -156,14 +229,14 @@ export default function ProfileClient() {
             <StatCard 
               theme={theme}
               icon={<Star size={18} className="text-yellow-500 fill-yellow-500" />} 
-              label="XP" 
+              label="XP Total" 
               value={getXP()} 
             />
             <StatCard 
               theme={theme}
               icon={<Award size={18} className="text-blue-500" />} 
-              label="BIPA" 
-              value={getLevel()} 
+              label="Badges" 
+              value={unlockedCount} 
             />
             <StatCard 
               theme={theme}
@@ -221,78 +294,71 @@ export default function ProfileClient() {
         {/* 4. TAB CONTENT */}
         <div className="min-h-[300px]">
           
-          {/* TAB: ACHIEVEMENTS */}
+          {/* TAB: ACHIEVEMENTS (REAL DATA) */}
           {activeTab === "achievements" && (
             <div className="grid grid-cols-2 gap-4">
-              {MOCK_BADGES.map((badge) => (
-                <div 
-                  key={badge.id}
-                  className={cn(
-                    "p-4 border rounded-xl flex flex-col items-center text-center transition-all",
-                    badge.unlocked 
-                      ? (theme === "kids" ? "bg-white border-yellow-200 shadow-sm" : "bg-white border-slate-200")
-                      : "bg-gray-50 border-gray-100 opacity-60 grayscale"
-                  )}
-                >
-                  <div className="text-4xl mb-3 filter drop-shadow-sm">{badge.icon}</div>
-                  <h3 className="font-bold text-sm text-foreground mb-1">{badge.name}</h3>
-                  <p className="text-[10px] text-muted-foreground leading-tight">{badge.description}</p>
-                  {!badge.unlocked && <Lock size={12} className="mt-2 text-gray-400" />}
-                </div>
-              ))}
+              {BADGE_SYSTEM.map((badge) => {
+                const isUnlocked = checkBadge(badge);
+                return (
+                  <div 
+                    key={badge.id}
+                    className={cn(
+                      "p-4 border rounded-xl flex flex-col items-center text-center transition-all duration-300",
+                      isUnlocked 
+                        ? (theme === "kids" ? "bg-white border-yellow-200 shadow-sm scale-100" : "bg-white border-slate-200")
+                        : "bg-gray-50 border-gray-100 opacity-60 grayscale scale-95"
+                    )}
+                  >
+                    <div className={cn(
+                      "text-4xl mb-3 filter drop-shadow-sm transition-transform",
+                      isUnlocked && "animate-bounce-slow"
+                    )}>
+                      {badge.icon}
+                    </div>
+                    <h3 className="font-bold text-sm text-foreground mb-1">{badge.name}</h3>
+                    <p className="text-[10px] text-muted-foreground leading-tight h-8 overflow-hidden">{badge.desc}</p>
+                    
+                    {!isUnlocked && (
+                      <div className="mt-2 flex items-center gap-1 px-2 py-1 bg-gray-200 rounded text-[10px] text-gray-500 font-bold">
+                        <Lock size={10} /> Terkunci
+                      </div>
+                    )}
+                    
+                    {isUnlocked && (
+                      <div className={cn(
+                        "mt-2 text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1",
+                        theme === "kids" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"
+                      )}>
+                        <Zap size={10} /> Tercapai
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {/* TAB: FRIENDS */}
+          {/* TAB: FRIENDS (Placeholder) */}
           {activeTab === "friends" && (
             <div className={cn(
-              "bg-white border rounded-xl overflow-hidden",
-              theme === "kids" ? "rounded-3xl border-sky-100" : "rounded-xl border-slate-200"
+              "text-center py-12 border-2 border-dashed rounded-xl bg-gray-50",
+              theme === "kids" ? "border-sky-200" : "border-gray-200"
             )}>
-              {MOCK_FRIENDS.map((friend, idx) => (
-                <div key={friend.id} className={cn(
-                  "flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors",
-                  idx !== MOCK_FRIENDS.length - 1 && "border-b border-gray-100"
-                )}>
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-xl">
-                    {friend.avatar}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-bold text-sm text-foreground">{friend.name}</p>
-                    <p className="text-xs text-muted-foreground">Level {friend.level}</p>
-                  </div>
-                  <Button size="sm" variant="outline" className="text-xs h-8">
-                    Sapa 👋
-                  </Button>
-                </div>
-              ))}
-              <div className="p-4 text-center border-t border-gray-100">
-                <Button variant="ghost" className="text-xs text-primary w-full">
-                  + Tambah Teman Baru
-                </Button>
-              </div>
+              <Users size={48} className="mx-auto text-gray-300 mb-4" />
+              <h3 className="text-gray-600 font-bold mb-1">Belum Ada Teman</h3>
+              <p className="text-gray-400 text-xs px-8">Ajak teman sekelasmu untuk bergabung agar bisa saling sapa!</p>
             </div>
           )}
 
-          {/* TAB: FEED */}
+          {/* TAB: FEED (Placeholder) */}
           {activeTab === "feed" && (
-            <div className="space-y-4">
-              {MOCK_ACTIVITIES.map((act) => (
-                <div key={act.id} className={cn(
-                  "flex gap-4 bg-white p-4 border rounded-xl",
-                  theme === "kids" ? "rounded-2xl border-sky-50 shadow-sm" : "rounded-xl border-slate-200"
-                )}>
-                  <div className="mt-1">
-                    {act.type === 'level_up' && <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600"><Star size={16} /></div>}
-                    {act.type === 'finish_lesson' && <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600"><BookOpen size={16} /></div>}
-                    {act.type === 'join_class' && <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600"><Users size={16} /></div>}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{act.text}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{act.time}</p>
-                  </div>
-                </div>
-              ))}
+            <div className={cn(
+              "text-center py-12 border-2 border-dashed rounded-xl bg-gray-50",
+              theme === "kids" ? "border-sky-200" : "border-gray-200"
+            )}>
+              <Activity size={48} className="mx-auto text-gray-300 mb-4" />
+              <h3 className="text-gray-600 font-bold mb-1">Aktivitas Kosong</h3>
+              <p className="text-gray-400 text-xs px-8">Mulai selesaikan modul untuk melihat riwayat aktivitasmu di sini.</p>
             </div>
           )}
 

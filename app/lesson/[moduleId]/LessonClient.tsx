@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import QuizEngine from "@/components/quiz/quiz-engine";
-import { addUserXP } from "@/lib/progress-service";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth"; // Import listener auth
+import QuizEngine from "../../../components/quiz/quiz-engine";
+import { addUserXP } from "../../../lib/progress-service";
+import { auth, db } from "../../../lib/firebase";
+import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { LessonContent } from "@/lib/types/course.types";
+import { Button } from "../../../components/ui/button";
+import { LessonContent } from "../../../lib/types/course.types";
 
 interface LessonData {
   title: string;
@@ -28,7 +28,7 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
-  const [userId, setUserId] = useState<string | null>(null); // Simpan userID di state
+  const [userId, setUserId] = useState<string | null>(null);
 
   // 1. Cek Auth State secara real-time
   useEffect(() => {
@@ -36,7 +36,6 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
       if (user) {
         setUserId(user.uid);
       } else {
-        // Jika tidak login, jangan redirect paksa dulu, biarkan user belajar tapi nanti ingatkan saat selesai
         console.warn("User belum login.");
       }
     });
@@ -93,12 +92,12 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
   // 3. Handle Penyelesaian
   const handleLessonComplete = async (score: number) => {
-    console.log("🏁 Lesson Complete! Score:", score); // Debug log
+    console.log("🏁 Lesson Complete! Score:", score);
 
     // Validasi User
     if (!userId) {
       alert("Anda belum login! Progres tidak dapat disimpan. Silakan login terlebih dahulu.");
-      router.push("/auth/login"); // Redirect ke login jika user null
+      router.push("/auth/login");
       return;
     }
 
@@ -108,27 +107,38 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
     // Hitung XP (Score >= 60% dapat Full XP, di bawah itu dapat 25%)
     const passingScore = 60;
-    const earnedXP = score >= passingScore ? lesson.xp : Math.floor(lesson.xp / 4);
+    const isPassed = score >= passingScore;
+    const earnedXP = isPassed ? lesson.xp : Math.floor(lesson.xp / 4);
     
     console.log(`💰 Calculating XP: Reward=${lesson.xp}, Score=${score}%, Earned=${earnedXP}`);
 
     try {
-      // Simpan ke Firestore
+      // A. Simpan XP ke Firestore (Global)
       await addUserXP(userId, earnedXP);
-      console.log("✅ XP Saved Successfully to Firestore!");
       
-      // Delay visual agar user melihat loading
+      // B. Update Status Penyelesaian (JIKA LULUS)
+      // LOGIKA BARU: Menyimpan ID modul ke array completedModules user
+      if (isPassed) {
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, {
+          completedModules: arrayUnion(moduleId), 
+          lastActiveModule: moduleId
+        });
+        console.log("✅ Module marked as COMPLETED in Firestore!");
+      }
+
+      console.log("✅ XP Saved Successfully!");
+      
+      // Delay visual agar user melihat loading, lalu redirect dan refresh dashboard
       setTimeout(() => {
-        // FIX: Tambahkan router.refresh() agar cache client dibersihkan 
-        // dan halaman /learn mengambil data terbaru (XP yang sudah bertambah)
-        router.refresh();
+        router.refresh(); 
         router.push("/learn");
-      }, 1000);
+      }, 1500);
 
     } catch (err) {
-      console.error("❌ Gagal save XP:", err);
-      alert("Terjadi kesalahan saat menyimpan XP. Pastikan koneksi internet lancar.");
-      setIsSaving(false); // Kembalikan state agar tidak stuck
+      console.error("❌ Gagal save progress:", err);
+      alert("Terjadi kesalahan saat menyimpan progres. Coba lagi.");
+      setIsSaving(false); 
       router.push("/learn");
     }
   };
