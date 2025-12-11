@@ -2,7 +2,7 @@
 
 import React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Trophy, User, LogOut, LayoutDashboard, School, Users } from "lucide-react";
+import { User, LogOut, LayoutDashboard, School, Users, Map, Backpack, Smile } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
@@ -19,36 +19,42 @@ export function MobileNav() {
   };
 
   const isUni = theme === "uni";
+  const isKids = theme === "sd";
 
   return (
     <nav className={cn(
-      "fixed bottom-0 left-0 right-0 border-t px-4 py-2 flex justify-between items-center md:hidden z-50 pb-safe transition-colors duration-300",
-      isUni ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-white border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
+      "fixed bottom-0 left-0 right-0 px-4 py-2 flex justify-between items-center md:hidden z-50 pb-safe transition-all duration-300",
+      // KIDS THEME: Floating Island Look
+      isKids ? "bg-white/95 backdrop-blur-md border-t-4 border-primary rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] pb-4 mx-2 mb-2" :
+      
+      // UNI THEME
+      isUni ? "bg-slate-900 border-t border-slate-800 text-slate-400" : 
+      
+      // DEFAULT
+      "bg-white border-t border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
     )}>
       <NavItem 
         theme={theme}
         active={pathname === "/learn"} 
         onClick={() => router.push("/learn")} 
-        icon={<LayoutDashboard />} 
-        label="Home" 
+        icon={isKids ? <Map /> : <LayoutDashboard />} 
+        label={isKids ? "Markas" : "Home"} 
       />
       
-      {/* Shortcut ke Kelas */}
       <NavItem 
         theme={theme}
         active={pathname.includes("class")} 
         onClick={() => router.push("/learn?tab=classes")} 
-        icon={<School />} 
-        label="Kelas" 
+        icon={isKids ? <Backpack /> : <School />} 
+        label={isKids ? "Kelas" : "Kelas"} 
       />
       
-      {/* Akses Sosial */}
       <NavItem 
         theme={theme}
         active={pathname === "/social"} 
         onClick={() => router.push("/social")} 
-        icon={<Users />} 
-        label="Sosial" 
+        icon={isKids ? <Smile /> : <Users />} 
+        label={isKids ? "Teman" : "Sosial"} 
       />
       
       <NavItem 
@@ -56,18 +62,20 @@ export function MobileNav() {
         active={pathname === "/profile"} 
         onClick={() => router.push("/profile")} 
         icon={<User />} 
-        label="Profil" 
+        label={isKids ? "Kartu" : "Profil"} 
       />
       
       <button 
         onClick={handleLogout} 
         className={cn(
-          "flex flex-col items-center gap-1 transition-colors p-2 rounded-lg",
-          theme === "sd" ? "text-gray-400 hover:text-red-500" : "text-slate-400 hover:text-red-500"
+          "flex flex-col items-center gap-1 transition-colors p-2 rounded-lg group",
+          theme === "sd" ? "text-red-300 hover:text-red-500 active:scale-95" : "text-slate-400 hover:text-red-500"
         )}
       >
-        <LogOut size={24} />
-        <span className="text-[10px] font-bold">Keluar</span>
+        <div className={cn("transition-transform group-active:scale-90", isKids && "bg-red-50 p-1 rounded-full")}>
+            <LogOut size={isKids ? 20 : 24} className={isKids ? "text-red-400" : ""} />
+        </div>
+        <span className={cn("text-[10px] font-bold", isKids && "text-red-400")}>{isKids ? "Keluar" : "Out"}</span>
       </button>
     </nav>
   );
@@ -76,34 +84,45 @@ export function MobileNav() {
 function NavItem({ icon, label, active = false, onClick, theme }: any) {
   const isKids = theme === "sd";
   const isUni = theme === "uni";
+  const isSMP = theme === "smp";
 
   return (
     <button 
       onClick={onClick} 
       className={cn(
-        "flex flex-col items-center gap-1 p-2 transition-all",
-        // Kids Theme
-        isKids ? "rounded-xl" : "rounded-md",
-        isKids && active && "text-sky-600 bg-sky-50",
-        isKids && !active && "text-gray-400 hover:text-sky-400",
+        "flex flex-col items-center gap-1 p-2 transition-all relative",
         
-        // Uni Theme (FIX CONTRAST)
-        // Pastikan text-white agar terbaca
+        // Kids Theme: Bouncy & Colorful
+        isKids ? "rounded-2xl w-16" : "rounded-md",
+        isKids && active && "text-white bg-primary shadow-lg shadow-primary/30 -translate-y-4 scale-110 border-4 border-white",
+        isKids && !active && "text-gray-400 hover:text-primary hover:bg-primary/5",
+        
+        // Uni Theme (High Contrast)
         isUni && active && "text-white bg-slate-800 border-t-2 border-white", 
         isUni && !active && "text-slate-500 hover:text-slate-300",
 
+        // SMP Theme (Glowing)
+        isSMP && active && "text-violet-600",
+        
         // Default / Pro Theme
-        !isKids && !isUni && active && "text-primary bg-primary/10",
-        !isKids && !isUni && !active && "text-slate-400 hover:text-slate-600"
+        !isKids && !isUni && !isSMP && active && "text-primary bg-primary/10",
+        !isKids && !isUni && !isSMP && !active && "text-slate-400 hover:text-slate-600"
       )}
     >
-      <div className={cn("transition-transform", active && isKids && "scale-110")}>
+      <div className={cn(
+          "transition-transform duration-300", 
+          active && isKids && "animate-bounce",
+          active && isSMP && "drop-shadow-[0_0_8px_rgba(139,92,246,0.6)]"
+      )}>
         {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { 
-           size: 24, 
-           className: active ? "fill-current opacity-20" : "" 
+           size: isKids && active ? 20 : 24, 
+           className: active && !isKids && !isSMP && !isUni ? "fill-current opacity-20" : "" 
         }) : icon}
       </div>
-      <span className="text-[10px] font-bold">{label}</span>
+      <span className={cn("text-[10px] font-bold", isKids && active && "hidden")}>{label}</span>
+      
+      {/* Active Dot for SMP */}
+      {isSMP && active && <div className="absolute -bottom-1 w-1 h-1 bg-violet-600 rounded-full shadow-[0_0_5px_currentColor]" />}
     </button>
   );
 }

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Trophy, LogOut, User, LayoutDashboard, Calendar, School, Users } from "lucide-react";
+import { LogOut, User, LayoutDashboard, Calendar, School, Users, Backpack, Map, BookOpen, Smile } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -32,92 +32,97 @@ export function StudentSidebar() {
   };
 
   const isKids = theme === "sd";
+  const isSMP = theme === "smp";
   const isUni = theme === "uni";
 
   return (
     <aside className={cn(
       "hidden md:flex w-64 flex-col fixed inset-y-0 z-50 transition-all duration-500 border-r",
-      isKids ? "bg-white border-r-4 border-primary/20" : 
+      isKids ? "bg-white border-r-4 border-primary/20 shadow-xl" : 
       isUni ? "bg-slate-900 border-slate-800 text-slate-100" :
+      isSMP ? "bg-white border-indigo-100" :
       "bg-white border-slate-200"
     )}>
       {/* BRANDING AREA */}
       <div className={cn(
-        "p-6 flex items-center gap-3",
-        (isUni || theme === 'sma') && "border-b border-border/10"
+        "p-6 flex items-center gap-3 transition-all",
+        (isUni || theme === 'sma') && "border-b border-border/10",
+        isKids && "pb-8 pt-8"
       )}>
         <div className={cn(
-          "flex items-center justify-center transition-all shrink-0",
-          isKids ? "w-12 h-12 bg-primary text-white rounded-2xl shadow-[0_4px_0_rgba(0,0,0,0.2)] rotate-3" : 
+          "flex items-center justify-center transition-all shrink-0 relative",
+          isKids ? "w-14 h-14 bg-primary text-white rounded-3xl shadow-[0_6px_0_rgba(0,0,0,0.2)] rotate-[-6deg] hover:rotate-6 hover:scale-110 cursor-pointer duration-300" : 
+          isSMP ? "w-10 h-10 bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white rounded-xl shadow-lg shadow-violet-500/30" :
           "w-10 h-10 bg-primary text-white rounded-lg shadow-sm"
         )}>
-          {isKids ? <span className="text-2xl">🎒</span> : <span className="font-bold text-lg">S</span>}
+           {isKids && <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full animate-ping" />}
+          {isKids ? <span className="text-3xl">🎒</span> : <span className="font-bold text-lg">S</span>}
         </div>
         <div>
           <h1 className={cn(
-            "font-bold leading-none tracking-tight",
-            isKids ? "text-2xl text-primary font-display uppercase" : 
-            isUni ? "text-lg text-white" : "text-xl text-slate-800"
+            "font-bold leading-none tracking-tight transition-all",
+            isKids ? "text-3xl text-primary font-display uppercase drop-shadow-sm" : 
+            isSMP ? "text-xl text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-indigo-600" :
+            isUni ? "text-lg text-white font-serif tracking-wide" : "text-xl text-slate-800"
           )}>
             SKOOLA
           </h1>
           <p className={cn(
             "text-[10px] font-bold uppercase tracking-widest mt-1",
-            isKids ? "text-secondary-foreground" : "text-muted-foreground"
+            isKids ? "text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full inline-block mt-2" : "text-muted-foreground"
           )}>
-            {theme === 'sd' ? 'Sekolah Dasar' : theme === 'smp' ? 'Junior High' : theme === 'sma' ? 'High School' : 'University'}
+            {theme === 'sd' ? 'Petualang Cilik' : theme === 'smp' ? 'Junior High' : theme === 'sma' ? 'High School' : 'University'}
           </p>
         </div>
       </div>
 
       {/* NAVIGATION */}
-      <nav className="flex-1 px-4 py-4 space-y-2">
+      <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
         <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
-          Menu Utama
+          {isKids ? "Peta Utama" : "Menu Utama"}
         </div>
         
         <SidebarItem 
           theme={theme}
-          icon={<LayoutDashboard size={isKids ? 24 : 20} />} 
-          label="Dashboard" 
+          icon={isKids ? <Map size={24} /> : <LayoutDashboard size={20} />} 
+          label={isKids ? "Markas Besar" : "Dashboard"} 
           active={pathname === "/learn"} 
           onClick={() => router.push("/learn")} 
         />
         
-        {/* FIX: Label diubah jadi "Sosial" agar jelas */}
         <SidebarItem 
           theme={theme}
-          icon={<Users size={isKids ? 24 : 20} />} 
-          label="Sosial" 
+          icon={isKids ? <Smile size={24} /> : <Users size={20} />} 
+          label={isKids ? "Teman Main" : "Sosial"} 
           active={pathname === "/social"} 
           onClick={() => router.push("/social")} 
         />
         
-        <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-6 mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
-          Akademik
+        <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-8 mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
+          {isKids ? "Tas Sekolah" : "Akademik"}
         </div>
         <SidebarItem 
           theme={theme}
-          icon={<School size={isKids ? 24 : 20} />} 
-          label="Kelas Saya" 
+          icon={isKids ? <Backpack size={24} /> : <School size={20} />} 
+          label={isKids ? "Kelasku" : "Kelas Saya"} 
           active={pathname.includes("/classroom")} 
           onClick={() => router.push("/learn?tab=classes")} 
         />
         <SidebarItem 
           theme={theme}
-          icon={<Calendar size={isKids ? 24 : 20} />} 
-          label="Jadwal" 
+          icon={isKids ? <Calendar size={24} /> : <Calendar size={20} />} 
+          label={isKids ? "Jadwal Seru" : "Jadwal"} 
           active={pathname === "/schedule"} 
-          onClick={() => alert("Fitur Jadwal segera hadir!")} 
+          onClick={() => alert(isKids ? "Jadwal belum dipasang guru!" : "Fitur Jadwal segera hadir!")} 
         />
 
-        <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-6 mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
-          Akun
+        <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-8 mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
+           {isKids ? "Identitas" : "Akun"}
         </div>
         <SidebarItem 
           theme={theme}
-          icon={<User size={isKids ? 24 : 20} />} 
-          label="Profil Saya" 
+          icon={isKids ? <User size={24} /> : <User size={20} />} 
+          label={isKids ? "Kartu Nama" : "Profil Saya"} 
           active={pathname === "/profile"} 
           onClick={() => router.push("/profile")} 
         />
@@ -125,31 +130,34 @@ export function StudentSidebar() {
 
       {/* USER FOOTER */}
       <div className={cn(
-        "p-4 border-t",
-        isUni ? "bg-slate-900 border-slate-800" : "bg-secondary/20 border-border"
+        "p-4 border-t m-4 rounded-2xl",
+        isKids ? "bg-secondary/30 border-2 border-secondary border-b-4" :
+        isUni ? "bg-slate-800 border-slate-700 m-0 rounded-none border-x-0 border-b-0" : 
+        "bg-slate-50 border-slate-100"
       )}>
         <div 
           onClick={() => router.push("/profile")}
           className={cn(
-            "flex items-center gap-3 mb-4 p-3 transition-all cursor-pointer group rounded-xl",
-            isKids ? "bg-white border-2 border-primary/20 hover:bg-secondary hover:border-secondary-foreground" : 
-            isUni ? "hover:bg-slate-800" : "hover:bg-white hover:shadow-sm"
+            "flex items-center gap-3 mb-3 p-2 transition-all cursor-pointer group rounded-xl",
+            isKids ? "hover:bg-white/50" : 
+            isUni ? "hover:bg-slate-700" : "hover:bg-white hover:shadow-sm"
           )}
         >
            <div className={cn(
-             "flex items-center justify-center shadow-sm transition-transform group-hover:rotate-12",
+             "flex items-center justify-center shadow-sm transition-transform group-hover:scale-110",
              isKids 
-              ? "w-10 h-10 bg-secondary text-secondary-foreground border-2 border-white rounded-full" 
-              : "w-9 h-9 bg-primary/10 text-primary rounded-full"
+             ? "w-10 h-10 bg-white text-secondary-foreground border-2 border-secondary rounded-full overflow-hidden" 
+             : "w-9 h-9 bg-primary/10 text-primary rounded-full"
            )}>
+             {/* Jika nanti ada avatar image, taruh sini. Sementara inisial */}
              <span className="font-bold text-sm">{name.charAt(0)}</span>
            </div>
            <div className="flex-1 overflow-hidden">
              <p className={cn("text-sm font-bold truncate", isUni ? "text-slate-200" : "text-slate-800")}>
                {name}
              </p>
-             <p className={cn("text-xs truncate opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
-               Lihat Profil
+             <p className={cn("text-[10px] truncate opacity-70 font-medium", isUni ? "text-slate-400" : "text-slate-500")}>
+               {isKids ? "Level 1 Explorer" : "Lihat Profil"}
              </p>
            </div>
         </div>
@@ -157,13 +165,14 @@ export function StudentSidebar() {
         <button 
           onClick={handleLogout} 
           className={cn(
-            "flex items-center justify-center gap-2 px-4 py-2.5 w-full font-bold text-xs transition-all rounded-lg",
+            "flex items-center justify-center gap-2 px-4 py-2.5 w-full font-bold text-xs transition-all rounded-xl",
+            isKids ? "bg-white text-red-500 border-2 border-red-100 hover:border-red-500 hover:bg-red-50 shadow-sm" :
             isUni 
-              ? "text-slate-400 hover:text-white hover:bg-slate-800" 
+              ? "text-slate-400 hover:text-white hover:bg-slate-700" 
               : "text-slate-500 hover:text-red-600 hover:bg-red-50"
           )}
         >
-          <LogOut size={16} /> Keluar
+          <LogOut size={16} /> {isKids ? "Keluar Game" : "Keluar"}
         </button>
       </div>
     </aside>
@@ -173,37 +182,47 @@ export function StudentSidebar() {
 function SidebarItem({ icon, label, active, onClick, theme }: any) {
   const isKids = theme === "sd";
   const isUni = theme === "uni";
+  const isSMP = theme === "smp";
 
   return (
     <button 
       onClick={onClick} 
       className={cn(
-        "flex items-center gap-3 px-3 py-2.5 w-full transition-all text-sm font-bold group relative",
+        "flex items-center gap-3 px-3 py-3 w-full transition-all text-sm font-bold group relative overflow-hidden",
         
-        // KIDS THEME
-        isKids && "rounded-xl",
-        isKids && active && "bg-primary text-white shadow-[0_4px_0_rgba(0,0,0,0.2)] translate-y-[-2px]",
-        isKids && !active && "text-slate-500 hover:bg-secondary hover:text-secondary-foreground hover:translate-x-1",
+        // KIDS THEME - Chunky & Bouncy
+        isKids && "rounded-2xl border-2 border-transparent my-1",
+        isKids && active && "bg-primary text-white border-primary shadow-[0_4px_0_rgba(185,28,28,0.2)] translate-y-[-2px]",
+        isKids && !active && "text-slate-500 hover:bg-white hover:border-secondary hover:text-secondary-foreground hover:shadow-sm hover:translate-x-1",
         
-        // SMP/SMA THEME (Modern Flat)
-        !isKids && !isUni && "rounded-lg",
-        !isKids && !isUni && active && "bg-primary/10 text-primary",
-        !isKids && !isUni && !active && "text-slate-500 hover:bg-slate-50 hover:text-slate-900",
+        // SMP THEME - Gradient & Glow
+        isSMP && "rounded-xl my-1",
+        isSMP && active && "bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 text-violet-700 border-l-4 border-violet-500",
+        isSMP && !active && "text-slate-500 hover:bg-slate-50 hover:text-violet-600",
 
-        // UNI THEME (Fixed Contrast)
+        // UNI THEME - Clean & Minimal
         isUni && "rounded-md",
-        // FIX: Gunakan text-white agar terbaca di atas bg-slate-800
-        isUni && active && "bg-slate-800 text-white border-l-2 border-white pl-[10px]", 
-        isUni && !active && "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+        isUni && active && "bg-slate-800 text-white border-l-2 border-blue-400 pl-[10px]", 
+        isUni && !active && "text-slate-400 hover:text-slate-200 hover:bg-slate-800",
+
+        // DEFAULT THEME
+        !isKids && !isUni && !isSMP && "rounded-lg",
+        !isKids && !isUni && !isSMP && active && "bg-primary/10 text-primary",
+        !isKids && !isUni && !isSMP && !active && "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
       )}
     >
       <span className={cn(
         "transition-transform duration-300", 
-        isKids && (active || "group-hover:animate-bounce") 
+        isKids && (active ? "scale-110 rotate-[-5deg]" : "group-hover:scale-110 group-hover:rotate-6") 
       )}>
         {icon}
       </span>
       {label}
+      
+      {/* Active Indicator Dot for SMP */}
+      {isSMP && active && (
+          <span className="absolute right-3 w-2 h-2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
+      )}
     </button>
   );
 }
