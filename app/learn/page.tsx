@@ -3,8 +3,8 @@ import LearnClient from "./LearnClient";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Dashboard Belajar | Skoola LMS",
-  description: "Peta belajar interaktif dan manajemen kelas.",
+  title: "Dashboard Sekolah | Skoola LMS",
+  description: "Pusat aktivitas belajar, jadwal, dan tugas sekolah.",
 };
 
 export default function LearnPage() {

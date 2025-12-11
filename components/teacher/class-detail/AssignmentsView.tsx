@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { 
   Plus, Calendar, Clock, FileText, CheckCircle2, 
-  MoreVertical, FileCheck, ClipboardList 
+  MoreVertical, FileCheck, ClipboardList, PenTool 
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Timestamp } from "firebase/firestore";
@@ -26,8 +26,8 @@ interface AssignmentsViewProps {
   assignments: AssignmentData[];
   onOpenCreateModal: () => void;
   onDeleteAssignment: (id: string) => void;
-  onViewDetail: (id: string) => void;
-  onGradeAssignment: (id: string) => void;
+  onViewDetail: (id: string) => void; // Ke Builder
+  onGradeAssignment: (id: string) => void; // Ke Grading
 }
 
 export default function AssignmentsView({ 
@@ -157,20 +157,20 @@ export default function AssignmentsView({
                    <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
                       <div className="flex gap-2">
                          <Button 
-                           variant="ghost" // KEMBALI KE GHOST
+                           variant="ghost" 
                            size="sm" 
                            onClick={() => onViewDetail(item.id)}
-                           className="text-slate-500 hover:text-purple-700 text-xs border-transparent hover:bg-slate-50"
+                           className="text-slate-500 hover:text-purple-700 text-xs border-transparent hover:bg-slate-50 gap-1"
                          >
-                            Lihat Detail
+                            <PenTool size={14} /> Edit Soal
                          </Button>
                          <Button 
-                           variant="ghost" // KEMBALI KE GHOST
+                           variant="ghost" 
                            size="sm" 
                            onClick={() => onGradeAssignment(item.id)}
-                           className="text-slate-500 hover:text-purple-700 text-xs font-bold border-transparent hover:bg-slate-50"
+                           className="text-slate-500 hover:text-purple-700 text-xs font-bold border-transparent hover:bg-slate-50 gap-1"
                          >
-                            Nilai Tugas ({item.submissionCount || 0})
+                            <CheckCircle2 size={14} /> Nilai Tugas ({item.submissionCount || 0})
                          </Button>
                       </div>
                       <button 

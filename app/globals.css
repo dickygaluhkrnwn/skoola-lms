@@ -2,101 +2,157 @@
 
 :root {
   /* --- BASE SETTINGS --- */
-  --background: #fafafa; /* Zinc-50 for Pro base */
-  --foreground: #09090b; /* Zinc-950 */
-  
-  /* DEFAULT THEME (PRO / DEWASA) - Clean, Corporate, & Serious */
-  /* Radius: Kecil/Tajam untuk kesan profesional */
-  --radius: 0.5rem; /* 8px */
-  
-  /* Font: Menggunakan font default sistem yang bersih */
-  --font-heading: var(--font-geist-sans);
-  
-  /* Colors - Pro (Zinc & Indigo Accent) */
-  /* Primary: Indigo-600 (Warna kepercayaan & intelek) */
-  --color-primary: #4f46e5; 
-  --color-primary-fg: #ffffff;
-  
-  /* Secondary: Zinc-100 (Netral) */
-  --color-secondary: #f4f4f5; 
-  --color-secondary-fg: #18181b;
-  
-  /* Muted/Border: Zinc-200 */
-  --color-border: #e4e4e7; 
-  --color-ring: #4f46e5;
-  
-  /* Card Surface */
-  --color-card: #ffffff;
-  --color-card-fg: #09090b;
-
-  /* Background: Clean White/Gray, No Patterns */
-  --bg-pattern: none;
-  
-  /* Shadow: Soft & Diffused (Modern SaaS look) */
-  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --shadow-button: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --background: #ffffff;
+  --foreground: #0f172a;
 }
 
-[data-theme="kids"] {
-  /* KIDS THEME - Playful, Bouncy, & Vibrant */
-  /* Radius: Besar/Bulat untuk kesan ramah & aman */
-  --radius: 1.5rem; /* 24px */
-  
-  /* Colors - Kids (Red/Yellow/Paper) */
-  --color-primary: #dc2626; /* Red-600 */
+/* =========================================
+   THEME 1: SD (Sekolah Dasar)
+   Vibe: Playful, Bouncy, Colorful, Big Rounded
+   ========================================= */
+[data-theme="sd"] {
+  /* Colors: Primary Red, Secondary Yellow */
+  --color-primary: #ef4444; /* Red-500 */
   --color-primary-fg: #ffffff;
   
-  --color-secondary: #fef9c3; /* Yellow-100 */
+  --color-secondary: #fef08a; /* Yellow-200 */
   --color-secondary-fg: #854d0e; /* Yellow-800 */
   
-  --color-border: #fca5a5; /* Red-300 - Tebal */
-  --color-ring: #fca5a5;
+  --color-accent: #3b82f6; /* Blue-500 */
+  --color-muted: #f3f4f6; /* Gray-100 */
   
-  --color-card: #ffffff;
-  --color-card-fg: #171717;
-
-  /* Background: Polka Dot Pattern */
-  --bg-pattern: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23dc2626' fill-opacity='0.05' fill-rule='evenodd'%3E%3Ccircle cx='3' cy='3' r='3'/%3E%3Ccircle cx='13' cy='13' r='3'/%3E%3C/g%3E%3C/svg%3E");
-  --background: #fff1f2; /* Rose-50 base override */
+  /* UI Attributes */
+  --radius: 1.5rem; /* 24px - Super Rounded */
+  --font-family: "Comic Sans MS", "Chalkboard SE", sans-serif; /* Fallback to fun font */
   
-  /* Shadow: Hard Edge (Cartoonish/Pop) */
-  --shadow-card: 4px 4px 0px 0px rgba(0,0,0,0.1);
-  --shadow-button: 0 4px 0 rgb(220,38,38); /* Efek tombol timbul */
+  --shadow-card: 4px 4px 0px 0px rgba(0,0,0,0.15); /* Hard Shadow */
+  --shadow-button: 0 4px 0 #b91c1c; /* 3D Button Effect */
+  
+  --bg-pattern: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ef4444' fill-opacity='0.05' fill-rule='evenodd'%3E%3Ccircle cx='3' cy='3' r='3'/%3E%3Ccircle cx='13' cy='13' r='3'/%3E%3C/g%3E%3C/svg%3E");
 }
 
+/* =========================================
+   THEME 2: SMP (Sekolah Menengah Pertama)
+   Vibe: Energetic, Techy, Pop Colors, Gradient
+   ========================================= */
+[data-theme="smp"] {
+  /* Colors: Primary Purple, Secondary Teal */
+  --color-primary: #8b5cf6; /* Violet-500 */
+  --color-primary-fg: #ffffff;
+  
+  --color-secondary: #ccfbf1; /* Teal-100 */
+  --color-secondary-fg: #115e59; /* Teal-800 */
+  
+  --color-accent: #f472b6; /* Pink-400 */
+  --color-muted: #f1f5f9; /* Slate-100 */
+  
+  /* UI Attributes */
+  --radius: 1rem; /* 16px - Medium Rounded */
+  --font-family: "Verdana", sans-serif;
+  
+  --shadow-card: 0 4px 20px -2px rgba(139, 92, 246, 0.2); /* Glow Shadow */
+  --shadow-button: 0 4px 14px 0 rgba(139, 92, 246, 0.39);
+  
+  --bg-pattern: radial-gradient(#e0e7ff 1px, transparent 1px);
+  --bg-size: 20px 20px;
+}
+
+/* =========================================
+   THEME 3: SMA (Sekolah Menengah Atas)
+   Vibe: Clean, Aesthetic, Productivity, Minimal
+   ========================================= */
+[data-theme="sma"] {
+  /* Colors: Primary Sage/Emerald, Secondary Beige */
+  --color-primary: #10b981; /* Emerald-500 */
+  --color-primary-fg: #ffffff;
+  
+  --color-secondary: #fffbeb; /* Amber-50 */
+  --color-secondary-fg: #78350f; /* Amber-900 */
+  
+  --color-accent: #64748b; /* Slate-500 */
+  --color-muted: #f8fafc; /* Slate-50 */
+  
+  /* UI Attributes */
+  --radius: 0.5rem; /* 8px - Sleek */
+  --font-family: var(--font-geist-sans), sans-serif;
+  
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); /* Subtle */
+  --shadow-button: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  
+  --bg-pattern: none;
+}
+
+/* =========================================
+   THEME 4: UNI (Universitas/Kampus)
+   Vibe: Professional, Academic, Serif, Sharp
+   ========================================= */
+[data-theme="uni"] {
+  /* Colors: Primary Navy, Secondary Gray */
+  --color-primary: #1e293b; /* Slate-800 */
+  --color-primary-fg: #ffffff;
+  
+  --color-secondary: #e2e8f0; /* Slate-200 */
+  --color-secondary-fg: #0f172a; /* Slate-900 */
+  
+  --color-accent: #3b82f6; /* Blue-500 (Link color) */
+  --color-muted: #f8fafc; /* Slate-50 */
+  
+  /* UI Attributes */
+  --radius: 0.25rem; /* 4px - Sharp/Formal */
+  --font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace; /* Data Driven feel */
+  
+  --shadow-card: 0 0 0 1px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.05); /* Border-like shadow */
+  --shadow-button: none;
+  
+  --bg-pattern: none;
+}
+
+/* =========================================
+   TAILWIND UTILITY MAPPING
+   ========================================= */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   
-  /* Dynamic Variables */
+  /* Dynamic Variables Mapped to Tailwind */
   --color-primary: var(--color-primary);
   --color-primary-fg: var(--color-primary-fg);
   --color-secondary: var(--color-secondary);
   --color-secondary-fg: var(--color-secondary-fg);
-  --color-border: var(--color-border);
-  --color-card: var(--color-card);
-  --color-card-fg: var(--color-card-fg);
+  --color-accent: var(--color-accent);
+  --color-muted: var(--color-muted);
   
   --radius-xl: var(--radius);
-  
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-family);
   
   /* Custom Utilities */
   --shadow-card: var(--shadow-card);
   --shadow-button: var(--shadow-button);
 }
 
+/* =========================================
+   GLOBAL BASE STYLES
+   ========================================= */
 body {
   background-color: var(--background);
   background-image: var(--bg-pattern);
+  background-size: var(--bg-size, auto);
   color: var(--foreground);
-  transition: background-color 0.5s ease, color 0.3s ease;
+  font-family: var(--font-family);
+  
+  /* Smooth transitions for theme switching */
+  transition: background-color 0.5s ease, color 0.3s ease, background-image 0.5s ease;
 }
 
-/* Transisi halus */
+/* Element Transitions */
 *, *::before, *::after {
   transition-property: border-radius, background-color, border-color, color, box-shadow, transform;
   transition-duration: 0.3s;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Selection Color per Theme (Optional Polish) */
+[data-theme="sd"] ::selection { background: #fca5a5; color: #7f1d1d; }
+[data-theme="smp"] ::selection { background: #ddd6fe; color: #4c1d95; }
+[data-theme="sma"] ::selection { background: #d1fae5; color: #064e3b; }
+[data-theme="uni"] ::selection { background: #cbd5e1; color: #0f172a; }

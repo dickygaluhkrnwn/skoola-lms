@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Video, FileText, Loader2, X, ClipboardList, 
-  FileCheck, Calendar, Clock 
+  FileCheck, Calendar, Clock, UploadCloud 
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -216,47 +216,47 @@ export default function UploadMaterialModal({
                     <TypeSelector 
                       active={assignmentType === "upload"} 
                       onClick={() => setAssignmentType("upload")} 
-                      icon={<ClipboardList size={20} />} 
+                      icon={<UploadCloud size={20} />} 
                       label="Upload File" 
                       color="purple"
                     />
-                </div>
+                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                   <div>
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Tenggat Tanggal</label>
-                      <div className="relative">
-                        <Calendar size={16} className="absolute left-3 top-3 text-slate-400" />
-                        <input 
-                          type="date"
-                          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                          value={deadlineDate}
-                          onChange={e => setDeadlineDate(e.target.value)}
-                        />
-                      </div>
-                   </div>
-                   <div>
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Tenggat Jam</label>
-                      <div className="relative">
-                        <Clock size={16} className="absolute left-3 top-3 text-slate-400" />
-                        <input 
-                          type="time"
-                          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                          value={deadlineTime}
-                          onChange={e => setDeadlineTime(e.target.value)}
-                        />
-                      </div>
-                   </div>
-                </div>
-                
-                {assignmentType === "quiz" && (
-                   <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 text-xs text-orange-700 flex gap-2">
-                      <div className="shrink-0 pt-0.5">💡</div>
-                      <p>
-                        Setelah menyimpan tugas ini, Anda akan diarahkan ke halaman <strong>Pembuat Soal Kuis</strong> untuk menambahkan pertanyaan.
-                      </p>
-                   </div>
-                )}
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Tenggat Tanggal</label>
+                       <div className="relative">
+                         <Calendar size={16} className="absolute left-3 top-3 text-slate-400" />
+                         <input 
+                           type="date"
+                           className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                           value={deadlineDate}
+                           onChange={e => setDeadlineDate(e.target.value)}
+                         />
+                       </div>
+                    </div>
+                    <div>
+                       <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Tenggat Jam</label>
+                       <div className="relative">
+                         <Clock size={16} className="absolute left-3 top-3 text-slate-400" />
+                         <input 
+                           type="time"
+                           className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                           value={deadlineTime}
+                           onChange={e => setDeadlineTime(e.target.value)}
+                         />
+                       </div>
+                    </div>
+                 </div>
+                 
+                 {assignmentType === "quiz" && (
+                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 text-xs text-orange-700 flex gap-2">
+                       <div className="shrink-0 pt-0.5">💡</div>
+                       <p>
+                         Setelah menyimpan tugas ini, Anda akan diarahkan ke halaman <strong>Pembuat Soal Kuis</strong> untuk menambahkan pertanyaan.
+                       </p>
+                    </div>
+                 )}
               </div>
             )}
 

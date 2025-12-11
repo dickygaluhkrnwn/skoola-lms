@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "kids" | "pro";
+// Update: Definisi 4 Jenjang Sekolah
+export type Theme = "sd" | "smp" | "sma" | "uni";
 
 interface ThemeContextType {
   theme: Theme;
@@ -12,16 +13,20 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("kids"); // Default ke Kids
+  // Default sementara ke 'sd' sebelum user login/memilih
+  const [theme, setTheme] = useState<Theme>("sd");
 
   useEffect(() => {
     // 1. Cek Local Storage saat pertama load
     const savedTheme = localStorage.getItem("skoola-theme") as Theme;
-    if (savedTheme) {
+    const validThemes: Theme[] = ["sd", "smp", "sma", "uni"];
+
+    if (savedTheme && validThemes.includes(savedTheme)) {
       setTheme(savedTheme);
       document.documentElement.setAttribute("data-theme", savedTheme);
     } else {
-      document.documentElement.setAttribute("data-theme", "kids");
+      // Fallback default
+      document.documentElement.setAttribute("data-theme", "sd");
     }
   }, []);
 

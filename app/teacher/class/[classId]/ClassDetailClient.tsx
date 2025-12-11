@@ -4,13 +4,17 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, Users, BookOpen, LayoutDashboard, 
-  CalendarCheck, Loader2, ClipboardList
+  CalendarCheck, Loader2, ClipboardList, GraduationCap, Palette
 } from "lucide-react";
 import { db } from "../../../../lib/firebase";
 import { 
   doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, deleteDoc, serverTimestamp, Timestamp, getCountFromServer 
 } from "firebase/firestore";
 import { cn } from "../../../../lib/utils";
+
+// --- IMPORT TIPE DATA SENTRAL ---
+import { Classroom } from "../../../../lib/types/course.types";
+import { UserProfile } from "../../../../lib/types/user.types";
 
 // --- IMPORT KOMPONEN PECAHAN ---
 import DashboardView from "../../../../components/teacher/class-detail/DashboardView";
@@ -20,15 +24,7 @@ import MaterialsView from "../../../../components/teacher/class-detail/Materials
 import AssignmentsView, { AssignmentData } from "../../../../components/teacher/class-detail/AssignmentsView";
 import UploadMaterialModal from "../../../../components/teacher/class-detail/UploadMaterialModal";
 
-// --- TIPE DATA ---
-interface ClassData {
-  id: string;
-  name: string;
-  description: string;
-  code: string;
-  students: string[]; 
-}
-
+// --- TIPE DATA LOKAL (YANG BELUM ADA DI CENTRAL) ---
 interface StudentData {
   uid: string;
   displayName: string;
@@ -57,7 +53,7 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
   const router = useRouter();
 
   // --- STATE UTAMA ---
-  const [classData, setClassData] = useState<ClassData | null>(null);
+  const [classData, setClassData] = useState<Classroom | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "attendance" | "students" | "materials" | "assignments">("dashboard");
   const [loading, setLoading] = useState(true);
 
@@ -89,7 +85,8 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
         
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setClassData({ id: docSnap.id, ...data } as ClassData);
+          // Menggunakan tipe Classroom yang sudah diupdate (support category & gradeLevel)
+          setClassData({ id: docSnap.id, ...data } as Classroom);
           
           // C. Fetch Detail Murid
           if (data.students && data.students.length > 0) {
@@ -231,7 +228,7 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
     <div className="flex min-h-screen bg-slate-50 font-sans">
       
       {/* 1. SIDEBAR NAVIGATION */}
-      <aside className="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col sticky top-0 h-screen">
+      <aside className="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col sticky top-0 h-screen z-40">
         <div className="p-6 border-b border-slate-100">
           <div className="flex items-center gap-2 text-blue-600 font-bold text-xl">
              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
@@ -290,12 +287,40 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
       {/* 2. MAIN CONTENT AREA */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         
-        {/* Mobile Header */}
-        <div className="md:hidden mb-6 flex items-center justify-between">
-           <button onClick={() => router.push("/teacher")}><ArrowLeft /></button>
-           <span className="font-bold">{classData?.name}</span>
-           <div />
-        </div>
+        {/* --- CLASS HEADER (NEW: Persisten di semua tab) --- */}
+        <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              {/* Back Button for Mobile */}
+              <button onClick={() => router.push("/teacher")} className="md:hidden text-slate-500"><ArrowLeft size={20}/></button>
+              
+              <h1 className="text-2xl font-bold text-slate-900">{classData?.name}</h1>
+              {classData?.gradeLevel && (
+                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider">
+                  {classData.gradeLevel}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <Palette size={14} className="text-slate-400"/> 
+                {classData?.category || 'Umum'}
+              </span>
+              <span className="hidden md:inline text-slate-300">•</span>
+              <div className="flex items-center gap-2">
+                <span className="opacity-70">Kode Kelas:</span>
+                <button 
+                  onClick={handleCopyCode}
+                  className="font-mono bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded text-slate-700 font-bold transition-colors text-xs"
+                  title="Klik untuk salin"
+                >
+                  {classData?.code}
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
 
         {/* --- DYNAMIC VIEW SWITCHER --- */}
         
@@ -344,7 +369,6 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
              onViewDetail={(assignmentId) => {
                 router.push(`/teacher/class/${classId}/assignment/${assignmentId}`);
              }}
-             // TAMBAHAN LOGIKA REDIRECT KE HALAMAN GRADING
              onGradeAssignment={(assignmentId) => {
                 router.push(`/teacher/class/${classId}/assignment/${assignmentId}/grade`);
              }}

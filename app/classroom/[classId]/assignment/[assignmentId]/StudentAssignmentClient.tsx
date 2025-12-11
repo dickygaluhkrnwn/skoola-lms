@@ -1,15 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, Clock, FileText, CheckCircle2, UploadCloud, 
-  Send, Loader2, AlertCircle, FileCheck, X 
+  Send, Loader2, AlertCircle, Music, Image as ImageIcon, X
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase"; 
 import { 
-  doc, getDoc, collection, addDoc, getDocs, serverTimestamp, setDoc, query, orderBy 
+  doc, getDoc, collection, getDocs, serverTimestamp, setDoc, query, orderBy 
 } from "firebase/firestore";
+import { 
+  getStorage, ref, uploadBytes, getDownloadURL 
+} from "firebase/storage";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -32,6 +35,8 @@ interface Question {
   type: "multiple-choice" | "essay";
   options?: string[]; // Untuk PG
   points: number;
+  mediaUrl?: string;
+  mediaType?: "image" | "audio";
 }
 
 interface Submission {
@@ -48,7 +53,6 @@ interface StudentAssignmentClientProps {
   assignmentId: string;
 }
 
-// Pastikan export default function ada di sini
 export default function StudentAssignmentClient({ classId, assignmentId }: StudentAssignmentClientProps) {
   const router = useRouter();
   
@@ -61,8 +65,11 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
   // State Pengerjaan
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({}); // Map questionId -> optionIndex
   const [essayAnswer, setEssayAnswer] = useState("");
-  const [fileUrl, setFileUrl] = useState(""); // Simulasi URL file
+  const [fileUrl, setFileUrl] = useState(""); 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 1. AUTH & DATA FETCHING
   useEffect(() => {
@@ -123,17 +130,55 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
     }));
   };
 
-  // 3. SUBMIT TUGAS
+  // 3. HANDLER FILE UPLOAD (REAL)
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const storage = getStorage();
+      const fileExt = file.name.split('.').pop();
+      // Path: assignments/student_uploads/{assignmentId}/{userId}.{ext}
+      const fileName = `assignments/student_uploads/${assignmentId}/${userId}_${Date.now()}.${fileExt}`;
+      const storageRef = ref(storage, fileName);
+      
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      setFileUrl(downloadURL);
+      alert("File berhasil diupload!");
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Gagal mengupload file. Pastikan koneksi lancar.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // 4. SUBMIT TUGAS
   const handleSubmit = async () => {
     if (!userId || !assignment) return;
     
+    // Validasi sebelum submit
+    if (assignment.type === "quiz" && Object.keys(quizAnswers).length < questions.length) {
+       if(!confirm("Anda belum menjawab semua soal. Yakin ingin mengumpulkan?")) return;
+    }
+    if (assignment.type === "upload" && !fileUrl) {
+       alert("Harap upload file tugas terlebih dahulu!");
+       return;
+    }
+    if (assignment.type === "essay" && !essayAnswer.trim()) {
+       if(!confirm("Jawaban esai masih kosong. Yakin ingin mengumpulkan?")) return;
+    }
+
     if (!confirm("Apakah Anda yakin ingin mengumpulkan tugas ini? Jawaban tidak dapat diubah setelah dikumpulkan.")) return;
 
     setIsSubmitting(true);
     try {
       let payload: any = {
         studentId: userId,
-        studentName: auth.currentUser?.displayName || "Siswa", // Fallback name
+        studentName: auth.currentUser?.displayName || "Siswa", 
         submittedAt: serverTimestamp(),
         status: "submitted",
       };
@@ -145,16 +190,16 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
         payload.answers = essayAnswer;
       } else if (assignment.type === "upload") {
         payload.answers = "File uploaded";
-        payload.attachmentUrl = fileUrl; // Simulasi link file
+        payload.attachmentUrl = fileUrl; 
       }
 
       const subRef = doc(db, "classrooms", classId, "assignments", assignmentId, "submissions", userId);
       await setDoc(subRef, payload);
 
-      // Update State Lokal
+      // Update State Lokal (dengan Date lokal agar UI update instan)
       setSubmission({
         ...payload,
-        submittedAt: new Date() // Placeholder untuk UI langsung update
+        submittedAt: { seconds: Date.now() / 1000 } 
       });
 
       alert("Tugas berhasil dikumpulkan! Kerja bagus.");
@@ -246,42 +291,64 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
             <div className="space-y-4">
                {questions.map((q, idx) => (
                   <div key={q.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                     <div className="flex gap-4">
-                        <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold text-sm">
-                           {idx + 1}
-                        </span>
-                        <div className="flex-1">
-                           <p className="font-medium text-slate-800 text-lg mb-4">{q.text}</p>
-                           
-                           {/* Opsi Jawaban */}
-                           <div className="space-y-3">
-                              {q.options?.map((opt, optIdx) => {
-                                 const isSelected = quizAnswers[q.id] === optIdx;
-                                 return (
-                                    <div 
-                                       key={optIdx}
-                                       onClick={() => !isSubmitted && handleOptionSelect(q.id, optIdx)}
-                                       className={cn(
-                                          "p-4 rounded-xl border-2 transition-all cursor-pointer flex items-center gap-3",
-                                          isSelected 
-                                             ? "border-blue-500 bg-blue-50 text-blue-700" 
-                                             : "border-slate-100 hover:border-blue-200 bg-slate-50",
-                                          isSubmitted && "cursor-default opacity-80" // Disable if submitted
-                                       )}
-                                    >
-                                       <div className={cn(
-                                          "w-5 h-5 rounded-full border-2 flex items-center justify-center",
-                                          isSelected ? "border-blue-500" : "border-slate-300"
-                                       )}>
-                                          {isSelected && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full" />}
-                                       </div>
-                                       <span className="font-medium">{opt}</span>
-                                    </div>
-                                 )
-                              })}
-                           </div>
-                        </div>
-                     </div>
+                      <div className="flex gap-4">
+                         <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold text-sm h-fit">
+                            {idx + 1}
+                         </span>
+                         <div className="flex-1">
+                            {/* Media Soal */}
+                            {q.mediaUrl && (
+                               <div className="mb-4 rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
+                                  {q.mediaType === 'image' ? (
+                                     <img src={q.mediaUrl} alt="Soal" className="w-full max-h-64 object-contain mx-auto" />
+                                  ) : (
+                                     <div className="p-4 flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center">
+                                           <Music size={20} />
+                                        </div>
+                                        <audio controls src={q.mediaUrl} className="w-full max-w-sm" />
+                                     </div>
+                                  )}
+                               </div>
+                            )}
+
+                            <p className="font-medium text-slate-800 text-lg mb-4">{q.text}</p>
+                            
+                            {/* Opsi Jawaban */}
+                            <div className="space-y-3">
+                               {q.options?.map((opt, optIdx) => {
+                                  // Jika sudah submit, kita ambil jawaban dari submission.answers
+                                  // Jika belum, ambil dari state quizAnswers
+                                  const savedAnswer = submission?.answers?.[q.id];
+                                  const currentAnswer = quizAnswers[q.id];
+                                  const isSelected = isSubmitted ? savedAnswer === optIdx : currentAnswer === optIdx;
+                                  
+                                  return (
+                                     <div 
+                                        key={optIdx}
+                                        onClick={() => !isSubmitted && handleOptionSelect(q.id, optIdx)}
+                                        className={cn(
+                                           "p-4 rounded-xl border-2 transition-all flex items-center gap-3",
+                                           !isSubmitted && "cursor-pointer",
+                                           isSelected 
+                                              ? "border-blue-500 bg-blue-50 text-blue-700" 
+                                              : "border-slate-100 bg-slate-50",
+                                           !isSubmitted && !isSelected && "hover:border-blue-200"
+                                        )}
+                                     >
+                                        <div className={cn(
+                                           "w-5 h-5 rounded-full border-2 flex items-center justify-center",
+                                           isSelected ? "border-blue-500" : "border-slate-300"
+                                        )}>
+                                           {isSelected && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full" />}
+                                        </div>
+                                        <span className="font-medium">{opt}</span>
+                                     </div>
+                                  )
+                               })}
+                            </div>
+                         </div>
+                      </div>
                   </div>
                ))}
             </div>
@@ -313,24 +380,49 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
                      Format yang didukung: PDF, DOCX, JPG, PNG. Maksimal 10MB.
                   </p>
                   
-                  {/* Simulasi Input File / Link */}
+                  {/* Area Upload */}
                   {!isSubmitted ? (
                      <div className="space-y-4">
+                        <div className="p-6 border-2 border-dashed border-slate-300 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                           {isUploading ? (
+                              <div className="flex flex-col items-center gap-2 text-blue-600">
+                                 <Loader2 className="animate-spin" />
+                                 <span className="text-sm font-bold">Mengupload...</span>
+                              </div>
+                           ) : fileUrl ? (
+                              <div className="flex flex-col items-center gap-2 text-green-600">
+                                 <CheckCircle2 size={32} />
+                                 <span className="text-sm font-bold">File Siap Dikirim</span>
+                                 <span className="text-xs text-slate-400 break-all">{fileUrl}</span>
+                                 <Button variant="ghost" size="sm" onClick={(e) => {e.stopPropagation(); setFileUrl("");}} className="mt-2 text-red-500 hover:text-red-600">
+                                    Ganti File
+                                 </Button>
+                              </div>
+                           ) : (
+                              <div className="text-slate-400">
+                                 <p className="text-sm font-bold">Klik untuk pilih file</p>
+                              </div>
+                           )}
+                        </div>
                         <input 
-                           type="text" 
-                           placeholder="[SIMULASI] Tempel Link File (Google Drive/Dropbox)"
-                           className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-center"
-                           value={fileUrl}
-                           onChange={(e) => setFileUrl(e.target.value)}
+                           type="file" 
+                           ref={fileInputRef} 
+                           className="hidden" 
+                           onChange={handleFileChange}
+                           accept=".pdf,.doc,.docx,.jpg,.png,.jpeg"
                         />
-                        <Button className="w-full bg-slate-900 text-white" disabled>
-                           Pilih File (Demo Disabled)
-                        </Button>
                      </div>
                   ) : (
-                     <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-center gap-2 text-green-700 font-bold">
-                        <CheckCircle2 size={20} />
-                        File Berhasil Diupload
+                     <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex flex-col items-center justify-center gap-2 text-green-700 font-bold">
+                        <div className="flex items-center gap-2">
+                           <CheckCircle2 size={20} />
+                           File Berhasil Diupload
+                        </div>
+                        {submission?.attachmentUrl && (
+                           <a href={submission.attachmentUrl} target="_blank" rel="noreferrer" className="text-xs underline hover:text-green-900 font-normal">
+                              Lihat File Saya
+                           </a>
+                        )}
                      </div>
                   )}
                </div>
@@ -348,7 +440,7 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
                </p>
                <Button 
                   onClick={handleSubmit} 
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isUploading}
                   className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 rounded-xl text-lg font-bold shadow-lg shadow-blue-200 transition-transform active:scale-95"
                >
                   {isSubmitting ? <Loader2 className="animate-spin mr-2"/> : <Send className="mr-2" size={20} />}

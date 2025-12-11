@@ -9,18 +9,17 @@ import { Button } from "../../ui/button";
 import { Timestamp } from "firebase/firestore";
 
 // --- INTERFACES ---
-// Kita definisikan props yang dibutuhkan komponen ini
 interface DashboardViewProps {
   classData: {
     name: string;
     description: string;
     code: string;
   } | null;
-  students: any[]; // Bisa diperjelas tipenya jika ada file types global
+  students: any[]; 
   materials: any[];
   averageXP: number;
   onCopyCode: () => void;
-  onChangeTab: (tab: "attendance") => void; // Fungsi untuk navigasi ke tab presensi
+  onChangeTab: (tab: "attendance") => void; 
 }
 
 export default function DashboardView({
@@ -142,7 +141,8 @@ export default function DashboardView({
   );
 }
 
-// --- SUB COMPONENT: StatCard ---
+// --- SUB COMPONENTS ---
+
 function StatCard({ icon, label, value, color }: { icon: React.ReactNode, label: string, value: string | number, color: string }) {
   const colorClasses: Record<string, string> = {
     blue: "bg-blue-50 text-blue-600",

@@ -2,19 +2,19 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Eye, EyeOff, Loader2, Mail, Lock, User, 
-  GraduationCap, Presentation, ArrowRight, Sun, Briefcase, Calendar
+import {
+  Eye, EyeOff, Loader2, Mail, Lock, User,
+  GraduationCap, Presentation, ArrowRight, Calendar
 } from "lucide-react";
-import { auth, db } from "@/lib/firebase"; 
-import { 
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, 
-  onAuthStateChanged 
+import { auth, db } from "@/lib/firebase";
+import {
+  createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  onAuthStateChanged
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useTheme } from "@/lib/theme-context"; 
+import { useTheme, Theme } from "@/lib/theme-context";
 
 // --- COMPONENTS ---
 const InputField = ({ label, icon, type = "text", value, onChange, placeholder, min, max }: any) => {
@@ -54,35 +54,30 @@ const InputField = ({ label, icon, type = "text", value, onChange, placeholder, 
 // --- MAIN CLIENT COMPONENT ---
 export default function AuthClient() {
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme(); 
-  
+  const { theme, toggleTheme } = useTheme();
+
   const [view, setView] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  // Register States
   const [role, setRole] = useState<"student" | "teacher" | null>(null);
-
+  const [schoolLevel, setSchoolLevel] = useState<Theme | null>(null); // 'sd' | 'smp' | 'sma' | 'uni'
+  
   // Form Data
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [age, setAge] = useState<string>(""); // State untuk Umur
 
-  // Logic Auto-Theme berdasarkan Umur
+  // Logic: Ganti tema visual secara langsung saat user memilih jenjang
   useEffect(() => {
-    if (view === "register" && age) {
-      const ageNum = parseInt(age);
-      if (!isNaN(ageNum)) {
-        if (ageNum < 13) {
-          if (theme !== "kids") toggleTheme("kids");
-        } else {
-          if (theme !== "pro") toggleTheme("pro");
-        }
-      }
+    if (view === "register" && schoolLevel) {
+      toggleTheme(schoolLevel);
     }
-  }, [age, view, theme, toggleTheme]);
+  }, [schoolLevel, view, toggleTheme]);
 
-  // Cek Auth
+  // Cek Auth Existing User
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -91,21 +86,23 @@ export default function AuthClient() {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             const userData = docSnap.data();
-            // Simpan preferensi tema user yang login ke localStorage agar konsisten
-            if (userData.themePreference) {
-               toggleTheme(userData.themePreference);
-            }
             
+            // Apply tema user yang tersimpan
+            if (userData.schoolLevel) {
+               toggleTheme(userData.schoolLevel as Theme);
+            }
+
             if (userData.role === "teacher") {
               router.push("/teacher");
             } else {
-              router.push("/learn");
+              // Redirect ke dashboard (Catatan: Kita akan ubah /learn jadi /dashboard di Tahap 2)
+              router.push("/learn"); 
             }
           }
         } catch (error) {
           console.error("Gagal load user:", error);
         }
-      } 
+      }
       setLoading(false);
     });
     return () => unsubscribe();
@@ -126,9 +123,9 @@ export default function AuthClient() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!role) return setError("Pilih peran dulu ya!");
-    if (!age && role === 'student') return setError("Masukkan umur kamu!"); // Validasi umur
-    
+    if (!role) return setError("Pilih peran (Murid/Guru) dulu ya!");
+    if (!schoolLevel) return setError("Pilih jenjang sekolah kamu!");
+
     setAuthLoading(true);
     setError("");
 
@@ -136,21 +133,20 @@ export default function AuthClient() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newUser = userCredential.user;
 
-      // Simpan data user ke Firestore
+      // Simpan data user lengkap ke Firestore
       await setDoc(doc(db, "users", newUser.uid), {
         uid: newUser.uid,
         displayName: name,
         email: email,
         role: role,
-        age: parseInt(age) || 0, // Simpan umur
+        schoolLevel: schoolLevel, // FIELD BARU: PENTING
         xp: 0,
         level: 1,
-        streak: 1, // Reset ke integer sederhana sesuai update SocialClient
+        streak: 1,
         createdAt: Date.now(),
-        themePreference: theme, // Simpan tema yang terpilih otomatis
         enrolledClasses: []
       });
-      
+
     } catch (err: any) {
       console.error("Register Error:", err);
       setError(err.message || "Gagal mendaftar.");
@@ -166,111 +162,89 @@ export default function AuthClient() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-background font-sans overflow-hidden transition-colors duration-500">
-      
-      {/* 1. THEME TOGGLE (Floating Top Right) */}
-      <div className="fixed top-6 right-6 z-50 flex items-center bg-white/80 backdrop-blur-md p-1.5 rounded-full border border-gray-200 shadow-lg">
-        <button
-          type="button"
-          onClick={() => toggleTheme("kids")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all",
-            theme === "kids" 
-              ? "bg-red-500 text-white shadow-md" 
-              : "text-gray-500 hover:bg-gray-100"
-          )}
-        >
-          <Sun size={14} /> Anak
-        </button>
-        <button
-          type="button"
-          onClick={() => toggleTheme("pro")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all",
-            theme === "pro" 
-              ? "bg-sky-600 text-white shadow-md" 
-              : "text-gray-500 hover:bg-gray-100"
-          )}
-        >
-          <Briefcase size={14} /> Dewasa
-        </button>
-      </div>
 
-      {/* 2. LEFT SIDE: Visual Banner */}
+      {/* LEFT SIDE: Dynamic Visual Banner */}
       <div className={cn(
         "hidden lg:flex w-1/2 relative items-center justify-center text-white p-12 overflow-hidden transition-colors duration-500",
-        theme === "kids" ? "bg-red-600" : "bg-slate-900"
+        // Warna background berubah sesuai tema aktif
+        theme === "sd" ? "bg-red-500" :
+        theme === "smp" ? "bg-violet-600" :
+        theme === "sma" ? "bg-emerald-600" : "bg-slate-900"
       )}>
         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/batik-rampung.png')]"></div>
-        
+
         <div className={cn(
           "absolute top-[-20%] left-[-20%] w-[600px] h-[600px] rounded-full blur-[120px] animate-pulse transition-colors duration-500",
-          theme === "kids" ? "bg-yellow-400" : "bg-sky-600"
+          theme === "sd" ? "bg-yellow-400" :
+          theme === "smp" ? "bg-cyan-400" :
+          theme === "sma" ? "bg-teal-400" : "bg-blue-600"
         )}></div>
 
         <div className="relative z-10 max-w-lg">
-          <motion.div 
-            key={theme}
+          <motion.div
+            key={theme} // Trigger animasi saat tema berubah
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
             <div className="mb-6 inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-sm">
-              <span className={cn("w-2.5 h-2.5 rounded-full animate-pulse", theme === "kids" ? "bg-yellow-400" : "bg-sky-400")}></span>
-              <span className="text-xs font-bold tracking-widest uppercase">SKOOLA {theme === 'kids' ? 'KIDS' : 'PRO'}</span>
+              <span className={cn("w-2.5 h-2.5 rounded-full animate-pulse",
+                 theme === "sd" ? "bg-yellow-400" :
+                 theme === "smp" ? "bg-pink-400" :
+                 theme === "sma" ? "bg-amber-400" : "bg-blue-400"
+              )}></span>
+              <span className="text-xs font-bold tracking-widest uppercase">SKOOLA 2.0</span>
             </div>
-            
+
             <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-tight">
-              {theme === "kids" ? (
-                <>Belajar Jadi <br/><span className="text-yellow-300 italic">Seru Banget!</span></>
-              ) : (
-                <>Tingkatkan <br/><span className="text-sky-400 italic">Kompetensi Anda.</span></>
-              )}
+              {theme === "sd" ? <>Belajar Itu <br/><span className="text-yellow-300 italic">Seru Banget!</span></> :
+               theme === "smp" ? <>Eksplorasi <br/><span className="text-cyan-300 italic">Duniamu.</span></> :
+               theme === "sma" ? <>Siapkan <br/><span className="text-amber-300 italic">Masa Depan.</span></> :
+               <>Platform <br/><span className="text-blue-300 italic">Akademik Digital.</span></>
+              }
             </h1>
-            
+
             <p className="text-white/80 text-lg leading-relaxed max-w-md">
-              {theme === "kids" 
-                ? "Ayo berpetualang sambil belajar Bahasa Indonesia. Kumpulkan poin dan jadilah juara!" 
-                : "Platform BIPA terintegrasi untuk meningkatkan profisiensi bahasa Indonesia Anda secara profesional."}
+              Platform sekolah digital terintegrasi untuk semua jenjang pendidikan.
             </p>
           </motion.div>
         </div>
       </div>
 
-      {/* 3. RIGHT SIDE: Form Area */}
+      {/* RIGHT SIDE: Form Area */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative bg-background">
         <div className="max-w-md w-full">
-          
+
           <div className="text-center mb-10">
-            <h2 className={cn("text-3xl font-bold mb-2 transition-colors", theme === 'kids' ? 'text-red-600' : 'text-slate-900')}>
-              {view === "login" 
-                ? (theme === "kids" ? "Halo, Petualang!" : "Selamat Datang") 
-                : (theme === "kids" ? "Mulai Petualangan" : "Buat Akun Baru")}
+            <h2 className="text-3xl font-bold mb-2 text-primary transition-colors">
+              {view === "login" ? "Selamat Datang" : "Buat Akun Baru"}
             </h2>
             <p className="text-gray-500 font-medium">
-              {view === "login" 
-                ? "Lanjutkan progres belajarmu hari ini." 
-                : "Daftar gratis untuk mulai belajar."}
+              {view === "login"
+                ? "Masuk untuk melanjutkan pembelajaran."
+                : "Daftar untuk mulai akses kelas digital."}
             </p>
           </div>
 
-          <div className="bg-secondary/50 p-1.5 rounded-xl flex mb-8">
-            <button 
+          {/* Toggle Login/Register */}
+          <div className="bg-secondary p-1.5 rounded-xl flex mb-8">
+            <button
               onClick={() => { setView("login"); setError(""); }}
               className={cn(
                 "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-                view === "login" 
-                  ? "bg-white text-gray-900 shadow-sm" 
+                view === "login"
+                  ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700 hover:bg-white/50"
               )}
             >
               Masuk
             </button>
-            <button 
+            <button
               onClick={() => { setView("register"); setError(""); }}
               className={cn(
                 "flex-1 py-2.5 text-sm font-bold rounded-xl transition-all",
-                view === "register" 
-                  ? "bg-white text-gray-900 shadow-sm" 
+                view === "register"
+                  ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700 hover:bg-white/50"
               )}
             >
@@ -289,79 +263,97 @@ export default function AuthClient() {
               className="space-y-5"
             >
               {view === "register" && (
-                <div className="space-y-4">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Data Diri</label>
-                  
+                <div className="space-y-5">
                   {/* Pilihan Peran */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div 
-                      onClick={() => setRole("student")}
-                      className={cn(
-                        "cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 text-center group active:scale-95",
-                        role === "student" 
-                          ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/20" 
-                          : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
-                      )}
-                    >
-                      <div className={cn("p-2 rounded-full", role === "student" ? "bg-primary text-white" : "bg-gray-100 text-gray-500")}>
-                        <GraduationCap size={18} />
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1 mb-2 block">Saya adalah...</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div
+                        onClick={() => setRole("student")}
+                        className={cn(
+                          "cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 text-center group active:scale-95",
+                          role === "student"
+                            ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/20"
+                            : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
+                        )}
+                      >
+                        <div className={cn("p-2 rounded-full", role === "student" ? "bg-primary text-white" : "bg-gray-100 text-gray-500")}>
+                          <GraduationCap size={18} />
+                        </div>
+                        <span className="font-bold text-sm">Murid</span>
                       </div>
-                      <span className="font-bold text-sm">Murid</span>
-                    </div>
-                    <div 
-                      onClick={() => setRole("teacher")}
-                      className={cn(
-                        "cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 text-center group active:scale-95",
-                        role === "teacher" 
-                          ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/20" 
-                          : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
-                      )}
-                    >
-                      <div className={cn("p-2 rounded-full", role === "teacher" ? "bg-primary text-white" : "bg-gray-100 text-gray-500")}>
-                        <Presentation size={18} />
+                      <div
+                        onClick={() => setRole("teacher")}
+                        className={cn(
+                          "cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 text-center group active:scale-95",
+                          role === "teacher"
+                            ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/20"
+                            : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
+                        )}
+                      >
+                        <div className={cn("p-2 rounded-full", role === "teacher" ? "bg-primary text-white" : "bg-gray-100 text-gray-500")}>
+                          <Presentation size={18} />
+                        </div>
+                        <span className="font-bold text-sm">Guru</span>
                       </div>
-                      <span className="font-bold text-sm">Guru</span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="col-span-2">
-                        <InputField 
-                            label="Nama Lengkap" 
-                            placeholder="Budi Santoso"
-                            icon={<User size={18} />} 
-                            value={name} 
-                            onChange={(e: any) => setName(e.target.value)}
-                        />
-                    </div>
-                    <div className="col-span-1">
-                        <InputField 
-                            label="Umur" 
-                            type="number"
-                            placeholder="12"
-                            min="5"
-                            max="99"
-                            icon={<Calendar size={18} />} 
-                            value={age} 
-                            onChange={(e: any) => setAge(e.target.value)}
-                        />
+                  {/* Pilihan Jenjang Sekolah */}
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1 mb-2 block">Jenjang Sekolah</label>
+                    <div className="grid grid-cols-4 gap-2">
+                        {[
+                            { id: 'sd', label: 'SD', icon: '🎒', color: 'red' },
+                            { id: 'smp', label: 'SMP', icon: '🛹', color: 'violet' },
+                            { id: 'sma', label: 'SMA', icon: '🎧', color: 'emerald' },
+                            { id: 'uni', label: 'Univ', icon: '🏛️', color: 'slate' },
+                        ].map((level) => (
+                            <div
+                                key={level.id}
+                                onClick={() => setSchoolLevel(level.id as Theme)}
+                                className={cn(
+                                    "cursor-pointer p-2 py-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 text-center active:scale-95",
+                                    schoolLevel === level.id
+                                        ? `border-${level.color}-500 bg-${level.color}-50 text-${level.color}-700 ring-2 ring-${level.color}-200`
+                                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                                )}
+                                style={{
+                                    // Hack untuk memastikan warna aktif sesuai tema tanpa ribet class dynamic tailwind
+                                    borderColor: schoolLevel === level.id ? `var(--color-primary)` : '',
+                                    color: schoolLevel === level.id ? `var(--color-primary)` : '',
+                                    backgroundColor: schoolLevel === level.id ? `var(--color-secondary)` : ''
+                                }}
+                            >
+                                <span className="text-xl">{level.icon}</span>
+                                <span className="font-bold text-xs">{level.label}</span>
+                            </div>
+                        ))}
                     </div>
                   </div>
+
+                  <InputField
+                    label="Nama Lengkap"
+                    placeholder="Nama Anda"
+                    icon={<User size={18} />}
+                    value={name}
+                    onChange={(e: any) => setName(e.target.value)}
+                  />
                 </div>
               )}
 
-              <InputField 
-                label="Alamat Email" 
+              <InputField
+                label="Alamat Email"
                 type="email"
-                placeholder="nama@email.com"
-                icon={<Mail size={18} />} 
-                value={email} 
+                placeholder="nama@sekolah.id"
+                icon={<Mail size={18} />}
+                value={email}
                 onChange={(e: any) => setEmail(e.target.value)}
               />
 
-              <InputField 
-                label="Kata Sandi" 
-                type="password" 
+              <InputField
+                label="Kata Sandi"
+                type="password"
                 placeholder="••••••••"
                 icon={<Lock size={18} />}
                 value={password}
@@ -380,9 +372,7 @@ export default function AuthClient() {
                 disabled={authLoading}
                 className={cn(
                   "w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed hover:shadow-xl active:scale-[0.98]",
-                  theme === "kids" 
-                    ? "bg-red-600 hover:bg-red-700 shadow-red-500/30" 
-                    : "bg-sky-600 hover:bg-sky-700 shadow-sky-500/30"
+                  "bg-primary hover:bg-primary/90"
                 )}
               >
                 {authLoading ? (

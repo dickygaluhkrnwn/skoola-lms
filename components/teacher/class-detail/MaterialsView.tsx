@@ -2,11 +2,12 @@
 
 import React from "react";
 import { 
-  BookOpen, Plus, Video, FileText, Link as LinkIcon, Trash2 
+  BookOpen, Plus, Video, FileText, Link as LinkIcon, Trash2, Calendar 
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { motion } from "framer-motion";
 import { Timestamp } from "firebase/firestore";
+import { cn } from "../../../lib/utils";
 
 // --- INTERFACES ---
 interface MaterialData {
@@ -32,10 +33,12 @@ export default function MaterialsView({
   return (
     <div className="max-w-5xl space-y-6">
        {/* Header Section */}
-       <div className="flex justify-between items-center bg-blue-50 p-6 rounded-2xl border border-blue-100 shadow-sm">
+       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div>
-             <h2 className="text-xl font-bold text-blue-900">Materi Tambahan</h2>
-             <p className="text-sm text-blue-600 mt-1">
+             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <BookOpen className="text-blue-600" /> Materi Pembelajaran
+             </h2>
+             <p className="text-sm text-slate-500 mt-1">
                 Kelola bahan ajar suplemen (Video/Artikel) untuk kelas ini.
              </p>
           </div>
@@ -61,53 +64,56 @@ export default function MaterialsView({
           </div>
        ) : (
           /* List Content */
-          <div className="grid gap-3">
-             {materials.map((item) => (
+          <div className="grid gap-4">
+             {materials.map((item, idx) => (
                 <motion.div 
                    key={item.id}
                    initial={{ opacity: 0, y: 10 }}
                    animate={{ opacity: 1, y: 0 }}
-                   className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between hover:border-blue-300 hover:shadow-md transition-all group"
+                   transition={{ delay: idx * 0.05 }}
+                   className="bg-white p-5 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between hover:border-blue-300 hover:shadow-md transition-all group relative overflow-hidden"
                 >
                    {/* Left: Icon & Info */}
-                   <div className="flex items-center gap-4 overflow-hidden">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm transition-colors shrink-0 ${
+                   <div className="flex items-start md:items-center gap-4 overflow-hidden mb-4 md:mb-0">
+                      <div className={cn(
+                         "w-12 h-12 rounded-xl flex items-center justify-center shadow-sm transition-colors shrink-0",
                          item.type === "video" 
-                            ? "bg-red-50 text-red-500 group-hover:bg-red-100" 
-                            : "bg-blue-50 text-blue-500 group-hover:bg-blue-100"
-                      }`}>
+                            ? "bg-red-50 text-red-600 group-hover:bg-red-100" 
+                            : "bg-blue-50 text-blue-600 group-hover:bg-blue-100"
+                      )}>
                          {item.type === "video" ? <Video size={24} /> : <FileText size={24} />}
                       </div>
                       <div className="min-w-0">
                          <p className="font-bold text-slate-800 text-lg group-hover:text-blue-700 transition-colors truncate pr-4">
                             {item.title}
                          </p>
-                         <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                            <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wide text-slate-500 border border-slate-200">
+                         <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2 mt-1">
+                            <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wide text-slate-500 border border-slate-200">
                                {item.type === 'video' ? 'Video' : 'Artikel'}
                             </span>
-                            <span>•</span>
-                            <span>
+                            <span className="flex items-center gap-1">
+                               <Calendar size={12} />
                                {item.createdAt 
                                   ? new Date(item.createdAt.seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) 
                                   : 'Baru saja'}
                             </span>
-                         </p>
+                         </div>
                       </div>
                    </div>
 
                    {/* Right: Actions */}
-                   <div className="flex gap-2 shrink-0">
-                      <button 
+                   <div className="flex gap-2 shrink-0 md:border-l md:pl-4 md:border-slate-100">
+                      <Button 
+                         variant="ghost" 
+                         size="sm"
                          onClick={() => window.open(item.content, "_blank")} 
-                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100" 
-                         title="Buka Link"
+                         className="text-slate-500 hover:text-blue-600 hover:bg-blue-50 border-transparent gap-2"
                       >
-                         <LinkIcon size={18}/>
-                      </button>
+                         <LinkIcon size={16}/> Buka
+                      </Button>
                       <button 
                          onClick={() => onDeleteMaterial(item.id)} 
-                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" 
+                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" 
                          title="Hapus Materi"
                       >
                          <Trash2 size={18}/>

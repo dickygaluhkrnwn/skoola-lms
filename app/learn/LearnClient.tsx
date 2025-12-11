@@ -1,124 +1,63 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { School, Layout, Map as MapIcon } from "lucide-react";
+import { 
+  School, LayoutDashboard, Clock, Calendar, CheckCircle, 
+  AlertCircle, BookOpen, TrendingUp, Plus, ArrowRight
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../lib/firebase";
 import { 
-  doc, getDoc, updateDoc, arrayUnion, collection, query, where, getDocs, increment, orderBy, onSnapshot 
+  doc, getDoc, collection, query, where, getDocs, orderBy, limit, onSnapshot, updateDoc, arrayUnion, increment 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
-// --- IMPORTS: COMPONENTS (Relative Paths) ---
+// --- IMPORTS ---
 import { StudentSidebar } from "../../components/layout/student-sidebar";
 import { MobileNav } from "../../components/layout/mobile-nav";
-import { LearnHeader } from "../../components/learn/learn-header";
-import { AdventureMap } from "../../components/learn/adventure-map"; // Kids View
-import { ModuleList } from "../../components/learn/module-list";     // Pro View
-import { ClassList } from "../../components/learn/class-list";
 import { JoinClassModal } from "../../components/learn/join-class-modal";
-
 import { useTheme } from "../../lib/theme-context";
 import { cn } from "../../lib/utils";
-import { UserProfile } from "../../lib/types/user.types";
-import { CourseModule } from "../../lib/types/course.types";
-
-// Extended interface untuk menangani completedModules secara lokal
-interface ExtendedUserProfile extends UserProfile {
-  completedModules?: string[]; // Array of Module IDs
-}
 
 export default function LearnClient() {
   const router = useRouter();
-  const { theme } = useTheme(); 
+  const { theme } = useTheme();
   
-  // --- STATE MANAGEMENT ---
-  const [userProfile, setUserProfile] = useState<ExtendedUserProfile | null>(null);
+  // State
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
-  // Raw modules dari DB
-  const [rawModules, setRawModules] = useState<CourseModule[]>([]);
-  // Processed modules (setelah dihitung locking logic-nya)
-  const [modules, setModules] = useState<CourseModule[]>([]); 
-  
   const [myClasses, setMyClasses] = useState<any[]>([]);
+  const [upcomingAssignments, setUpcomingAssignments] = useState<any[]>([]);
   
-  const [activeTab, setActiveTab] = useState<"map" | "classes">("map");
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joining, setJoining] = useState(false);
 
-  // --- 1. INITIAL FETCH (Modules & Auth) ---
-  useEffect(() => {
-    // A. Fetch Global Modules Sekali Saja (Static Content)
-    const fetchModules = async () => {
-      try {
-        const modQ = query(collection(db, "global_modules"), orderBy("order", "asc"));
-        const modSnap = await getDocs(modQ);
-        
-        if (!modSnap.empty) {
-          const fetched = modSnap.docs.map(d => ({ id: d.id, ...d.data() })) as unknown as CourseModule[];
-          setRawModules(fetched);
-        } else {
-          // Fallback jika DB kosong
-          setRawModules([
-            { 
-              id: "dummy1", 
-              title: "Selamat Datang!", 
-              description: "Menunggu konten dari admin...", 
-              level: 1, 
-              order: 1, 
-              xpReward: 50, 
-              lessons: [] 
-            } as any
-          ]);
-        }
-      } catch (err) {
-        console.error("Gagal load modules:", err);
-      }
-    };
-    fetchModules();
+  // Helper Theme Logic
+  const isKids = theme === "sd";
+  const isUni = theme === "uni";
 
-    // B. Listener Auth & User Data Real-time
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+  // --- INITIAL FETCH ---
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.push("/");
         return;
       }
 
-      // Listener User Profile (Real-time updates untuk XP/Level/Completed)
+      // 1. Fetch User Profile Realtime
       const unsubUser = onSnapshot(doc(db, "users", user.uid), async (docSnap) => {
         if (docSnap.exists()) {
-          const userData = docSnap.data() as ExtendedUserProfile;
-          
-          // Normalisasi Data (Handle root vs nested gamification)
-          const normalizedUser = {
-            ...userData,
-            gamification: {
-              xp: userData.gamification?.xp ?? (userData as any).xp ?? 0,
-              level: userData.gamification?.level ?? (userData as any).level ?? 1,
-              currentStreak: userData.gamification?.currentStreak ?? (userData as any).streak ?? 0,
-              // ... copy properties lain jika perlu
-            }
-          } as ExtendedUserProfile;
+          const userData = docSnap.data();
+          setUserProfile(userData);
 
-          setUserProfile(normalizedUser);
-
-          // Fetch Classes (Jika enrolledClasses berubah)
-          const enrolled = (userData as any).enrolledClasses || [];
+          // 2. Fetch Classes
+          const enrolled = userData.enrolledClasses || [];
           if (enrolled.length > 0) {
-            try {
-              const classesPromises = enrolled.map(async (classId: string) => {
-                const classDoc = await getDoc(doc(db, "classrooms", classId));
-                return classDoc.exists() ? { id: classDoc.id, ...classDoc.data() } : null;
-              });
-              const classes = await Promise.all(classesPromises);
-              setMyClasses(classes.filter((c: any) => c !== null));
-            } catch (e) {
-              console.error("Error fetching classes:", e);
-            }
+            fetchClassesAndAssignments(enrolled);
+          } else {
+            setLoading(false);
           }
         }
-        setLoading(false);
       });
 
       return () => unsubUser();
@@ -127,43 +66,43 @@ export default function LearnClient() {
     return () => unsubscribeAuth();
   }, [router]);
 
-  // --- 2. DYNAMIC LOCKING LOGIC (STRICT SEQUENTIAL) ---
-  useEffect(() => {
-    if (!userProfile || rawModules.length === 0) return;
+  const fetchClassesAndAssignments = async (classIds: string[]) => {
+    try {
+      // A. Fetch Classes Detail
+      const classesPromises = classIds.map(async (cid) => {
+        const cDoc = await getDoc(doc(db, "classrooms", cid));
+        // FIX: Cast as any agar properti .name terbaca
+        return cDoc.exists() ? { id: cDoc.id, ...cDoc.data() } as any : null;
+      });
+      const classesRes = await Promise.all(classesPromises);
+      const validClasses = classesRes.filter(c => c !== null);
+      setMyClasses(validClasses);
 
-    const userLevel = userProfile.gamification?.level || 1;
-    const completedModules = userProfile.completedModules || []; // Array of Module IDs
-
-    const processedModules = rawModules.map((mod, index) => {
-      // 1. Modul Pertama selalu UNLOCKED
-      if (index === 0) {
-        return { ...mod, isLocked: false };
+      // B. Fetch Upcoming Assignments (Simple aggregation)
+      if (validClasses.length > 0) {
+        // Ambil ID kelas pertama untuk contoh tugas
+        const firstClassId = validClasses[0].id;
+        const assignRef = collection(db, "classrooms", firstClassId, "assignments");
+        
+        const q = query(assignRef, orderBy("deadline", "asc"), limit(3));
+        const assignSnap = await getDocs(q);
+        
+        const assigns = assignSnap.docs.map(d => ({ 
+          id: d.id, 
+          classId: firstClassId, 
+          className: validClasses[0].name, // Sekarang aman karena validClasses[0] sudah any
+          ...d.data() 
+        }));
+        setUpcomingAssignments(assigns);
       }
-
-      // 2. Ambil Modul Sebelumnya
-      const prevModule = rawModules[index - 1];
       
-      // 3. Cek apakah Modul Sebelumnya sudah SELESAI
-      // Ini adalah kunci agar tidak bisa loncat meskipun level tinggi
-      const isPrevCompleted = completedModules.includes(prevModule.id);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // 4. Cek Syarat Level (Opsional tapi direkomendasikan)
-      // Modul level 2 butuh user level 2.
-      // Jika user level 10 tapi belum selesai modul level 1, tetap terkunci (karena poin 3)
-      const isLevelMet = userLevel >= mod.level;
-
-      // KESIMPULAN: UNLOCKED hanya jika Prev Selesai DAN Level Cukup
-      const isLocked = !(isPrevCompleted && isLevelMet);
-
-      return { ...mod, isLocked };
-    });
-
-    setModules(processedModules);
-
-  }, [userProfile, rawModules]);
-
-
-  // --- ACTIONS ---
   const handleJoinClass = async (code: string) => {
     setJoining(true);
     const user = auth.currentUser;
@@ -172,6 +111,7 @@ export default function LearnClient() {
     try {
       const codeUpper = code.toUpperCase();
       
+      // Cek apakah sudah join di state lokal
       if (myClasses.some(c => c.code === codeUpper)) {
         alert("Kamu sudah bergabung di kelas ini!");
         setJoining(false);
@@ -200,7 +140,7 @@ export default function LearnClient() {
 
       alert("Berhasil bergabung!");
       setIsJoinModalOpen(false);
-      setActiveTab("classes");
+      // Data akan auto-update karena ada listener onSnapshot di useEffect
     } catch (error) {
       console.error(error);
       alert("Gagal bergabung. Coba lagi nanti.");
@@ -209,12 +149,14 @@ export default function LearnClient() {
     }
   };
 
-  // --- RENDER ---
+
+  // --- RENDER HELPERS ---
+  
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-background text-foreground animate-pulse">
       <div className="flex flex-col items-center gap-2">
         <School className="w-10 h-10 animate-bounce text-primary" />
-        <span>Memuat Petualangan...</span>
+        <span className="font-bold">Memuat Sekolah Digital...</span>
       </div>
     </div>
   );
@@ -223,72 +165,199 @@ export default function LearnClient() {
     <div className="flex min-h-screen bg-background font-sans text-foreground transition-colors duration-500">
       <StudentSidebar />
 
-      <div className="flex-1 md:ml-64 relative pb-24">
-        {/* Header */}
-        <LearnHeader 
-          theme={theme} 
-          userProfile={userProfile} 
-          onOpenJoinModal={() => setIsJoinModalOpen(true)} 
-        />
-
-        {/* Tab Navigation */}
-        <div className="max-w-3xl mx-auto px-4 mt-8 mb-6">
+      <div className="flex-1 md:ml-64 relative pb-24 p-4 md:p-8">
+        
+        {/* HEADER SECTION: GREETING & STATS */}
+        <div className="max-w-6xl mx-auto space-y-8">
+          
+          {/* 1. Welcome Banner */}
           <div className={cn(
-            "flex p-1 shadow-sm border transition-all w-full max-w-sm mx-auto",
-            theme === "kids" ? "bg-white rounded-2xl border-2 border-sky-100 shadow-sky-100" : "bg-zinc-100/50 rounded-lg border-zinc-200"
+            "rounded-3xl p-8 relative overflow-hidden transition-all",
+            isKids ? "bg-primary text-white shadow-card" : 
+            isUni ? "bg-slate-800 text-white border border-slate-700" :
+            "bg-white border border-slate-200 text-slate-800"
           )}>
-            <button onClick={() => setActiveTab("map")} className={cn(
-              "flex-1 py-2 text-xs font-bold transition-all flex items-center justify-center gap-2",
-              theme === "kids" ? "rounded-xl" : "rounded-md",
-              activeTab === "map" 
-                ? (theme === "kids" ? "bg-sky-100 text-sky-700 shadow-inner" : "bg-white text-zinc-900 shadow-sm ring-1 ring-black/5")
-                : "text-gray-400 hover:text-gray-600"
-            )}>
-              {theme === "kids" ? <MapIcon size={16}/> : <Layout size={14}/>} 
-              {theme === "kids" ? "Peta" : "Kurikulum"}
-            </button>
-            <button onClick={() => setActiveTab("classes")} className={cn(
-              "flex-1 py-2 text-xs font-bold transition-all flex items-center justify-center gap-2",
-              theme === "kids" ? "rounded-xl" : "rounded-md",
-              activeTab === "classes" 
-                ? (theme === "kids" ? "bg-sky-100 text-sky-700 shadow-inner" : "bg-white text-zinc-900 shadow-sm ring-1 ring-black/5")
-                : "text-gray-400 hover:text-gray-600"
-            )}>
-              <School size={16} /> {theme === "kids" ? "Sekolahku" : "Kelas Saya"}
-            </button>
+            <div className="relative z-10">
+              <h1 className={cn("font-bold mb-2", isKids ? "text-3xl font-display" : "text-2xl md:text-3xl")}>
+                {isKids ? `Halo, Petualang ${userProfile?.displayName?.split(' ')[0]}! 🚀` : 
+                 isUni ? `Selamat Datang, ${userProfile?.displayName}` : 
+                 `Hai, ${userProfile?.displayName}! 👋`}
+              </h1>
+              <p className={cn("max-w-xl opacity-90", isUni ? "text-slate-300" : "")}>
+                {isKids ? "Siap untuk belajar hal baru hari ini? Ayo kumpulkan bintang!" : 
+                 isUni ? "Lanjutkan riset dan pembelajaran akademik Anda." : 
+                 "Cek jadwal kelas dan tugas terbaru kamu di sini."}
+              </p>
+            </div>
+            
+            {/* Background Decorations */}
+            <div className={cn(
+              "absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl opacity-20 -mr-16 -mt-16 pointer-events-none",
+              isKids ? "bg-yellow-300" : "bg-primary"
+            )} />
+          </div>
+
+          {/* 2. Quick Stats Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard 
+              label={isKids ? "Kelas Seru" : "Kelas Aktif"} 
+              value={myClasses.length} 
+              icon={<School />} 
+              theme={theme}
+            />
+            <StatCard 
+              label={isKids ? "Tugas PR" : "Tugas Pending"} 
+              value={upcomingAssignments.length} 
+              icon={<BookOpen />} 
+              theme={theme}
+            />
+            <StatCard 
+              label="Kehadiran" 
+              value="100%" 
+              icon={<CheckCircle />} 
+              theme={theme}
+            />
+            <StatCard 
+              label={isKids ? "Koin XP" : "Total XP"} 
+              value={userProfile?.gamification?.xp || userProfile?.xp || 0} 
+              icon={<TrendingUp />} 
+              theme={theme}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* LEFT COLUMN: CLASSES */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className={cn("text-xl font-bold flex items-center gap-2", isKids && "font-display text-primary")}>
+                  <School className="w-5 h-5" />
+                  {isKids ? "Kelasku" : "Daftar Kelas"}
+                </h2>
+                <button 
+                  onClick={() => setIsJoinModalOpen(true)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all",
+                    isKids ? "bg-secondary text-secondary-foreground hover:scale-105" : "bg-primary text-white hover:bg-primary/90"
+                  )}
+                >
+                  <Plus size={14} /> Gabung Kelas
+                </button>
+              </div>
+
+              {myClasses.length === 0 ? (
+                <div className="text-center p-12 border-2 border-dashed rounded-2xl border-gray-200">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                    <School size={32} />
+                  </div>
+                  <h3 className="font-bold text-gray-600 mb-1">Belum ada kelas</h3>
+                  <p className="text-sm text-gray-400 mb-4">Minta Kode Kelas dari gurumu untuk bergabung.</p>
+                  <button 
+                    onClick={() => setIsJoinModalOpen(true)}
+                    className="text-primary font-bold text-sm hover:underline"
+                  >
+                    Gabung Kelas Sekarang
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {myClasses.map((cls) => (
+                    <div 
+                      key={cls.id}
+                      onClick={() => router.push(`/classroom/${cls.id}`)}
+                      className={cn(
+                        "group relative p-5 rounded-2xl border transition-all cursor-pointer overflow-hidden",
+                        isKids ? "bg-white border-2 border-b-4 border-gray-100 hover:border-primary hover:shadow-lg" : 
+                        isUni ? "bg-slate-800 border-slate-700 hover:border-primary" :
+                        "bg-white border-gray-200 hover:border-primary hover:shadow-md"
+                      )}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className={cn(
+                          "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg",
+                          isKids ? "bg-secondary text-secondary-foreground" : "bg-primary/10 text-primary"
+                        )}>
+                          {cls.name.charAt(0)}
+                        </div>
+                        <span className={cn(
+                          "text-[10px] font-bold px-2 py-1 rounded-full uppercase",
+                          isUni ? "bg-slate-700 text-slate-300" : "bg-gray-100 text-gray-500"
+                        )}>
+                          {cls.category || "Umum"}
+                        </span>
+                      </div>
+                      <h3 className={cn("font-bold text-lg truncate mb-1", isUni && "text-white")}>{cls.name}</h3>
+                      <p className="text-xs text-gray-500 truncate mb-4">{cls.description || "Tidak ada deskripsi"}</p>
+                      
+                      <div className="flex items-center text-xs font-bold text-primary group-hover:translate-x-1 transition-transform">
+                        Masuk Kelas <ArrowRight size={14} className="ml-1" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN: SCHEDULE & TASKS */}
+            <div className="space-y-6">
+              
+              {/* Upcoming Assignments */}
+              <div className={cn(
+                "p-6 rounded-2xl border",
+                isUni ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-gray-200"
+              )}>
+                <h3 className="font-bold mb-4 flex items-center gap-2">
+                  <AlertCircle size={18} className="text-orange-500" />
+                  {isKids ? "PR Kamu" : "Tugas Segera"}
+                </h3>
+                
+                <div className="space-y-3">
+                  {upcomingAssignments.length > 0 ? (
+                    upcomingAssignments.map((task) => (
+                      <div key={task.id} className="flex gap-3 items-start pb-3 border-b border-dashed last:border-0 border-gray-100">
+                        <div className="mt-1 w-2 h-2 rounded-full bg-orange-500 shrink-0" />
+                        <div>
+                          <p className="text-sm font-bold line-clamp-1">{task.title}</p>
+                          <p className="text-xs opacity-60 mb-1">{task.className}</p>
+                          <p className="text-[10px] font-mono opacity-50 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded inline-block">
+                             {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No Deadline'}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-6 opacity-50">
+                      <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">Tidak ada tugas aktif.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Schedule Mockup */}
+              <div className={cn(
+                "p-6 rounded-2xl border",
+                isUni ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-gray-200"
+              )}>
+                <h3 className="font-bold mb-4 flex items-center gap-2">
+                  <Calendar size={18} className="text-primary" />
+                  Jadwal Hari Ini
+                </h3>
+                {/* Mock Empty State for now */}
+                <div className="text-center py-4">
+                  <p className="text-xs opacity-50 italic">Fitur Jadwal akan segera hadir.</p>
+                </div>
+              </div>
+
+            </div>
+
           </div>
         </div>
-
-        {/* Content Area */}
-        <main className={cn(
-          "px-4 transition-all pb-20",
-          theme === "kids" ? "max-w-xl mx-auto" : "max-w-3xl mx-auto"
-        )}>
-          
-          {activeTab === "map" && (
-            <>
-              {/* Dynamic Module Rendering */}
-              {theme === "pro" ? (
-                <ModuleList modules={modules} />
-              ) : (
-                <AdventureMap modules={modules} />
-              )}
-            </>
-          )}
-
-          {activeTab === "classes" && (
-            <ClassList 
-              classes={myClasses} 
-              theme={theme} 
-              onOpenJoinModal={() => setIsJoinModalOpen(true)} 
-            />
-          )}
-        </main>
       </div>
 
       <MobileNav />
 
-      {/* Modal */}
+      {/* Modal Join Class */}
       <JoinClassModal 
         isOpen={isJoinModalOpen} 
         onClose={() => setIsJoinModalOpen(false)} 
@@ -296,6 +365,32 @@ export default function LearnClient() {
         isLoading={joining}
         theme={theme}
       />
+    </div>
+  );
+}
+
+// Simple Stat Card Component
+function StatCard({ label, value, icon, theme }: any) {
+  const isKids = theme === "sd";
+  const isUni = theme === "uni";
+
+  return (
+    <div className={cn(
+      "p-4 rounded-2xl border flex flex-col justify-between h-28 transition-all hover:scale-[1.02]",
+      isKids ? "bg-white border-2 border-b-4 border-gray-100" : 
+      isUni ? "bg-slate-800 border-slate-700 text-white" :
+      "bg-white border-gray-200"
+    )}>
+      <div className={cn(
+        "self-start p-2 rounded-lg mb-2",
+        isKids ? "bg-secondary text-secondary-foreground" : "bg-primary/10 text-primary"
+      )}>
+        {React.cloneElement(icon, { size: 18 })}
+      </div>
+      <div>
+        <h4 className={cn("text-2xl font-bold leading-none mb-1", isKids && "font-display")}>{value}</h4>
+        <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">{label}</p>
+      </div>
     </div>
   );
 }

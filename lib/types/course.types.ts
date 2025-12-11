@@ -72,3 +72,25 @@ export interface CourseModule {
   // Status akses (apakah terkunci?)
   isLocked?: boolean;
 }
+
+// Struktur Data Kelas (Classroom) - SKOOLA 2.0
+export interface Classroom {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  
+  teacherId: string;
+  teacherName: string;
+  
+  studentCount: number;
+  students?: string[]; // Array of User UIDs
+  
+  createdAt: string;
+  
+  // New Fields for Categorization
+  category: string; // e.g. "Matematika", "Sains", "Bahasa"
+  gradeLevel: 'sd' | 'smp' | 'sma' | 'uni' | 'umum'; // Jenjang target
+  
+  themeColor?: string; // Optional: Override warna kelas
+}
