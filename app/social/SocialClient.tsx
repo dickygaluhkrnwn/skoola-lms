@@ -4,9 +4,9 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Users, Hash, School, BookOpen, Send, Plus, 
-  MessageSquare, MoreVertical, Trash2, Heart, Crown
+  MessageSquare, MoreVertical, Trash2, Heart, Crown, ArrowLeft,
+  LayoutDashboard
 } from "lucide-react";
-import { StudentSidebar } from "@/components/layout/student-sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { useTheme } from "@/lib/theme-context"; 
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { UserSummary } from "@/lib/types/user.types";
+import { useRouter } from "next/navigation"; 
 
 // --- TYPES ---
 type ContextType = "school" | "major" | "class" | "group";
@@ -42,14 +43,8 @@ interface Post {
   contextId: string;
 }
 
-interface GroupData {
-  id: string;
-  name: string;
-  createdBy: string;
-  members: string[];
-}
-
 export default function SocialClient() {
+  const router = useRouter(); 
   const { theme } = useTheme();
   const [loading, setLoading] = useState(true);
   
@@ -65,7 +60,6 @@ export default function SocialClient() {
   const [myClasses, setMyClasses] = useState<ForumContext[]>([]);
   const [myGroups, setMyGroups] = useState<ForumContext[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [leaderboard, setLeaderboard] = useState<UserSummary[]>([]);
 
   // Form States
   const [newPostContent, setNewPostContent] = useState("");
@@ -75,20 +69,18 @@ export default function SocialClient() {
 
   const isKids = theme === "sd";
   const isUni = theme === "uni";
+  const isSMP = theme === "smp";
 
-  // --- 1. INITIAL DATA FETCHING (Classes & Groups) ---
+  // --- 1. INITIAL DATA FETCHING ---
   useEffect(() => {
     const fetchUserData = async () => {
       const user = auth.currentUser;
       if (!user) return;
 
       try {
-        // A. Fetch User & Classes
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          
-          // Fetch Classes Details
           const enrolledClasses = userData.enrolledClasses || [];
           if (enrolledClasses.length > 0) {
             const classPromises = enrolledClasses.map(async (cid: string) => {
@@ -105,7 +97,6 @@ export default function SocialClient() {
           }
         }
 
-        // B. Fetch Groups (Where user is member)
         const groupsQuery = query(collection(db, "groups"), where("members", "array-contains", user.uid));
         const groupsSnap = await getDocs(groupsQuery);
         const groupsData = groupsSnap.docs.map(d => ({
@@ -115,15 +106,6 @@ export default function SocialClient() {
           icon: <Users size={18} />
         }));
         setMyGroups(groupsData);
-
-        // C. Fetch Leaderboard (Sekali saja untuk sidebar kanan)
-        const lbQuery = query(collection(db, "users"), where("role", "==", "student"), orderBy("xp", "desc"), limit(5));
-        const lbSnap = await getDocs(lbQuery);
-        const lbData = lbSnap.docs.map(d => ({ 
-           uid: d.id, displayName: d.data().displayName, xp: d.data().xp, photoURL: d.data().photoURL 
-        })) as UserSummary[];
-        setLeaderboard(lbData);
-
       } catch (err) {
         console.error("Error fetching initial data:", err);
       } finally {
@@ -136,8 +118,6 @@ export default function SocialClient() {
 
   // --- 2. REALTIME POSTS LISTENER ---
   useEffect(() => {
-    // Query posts berdasarkan Context Aktif
-    // NOTE UNTUK USER: Jika error "index required" muncul, klik link di console browser!
     const qPosts = query(
       collection(db, "posts"),
       where("contextType", "==", activeContext.type),
@@ -157,7 +137,6 @@ export default function SocialClient() {
   }, [activeContext]);
 
   // --- ACTIONS ---
-
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPostContent.trim() || !auth.currentUser) return;
@@ -199,8 +178,6 @@ export default function SocialClient() {
       };
       
       await setDoc(newGroupRef, newGroupData);
-      
-      // Update local state
       setMyGroups(prev => [...prev, {
         id: newGroupRef.id,
         name: newGroupName,
@@ -217,30 +194,54 @@ export default function SocialClient() {
   };
 
   // --- STYLES ---
-  const bgStyle = isKids ? "bg-yellow-50" : isUni ? "bg-slate-950 text-slate-200" : "bg-slate-50";
-  const sidebarStyle = isUni ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200";
+  const bgStyle = isKids ? "bg-yellow-50" : isUni ? "bg-slate-950 text-slate-200" : isSMP ? "bg-slate-50/30" : "bg-slate-50";
+  
+  const sidebarStyle = isUni ? "bg-slate-900 border-slate-800" : 
+                       isSMP ? "m-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-[0_8px_32px_0_rgba(139,92,246,0.15)]" :
+                       "bg-white border-slate-200";
+
   const activeItemStyle = isKids 
     ? "bg-yellow-100 text-yellow-800" 
     : isUni 
       ? "bg-blue-900/50 text-blue-200 border-l-2 border-blue-500" 
-      : "bg-blue-50 text-blue-700";
+      : isSMP
+        ? "bg-violet-500/10 text-violet-700 border border-violet-200 shadow-sm backdrop-blur-md"
+        : "bg-blue-50 text-blue-700";
 
   return (
-    <div className={cn("flex min-h-screen font-sans transition-colors duration-500", bgStyle)}>
+    <div className={cn("flex min-h-screen font-sans transition-colors duration-500 relative", bgStyle)}>
       
-      <StudentSidebar />
+      {/* --- SMP THEME: AMBIENT BACKGROUND BLOBS --- */}
+      {isSMP && (
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+            <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-400/20 rounded-full blur-[100px] animate-pulse" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-cyan-400/20 rounded-full blur-[100px] animate-pulse delay-700" />
+        </div>
+      )}
 
-      <div className="flex-1 md:ml-64 flex h-screen overflow-hidden relative">
+      {/* --- FLEX CONTAINER UTAMA (FULL WIDTH) --- */}
+      <div className="flex-1 flex h-screen overflow-hidden relative z-10">
         
         {/* --- LEFT: FORUM NAVIGATOR (SIDEBAR) --- */}
-        <aside className={cn("w-64 flex-shrink-0 border-r flex flex-col hidden md:flex", sidebarStyle)}>
-          <div className="p-4 border-b border-inherit">
+        <aside className={cn("w-64 flex-shrink-0 border-r flex flex-col hidden md:flex h-full", sidebarStyle, isSMP ? "rounded-3xl border-r-0 mr-0 h-[calc(100vh-2rem)]" : "")}>
+          
+          {/* HEADER SIDEBAR: BUTTON BACK -> TITLE */}
+          <div className={cn("p-4 border-b border-inherit flex items-center gap-3", isSMP && "border-white/20")}>
+            <button 
+                onClick={() => router.back()} 
+                className={cn(
+                    "p-1.5 rounded-lg transition-colors -ml-1 hover:scale-105 active:scale-95",
+                    isUni ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
+                )}
+                title="Kembali ke Dashboard"
+            >
+                <ArrowLeft size={20} />
+            </button>
             <h2 className="font-bold text-sm uppercase tracking-wider opacity-70">Forum Diskusi</h2>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-3 space-y-6">
-            
-            {/* 1. SEKOLAH & JURUSAN */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-6 custom-scrollbar">
+            {/* ... List Navigasi (Sama seperti sebelumnya) ... */}
             <div className="space-y-1">
               <p className="px-3 text-[10px] font-bold uppercase opacity-50 mb-1">Publik</p>
               <ContextButton 
@@ -249,17 +250,18 @@ export default function SocialClient() {
                 icon={<School size={18}/>} 
                 label="Lobi Sekolah" 
                 themeStyle={activeItemStyle}
+                isSMP={isSMP}
               />
               <ContextButton 
-                active={activeContext.id === "major_science"} // Contoh hardcoded major
+                active={activeContext.id === "major_science"} 
                 onClick={() => setActiveContext({ id: "major_science", name: "Forum Sains", type: "major", icon: <Hash size={18}/> })}
                 icon={<Hash size={18}/>} 
                 label="Forum Sains" 
                 themeStyle={activeItemStyle}
+                isSMP={isSMP}
               />
             </div>
 
-            {/* 2. KELAS SAYA */}
             <div className="space-y-1">
               <div className="flex justify-between items-center px-3 mb-1">
                  <p className="text-[10px] font-bold uppercase opacity-50">Kelas Saya</p>
@@ -273,11 +275,11 @@ export default function SocialClient() {
                   icon={<BookOpen size={18}/>} 
                   label={c.name} 
                   themeStyle={activeItemStyle}
+                  isSMP={isSMP}
                 />
               ))}
             </div>
 
-            {/* 3. KELOMPOK BELAJAR */}
             <div className="space-y-1">
               <div className="flex justify-between items-center px-3 mb-1">
                  <p className="text-[10px] font-bold uppercase opacity-50">Kelompok</p>
@@ -291,6 +293,7 @@ export default function SocialClient() {
                   icon={<Users size={18}/>} 
                   label={g.name} 
                   themeStyle={activeItemStyle}
+                  isSMP={isSMP}
                 />
               ))}
               {myGroups.length === 0 && (
@@ -302,16 +305,31 @@ export default function SocialClient() {
                  </button>
               )}
             </div>
-
           </div>
         </aside>
 
         {/* --- MIDDLE: CHAT FEED --- */}
         <main className="flex-1 flex flex-col min-w-0 bg-transparent relative">
           {/* Channel Header */}
-          <header className={cn("h-16 border-b flex items-center px-6 shrink-0 backdrop-blur-md bg-opacity-90 z-10", sidebarStyle)}>
+          <header className={cn("h-16 border-b flex items-center justify-between px-6 shrink-0 backdrop-blur-md bg-opacity-90 z-10", 
+             isUni ? "bg-slate-900 border-slate-700" : 
+             isSMP ? "bg-white/60 border-white/40 shadow-sm" : 
+             "bg-white border-slate-200"
+          )}>
              <div className="flex items-center gap-3">
-                <div className={cn("p-2 rounded-lg", isKids ? "bg-yellow-100 text-yellow-600" : isUni ? "bg-slate-800 text-blue-400" : "bg-blue-50 text-blue-600")}>
+                {/* Mobile Back Button */}
+                <button 
+                    onClick={() => router.back()} 
+                    className="md:hidden p-2 rounded-full hover:bg-black/5 mr-2"
+                >
+                    <ArrowLeft size={20} />
+                </button>
+
+                <div className={cn("p-2 rounded-lg", 
+                   isKids ? "bg-yellow-100 text-yellow-600" : 
+                   isSMP ? "bg-violet-100 text-violet-600" :
+                   isUni ? "bg-slate-800 text-blue-400" : "bg-blue-50 text-blue-600"
+                )}>
                    {activeContext.icon}
                 </div>
                 <div>
@@ -325,7 +343,7 @@ export default function SocialClient() {
           </header>
 
           {/* Chat List */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 custom-scrollbar">
              {loading ? (
                 <div className="text-center py-10 opacity-50">Memuat diskusi...</div>
              ) : posts.length === 0 ? (
@@ -340,9 +358,14 @@ export default function SocialClient() {
                       key={post.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={cn("flex gap-3 group", isUni ? "hover:bg-slate-900/50" : "hover:bg-slate-50", "p-2 rounded-xl transition-colors")}
+                      className={cn(
+                        "flex gap-3 group p-3 rounded-2xl transition-colors",
+                        isUni ? "hover:bg-slate-900/50" : 
+                        isSMP ? "bg-white/40 hover:bg-white/70 border border-white/40 shadow-sm" : 
+                        "hover:bg-slate-50"
+                      )}
                    >
-                      <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0 overflow-hidden">
+                      <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0 overflow-hidden border border-white/50">
                          {post.userAvatar ? <img src={post.userAvatar} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-xs">User</div>}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -361,7 +384,11 @@ export default function SocialClient() {
 
           {/* Input Area */}
           <div className="p-4 border-t border-inherit bg-inherit shrink-0 pb-safe md:pb-4">
-             <div className={cn("flex gap-2 items-end p-2 rounded-xl border transition-all focus-within:ring-2", isUni ? "bg-slate-800 border-slate-700 focus-within:ring-blue-900" : "bg-white border-slate-300 focus-within:ring-blue-100")}>
+             <div className={cn("flex gap-2 items-end p-2 rounded-xl border transition-all focus-within:ring-2", 
+                isUni ? "bg-slate-800 border-slate-700 focus-within:ring-blue-900" : 
+                isSMP ? "bg-white/80 border-white/60 focus-within:ring-violet-200 focus-within:border-violet-300 shadow-sm" :
+                "bg-white border-slate-300 focus-within:ring-blue-100"
+             )}>
                 <textarea 
                    value={newPostContent}
                    onChange={e => setNewPostContent(e.target.value)}
@@ -378,34 +405,13 @@ export default function SocialClient() {
                    size="icon" 
                    onClick={handlePostSubmit} 
                    disabled={!newPostContent.trim() || isPosting}
-                   className={cn("mb-1", isKids ? "bg-yellow-400 hover:bg-yellow-500 text-yellow-900" : "bg-blue-600 hover:bg-blue-700")}
+                   className={cn("mb-1 rounded-lg", isKids ? "bg-yellow-400 hover:bg-yellow-500 text-yellow-900" : isSMP ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700")}
                 >
                    <Send size={18} />
                 </Button>
              </div>
           </div>
         </main>
-
-        {/* --- RIGHT: LEADERBOARD/INFO (Hidden on mobile) --- */}
-        <aside className={cn("w-60 border-l hidden lg:block p-4", sidebarStyle)}>
-           <h3 className="text-xs font-bold uppercase tracking-wider opacity-70 mb-4">Top Siswa</h3>
-           <div className="space-y-3">
-              {leaderboard.map((user, i) => (
-                 <div key={user.uid} className="flex items-center gap-3">
-                    <div className="relative">
-                       <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden">
-                          {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover"/> : null}
-                       </div>
-                       {i === 0 && <Crown size={12} className="absolute -top-1 -right-1 text-yellow-500 fill-yellow-500"/>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                       <p className="text-xs font-bold truncate">{user.displayName}</p>
-                       <p className="text-[10px] opacity-60">{user.xp} XP</p>
-                    </div>
-                 </div>
-              ))}
-           </div>
-        </aside>
 
         {/* MODAL: CREATE GROUP */}
         <AnimatePresence>
@@ -433,13 +439,12 @@ export default function SocialClient() {
         </AnimatePresence>
 
       </div>
-      <MobileNav />
     </div>
   );
 }
 
 // Sub-Component for Sidebar Button
-function ContextButton({ active, onClick, icon, label, themeStyle }: any) {
+function ContextButton({ active, onClick, icon, label, themeStyle, isSMP }: any) {
    return (
       <button
          onClick={onClick}
@@ -447,7 +452,9 @@ function ContextButton({ active, onClick, icon, label, themeStyle }: any) {
             "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all text-left group",
             active 
                ? themeStyle 
-               : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+               : (isSMP 
+                   ? "text-slate-500 hover:bg-violet-50/50 hover:text-violet-600" 
+                   : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400")
          )}
       >
          <span className={cn("transition-transform group-hover:scale-110", active && "scale-110")}>{icon}</span>

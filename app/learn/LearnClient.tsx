@@ -11,7 +11,7 @@ import {
   doc, getDoc, collection, query, where, getDocs, orderBy, limit, onSnapshot, updateDoc, arrayUnion, increment 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { motion } from "framer-motion"; // Animasi Engine
+import { motion, Variants } from "framer-motion"; // Animasi Engine
 
 // --- IMPORTS ---
 import { StudentSidebar } from "../../components/layout/student-sidebar";
@@ -22,7 +22,7 @@ import { cn } from "../../lib/utils";
 import { Button } from "@/components/ui/button";
 
 // Animation Variants
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -32,13 +32,13 @@ const containerVariants = {
   }
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { y: 20, opacity: 0 },
   visible: {
     y: 0,
     opacity: 1,
     transition: {
-      type: "spring" as const, // FIX: Tambahkan 'as const' agar dikenali sebagai literal type
+      type: "spring",
       stiffness: 100,
       damping: 10
     }
@@ -199,11 +199,29 @@ export default function LearnClient() {
   );
 
   return (
-    <div className="flex min-h-screen bg-background font-sans text-foreground transition-colors duration-500">
+    <div className={cn(
+      "flex min-h-screen font-sans text-foreground transition-colors duration-500",
+      // FIX: Hapus bg-background solid agar pattern dari body terlihat
+      // Tambahkan tint halus untuk keterbacaan jika perlu
+      isSMP ? "bg-slate-50/30" : "bg-transparent"
+    )}>
+      
+      {/* --- SMP THEME: AMBIENT BACKGROUND BLOBS --- */}
+      {isSMP && (
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+            {/* Top Left Violet */}
+            <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-400/20 rounded-full blur-[100px] animate-pulse" />
+            {/* Bottom Right Cyan */}
+            <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-cyan-400/20 rounded-full blur-[100px] animate-pulse delay-700" />
+            {/* Center Fuchsia */}
+            <div className="absolute top-[40%] left-[30%] w-[300px] h-[300px] bg-fuchsia-400/20 rounded-full blur-[80px] animate-pulse delay-1000" />
+        </div>
+      )}
+
       <StudentSidebar />
 
       <motion.div 
-        className="flex-1 md:ml-64 relative pb-24 p-4 md:p-8"
+        className="flex-1 md:ml-64 relative pb-24 p-4 md:p-8 z-10" // z-10 agar konten di atas blobs
         initial="hidden"
         animate="visible"
         variants={containerVariants}
@@ -218,7 +236,8 @@ export default function LearnClient() {
             className={cn(
               "rounded-3xl p-8 relative overflow-hidden transition-all",
               isKids ? "bg-primary text-white shadow-[0_8px_0_rgba(0,0,0,0.15)] mb-8" : 
-              isSMP ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30" :
+              // SMP: Glassmorphism yang lebih kuat
+              isSMP ? "bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-600 text-white shadow-2xl shadow-violet-500/30 ring-1 ring-white/30 backdrop-blur-3xl" :
               isUni ? "bg-slate-900 text-white border border-slate-800" :
               "bg-white border border-slate-200 text-slate-800"
             )}
@@ -232,7 +251,7 @@ export default function LearnClient() {
               </h1>
               <p className={cn("max-w-xl opacity-90", isUni ? "text-slate-300" : "")}>
                 {isKids ? "Siap menaklukkan misi belajar hari ini? Ayo kumpulkan bintang!" : 
-                 isSMP ? "Cek jadwal dan tugas terbaru kamu. Jangan sampai streak putus!" :
+                 isSMP ? "Level up skill kamu hari ini. Cek jadwal dan tugas terbaru, jangan sampai streak putus!" :
                  isUni ? "Fokus pada akademik dan pengembangan riset Anda." : 
                  "Semoga harimu menyenangkan dan produktif."}
               </p>
@@ -241,13 +260,20 @@ export default function LearnClient() {
             {/* Background Decorations */}
             <div className={cn(
               "absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl opacity-20 -mr-16 -mt-16 pointer-events-none",
-              isKids ? "bg-yellow-300" : "bg-primary"
+              isKids ? "bg-yellow-300" : isSMP ? "bg-cyan-400 opacity-40 animate-pulse" : "bg-primary"
             )} />
             
             {isKids && (
                 <div className="absolute bottom-0 right-8 text-6xl opacity-20 rotate-12 pointer-events-none">
                     🎒
                 </div>
+            )}
+            
+            {isSMP && (
+               <>
+                 <div className="absolute bottom-[-10%] right-[-5%] w-40 h-40 bg-fuchsia-400 rounded-full blur-2xl opacity-30 animate-blob" />
+                 <div className="absolute top-[20%] right-[20%] w-20 h-20 bg-violet-400 rounded-full blur-xl opacity-20 animate-blob animation-delay-2000" />
+               </>
             )}
           </motion.div>
 
@@ -296,7 +322,7 @@ export default function LearnClient() {
                   onClick={() => setIsJoinModalOpen(true)}
                   variant={isKids ? "secondary" : "primary"}
                   size="sm"
-                  className={isKids ? "shadow-sm border-2" : ""}
+                  className={cn(isKids ? "shadow-sm border-2" : "", isSMP && "bg-violet-600 hover:bg-violet-700 shadow-lg shadow-violet-200")}
                 >
                   <Plus size={16} className="mr-2" /> {isKids ? "Gabung Tim Baru" : "Gabung Kelas"}
                 </Button>
@@ -304,12 +330,16 @@ export default function LearnClient() {
 
               {myClasses.length === 0 ? (
                 <div className={cn(
-                    "text-center p-12 border-2 border-dashed rounded-3xl",
-                    isKids ? "border-primary/30 bg-primary/5" : "border-gray-200 bg-gray-50"
+                    "text-center p-12 border-2 border-dashed rounded-3xl transition-all",
+                    isKids ? "border-primary/30 bg-primary/5" : 
+                    isSMP ? "border-violet-200 bg-white/40 backdrop-blur-sm" :
+                    "border-gray-200 bg-gray-50"
                 )}>
                   <div className={cn(
                       "w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4",
-                      isKids ? "bg-white shadow-md text-primary" : "bg-gray-200 text-gray-500"
+                      isKids ? "bg-white shadow-md text-primary" : 
+                      isSMP ? "bg-white shadow-lg text-violet-500 shadow-violet-100" :
+                      "bg-gray-200 text-gray-500"
                   )}>
                     <School size={32} />
                   </div>
@@ -319,7 +349,7 @@ export default function LearnClient() {
                   <p className="text-sm text-gray-400 mb-6">
                       {isKids ? "Minta kode rahasia dari guru untuk mulai berpetualang." : "Minta Kode Kelas dari gurumu untuk bergabung."}
                   </p>
-                  <Button onClick={() => setIsJoinModalOpen(true)} variant={isKids ? "primary" : "outline"}>
+                  <Button onClick={() => setIsJoinModalOpen(true)} variant={isKids ? "primary" : "outline"} className={cn(isSMP && "border-violet-500 text-violet-600 hover:bg-violet-50")}>
                     {isKids ? "Masukkan Kode Rahasia" : "Gabung Kelas Sekarang"}
                   </Button>
                 </div>
@@ -328,13 +358,14 @@ export default function LearnClient() {
                   {myClasses.map((cls, index) => (
                     <motion.div 
                       key={cls.id}
-                      whileHover={{ scale: isKids ? 1.03 : 1.01, translateY: -2 }}
+                      whileHover={{ scale: isKids ? 1.03 : 1.02, translateY: -4 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => router.push(`/classroom/${cls.id}`)}
                       className={cn(
                         "group relative p-6 rounded-3xl border transition-all cursor-pointer overflow-hidden",
                         isKids ? "bg-white border-2 border-b-8 border-gray-100 hover:border-primary hover:shadow-xl shadow-sm" : 
-                        isSMP ? "bg-white hover:shadow-indigo-500/20 hover:shadow-lg border-transparent hover:border-indigo-200" :
+                        // SMP: Card Style - Glass & Gradient Border
+                        isSMP ? "bg-white/70 backdrop-blur-md hover:shadow-[0_8px_30px_rgb(139,92,246,0.15)] border-violet-100 hover:border-violet-300 shadow-sm" :
                         isUni ? "bg-slate-800 border-slate-700 hover:border-primary" :
                         "bg-white border-gray-200 hover:border-primary hover:shadow-md"
                       )}
@@ -342,9 +373,9 @@ export default function LearnClient() {
                       {/* Class Icon / Initials */}
                       <div className="flex items-start justify-between mb-4">
                         <div className={cn(
-                          "w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-xl shadow-sm",
+                          "w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-xl shadow-sm transition-transform group-hover:scale-110",
                           isKids ? "bg-secondary text-secondary-foreground border-2 border-orange-200" : 
-                          isSMP ? "bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white" :
+                          isSMP ? "bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-violet-200" :
                           "bg-primary/10 text-primary"
                         )}>
                           {cls.name.charAt(0)}
@@ -352,6 +383,7 @@ export default function LearnClient() {
                         <span className={cn(
                           "text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider",
                           isKids ? "bg-blue-100 text-blue-700 border border-blue-200" :
+                          isSMP ? "bg-violet-50 text-violet-600 border border-violet-100" :
                           isUni ? "bg-slate-700 text-slate-300" : "bg-gray-100 text-gray-500"
                         )}>
                           {cls.category || "Umum"}
@@ -367,7 +399,8 @@ export default function LearnClient() {
                       
                       <div className={cn(
                           "flex items-center text-xs font-bold transition-transform group-hover:translate-x-1",
-                          isKids ? "text-primary uppercase tracking-widest" : "text-primary"
+                          isKids ? "text-primary uppercase tracking-widest" : 
+                          isSMP ? "text-violet-600" : "text-primary"
                       )}>
                         {isKids ? "Mulai Petualangan" : "Masuk Kelas"} <ArrowRight size={14} className="ml-1" />
                       </div>
@@ -375,6 +408,10 @@ export default function LearnClient() {
                       {/* Decoration for Kids */}
                       {isKids && (
                           <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-primary/5 rounded-full" />
+                      )}
+                      {/* Decoration for SMP */}
+                      {isSMP && (
+                          <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-violet-100/50 to-transparent rounded-bl-[4rem] pointer-events-none" />
                       )}
                     </motion.div>
                   ))}
@@ -389,26 +426,32 @@ export default function LearnClient() {
               <div className={cn(
                 "p-6 rounded-3xl border",
                 isKids ? "bg-white border-2 border-b-4 border-orange-100 shadow-sm" :
+                isSMP ? "bg-white/60 backdrop-blur-md border-white/50 shadow-sm" :
                 isUni ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-gray-200"
               )}>
-                <h3 className={cn("font-bold mb-4 flex items-center gap-2", isKids && "text-orange-600 font-display text-lg")}>
-                  {isKids ? <Scroll size={20} /> : <AlertCircle size={18} className="text-orange-500" />}
+                <h3 className={cn("font-bold mb-4 flex items-center gap-2", 
+                    isKids ? "text-orange-600 font-display text-lg" : 
+                    isSMP ? "text-slate-800" : ""
+                )}>
+                  {isKids ? <Scroll size={20} /> : <AlertCircle size={18} className={isSMP ? "text-fuchsia-500" : "text-orange-500"} />}
                   {isKids ? "Papan Misi" : "Tugas Segera"}
                 </h3>
                 
                 <div className="space-y-3">
                   {upcomingAssignments.length > 0 ? (
                     upcomingAssignments.map((task) => (
-                      <div key={task.id} className="flex gap-3 items-start pb-3 border-b border-dashed last:border-0 border-gray-100">
-                        <div className={cn("mt-1.5 w-2 h-2 rounded-full shrink-0", isKids ? "bg-orange-400" : "bg-orange-500")} />
+                      <div key={task.id} className="flex gap-3 items-start pb-3 border-b border-dashed last:border-0 border-gray-100/50">
+                        <div className={cn("mt-1.5 w-2 h-2 rounded-full shrink-0", isKids ? "bg-orange-400" : isSMP ? "bg-fuchsia-500" : "bg-orange-500")} />
                         <div>
                           <p className={cn("text-sm font-bold line-clamp-1", isKids && "text-gray-700")}>{task.title}</p>
                           <p className="text-xs opacity-60 mb-1">{task.className}</p>
                           <p className={cn(
                               "text-[10px] font-mono px-1.5 py-0.5 rounded inline-block",
-                              isKids ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-600 dark:bg-slate-700"
+                              isKids ? "bg-yellow-100 text-yellow-800" : 
+                              isSMP ? "bg-fuchsia-50 text-fuchsia-700" :
+                              "bg-gray-100 text-gray-600 dark:bg-slate-700"
                           )}>
-                             {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No Deadline'}
+                             {task.deadline ? new Date(task.deadline.seconds * 1000).toLocaleDateString() : 'No Deadline'}
                           </p>
                         </div>
                       </div>
@@ -426,10 +469,14 @@ export default function LearnClient() {
               <div className={cn(
                 "p-6 rounded-3xl border",
                 isKids ? "bg-blue-50 border-2 border-blue-100" :
+                isSMP ? "bg-gradient-to-b from-white/80 to-violet-50/30 border-violet-100 backdrop-blur-sm" :
                 isUni ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-gray-200"
               )}>
-                <h3 className={cn("font-bold mb-4 flex items-center gap-2", isKids && "text-blue-600 font-display text-lg")}>
-                  <Calendar size={18} className={isKids ? "text-blue-500" : "text-primary"} />
+                <h3 className={cn("font-bold mb-4 flex items-center gap-2", 
+                    isKids ? "text-blue-600 font-display text-lg" : 
+                    isSMP ? "text-slate-800" : ""
+                )}>
+                  <Calendar size={18} className={isKids ? "text-blue-500" : isSMP ? "text-violet-500" : "text-primary"} />
                   {isKids ? "Agenda Petualang" : "Jadwal Hari Ini"}
                 </h3>
                 {/* Mock Empty State for now */}
@@ -461,21 +508,26 @@ export default function LearnClient() {
 // Simple Stat Card Component
 function StatCard({ label, value, icon, theme, variants }: any) {
   const isKids = theme === "sd";
+  const isSMP = theme === "smp";
   const isUni = theme === "uni";
 
   return (
     <motion.div 
       variants={variants}
       className={cn(
-        "p-5 rounded-3xl border flex flex-col justify-between h-32 transition-all",
+        "p-5 rounded-3xl border flex flex-col justify-between h-32 transition-all cursor-default",
         isKids ? "bg-white border-2 border-b-4 border-gray-100 hover:-translate-y-1 hover:border-primary hover:shadow-lg" : 
+        // SMP: Glassy Card
+        isSMP ? "bg-white/60 backdrop-blur-md border-white/60 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:bg-white/80 transition-all duration-300" :
         isUni ? "bg-slate-800 border-slate-700 text-white" :
         "bg-white border-gray-200 shadow-sm hover:shadow-md"
       )}
     >
       <div className={cn(
         "self-start p-2.5 rounded-xl mb-2",
-        isKids ? "bg-secondary text-secondary-foreground shadow-sm" : "bg-primary/10 text-primary"
+        isKids ? "bg-secondary text-secondary-foreground shadow-sm" : 
+        isSMP ? "bg-violet-50 text-violet-600" :
+        "bg-primary/10 text-primary"
       )}>
         {React.cloneElement(icon, { size: 20 })}
       </div>

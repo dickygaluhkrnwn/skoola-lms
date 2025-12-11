@@ -20,6 +20,7 @@ export function MobileNav() {
 
   const isUni = theme === "uni";
   const isKids = theme === "sd";
+  const isSMP = theme === "smp";
 
   return (
     <nav className={cn(
@@ -27,6 +28,9 @@ export function MobileNav() {
       // KIDS THEME: Floating Island Look
       isKids ? "bg-white/95 backdrop-blur-md border-t-4 border-primary rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] pb-4 mx-2 mb-2" :
       
+      // SMP THEME: Floating Glass
+      isSMP ? "bg-white/80 backdrop-blur-xl border-t border-white/50 shadow-[0_-8px_32px_0_rgba(139,92,246,0.2)] rounded-t-2xl mx-2 mb-2 pb-3" :
+
       // UNI THEME
       isUni ? "bg-slate-900 border-t border-slate-800 text-slate-400" : 
       
@@ -69,7 +73,9 @@ export function MobileNav() {
         onClick={handleLogout} 
         className={cn(
           "flex flex-col items-center gap-1 transition-colors p-2 rounded-lg group",
-          theme === "sd" ? "text-red-300 hover:text-red-500 active:scale-95" : "text-slate-400 hover:text-red-500"
+          theme === "sd" ? "text-red-300 hover:text-red-500 active:scale-95" : 
+          theme === "smp" ? "text-slate-400 hover:text-red-500" : 
+          "text-slate-400 hover:text-red-500"
         )}
       >
         <div className={cn("transition-transform group-active:scale-90", isKids && "bg-red-50 p-1 rounded-full")}>
@@ -102,7 +108,7 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
         isUni && !active && "text-slate-500 hover:text-slate-300",
 
         // SMP Theme (Glowing)
-        isSMP && active && "text-violet-600",
+        isSMP && active && "text-violet-600 scale-110",
         
         // Default / Pro Theme
         !isKids && !isUni && !isSMP && active && "text-primary bg-primary/10",
@@ -122,7 +128,7 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
       <span className={cn("text-[10px] font-bold", isKids && active && "hidden")}>{label}</span>
       
       {/* Active Dot for SMP */}
-      {isSMP && active && <div className="absolute -bottom-1 w-1 h-1 bg-violet-600 rounded-full shadow-[0_0_5px_currentColor]" />}
+      {isSMP && active && <div className="absolute -bottom-1 w-1 h-1 bg-violet-600 rounded-full shadow-[0_0_5px_currentColor] animate-pulse" />}
     </button>
   );
 }

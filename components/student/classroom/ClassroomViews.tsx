@@ -1,0 +1,364 @@
+"use client";
+
+import React from "react";
+import { motion } from "framer-motion";
+import { 
+  Users, BookOpen, Video, FileText, Link as LinkIcon, 
+  ClipboardList, FileCheck, Clock, Trophy, Map, Scroll, 
+  AlertCircle, CheckCircle, GraduationCap, Palette
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { AdventureMap } from "@/components/learn/adventure-map";
+import { useRouter } from "next/navigation";
+
+// --- DASHBOARD VIEW ---
+export function DashboardView({ classData, classTotalXP, assignments, classMembers, setActiveTab, isKids, isSMP, isUni, theme }: any) {
+  return (
+    <motion.div 
+         key="dashboard"
+         initial={{ opacity: 0, y: 10 }}
+         animate={{ opacity: 1, y: 0 }}
+         exit={{ opacity: 0, y: -10 }}
+         className="space-y-6"
+     >
+       {/* Hero Banner */}
+       <div className={cn(
+           "rounded-3xl p-6 md:p-10 text-white relative overflow-hidden shadow-lg transition-all",
+           isKids ? "bg-primary border-b-8 border-red-700" : 
+           isSMP ? "bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-600 shadow-2xl shadow-violet-500/30 ring-1 ring-white/20 backdrop-blur-3xl" :
+           isUni ? "bg-slate-800 border border-slate-700" :
+           "bg-blue-600"
+       )}>
+          {/* Deco */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full opacity-10 -mr-16 -mt-16 blur-3xl pointer-events-none" />
+          {isKids && <div className="absolute bottom-4 right-4 text-6xl animate-bounce">🏰</div>}
+          
+          <div className="relative z-10">
+             <div className="flex flex-wrap gap-2 mb-3">
+                <span className="inline-block px-3 py-1 rounded-full bg-white/20 border border-white/30 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
+                   Kode: {classData?.code}
+                </span>
+                {classData?.gradeLevel && (
+                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/20 border border-white/30 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
+                      <GraduationCap size={12}/> {classData.gradeLevel}
+                   </span>
+                )}
+                {classData?.category && (
+                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/20 border border-white/30 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
+                      <Palette size={12}/> {classData.category}
+                   </span>
+                )}
+             </div>
+             <h1 className={cn("text-2xl md:text-4xl font-bold mb-2", isKids && "font-display tracking-wide drop-shadow-md")}>
+                 {isKids ? `Selamat Datang di Markas ${classData?.name}! 👋` : `Selamat Datang di ${classData?.name}`}
+             </h1>
+             <p className="text-white/90 max-w-xl text-sm md:text-base font-medium">
+                 {classData?.description || (isKids ? "Siap untuk petualangan seru hari ini?" : "Deskripsi kelas belum diatur.")}
+             </p>
+          </div>
+       </div>
+
+       {/* Shortcuts */}
+       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+          <StatCard 
+             icon={isKids ? <Map size={24}/> : <Map size={20}/>} 
+             label={isKids ? "Peta Utama" : "Peta Belajar"} 
+             value={isKids ? "Buka Peta" : "Akses"} 
+             color="blue" 
+             isKids={isKids} isSMP={isSMP} isUni={isUni}
+             onClick={() => setActiveTab("adventure")} 
+          />
+          <StatCard 
+             icon={isKids ? <Scroll size={24}/> : <ClipboardList size={20}/>} 
+             label={isKids ? "Misi Rahasia" : "Tugas Aktif"} 
+             value={assignments.length} 
+             color="purple" 
+             isKids={isKids} isSMP={isSMP} isUni={isUni}
+             onClick={() => setActiveTab("assignments")} 
+          />
+          <StatCard 
+             icon={<Trophy size={isKids ? 24 : 20}/>} 
+             label={isKids ? "Harta Karun" : "XP Kelas"} 
+             value={classTotalXP} 
+             color="yellow" 
+             isKids={isKids} isSMP={isSMP} isUni={isUni}
+          />
+          <StatCard 
+             icon={<Users size={isKids ? 24 : 20}/>} 
+             label={isKids ? "Pasukan" : "Anggota"} 
+             value={classMembers.length || classData?.studentCount || 0} 
+             color="green" 
+             isKids={isKids} isSMP={isSMP} isUni={isUni}
+             onClick={() => setActiveTab("people")} 
+          />
+       </div>
+    </motion.div>
+  );
+}
+
+// --- ADVENTURE VIEW ---
+export function AdventureView({ mapModules, isKids, isSMP, isUni }: any) {
+  return (
+    <motion.div 
+         key="adventure"
+         initial={{ opacity: 0, scale: 0.95 }}
+         animate={{ opacity: 1, scale: 1 }}
+         exit={{ opacity: 0, scale: 0.95 }}
+         className="space-y-6"
+     >
+         <div className="text-center mb-8">
+             <h2 className={cn("text-2xl font-bold mb-2", isKids ? "text-primary font-display" : "text-slate-800")}>
+                 {isKids ? "🗺️ Peta Perjalanan Belajar" : "Peta Kurikulum"}
+             </h2>
+             <p className="text-slate-500 text-sm">
+                 {isKids ? "Ikuti jejak ini untuk menemukan harta karun ilmu!" : "Ikuti alur pembelajaran ini secara berurutan."}
+             </p>
+         </div>
+         {/* Render Adventure Map Component */}
+         {mapModules.length > 0 ? (
+             <AdventureMap modules={mapModules} />
+         ) : (
+             <div className={cn("text-center py-12 border-2 border-dashed rounded-3xl", isSMP ? "bg-white/40 border-violet-200" : "bg-slate-50 border-slate-200")}>
+                 <Map className="w-12 h-12 mx-auto text-slate-300 mb-4" />
+                 <p className="text-slate-400 font-medium">Peta masih kosong. Tunggu guru menggambar peta ya!</p>
+             </div>
+         )}
+     </motion.div>
+  );
+}
+
+// --- MATERIALS VIEW ---
+export function MaterialsView({ materials, isKids, isSMP, isUni, theme }: any) {
+  return (
+    <motion.div key="materials" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+       <div className="flex items-center justify-between">
+           <h2 className={cn("text-xl font-bold", isKids && "font-display text-primary")}>
+               {isKids ? "🎒 Bekal Petualangan" : "Materi Pembelajaran"}
+           </h2>
+       </div>
+       
+       {materials.length === 0 ? (
+           <EmptyState 
+               icon={<BookOpen size={32}/>} 
+               text={isKids ? "Belum ada bekal ilmu dari Kapten Guru." : "Belum ada materi yang diunggah."} 
+               isKids={isKids} isSMP={isSMP}
+           />
+       ) : (
+           <div className="grid md:grid-cols-2 gap-4">
+              {materials.map((item: any, idx: number) => (
+                  <motion.div key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }}>
+                      <MaterialCard item={item} theme={theme} isKids={isKids} isSMP={isSMP} isUni={isUni} />
+                  </motion.div>
+              ))}
+           </div>
+       )}
+    </motion.div>
+  );
+}
+
+// --- ASSIGNMENTS VIEW ---
+export function AssignmentsView({ assignments, isKids, isSMP, isUni, theme, router, classId }: any) {
+  return (
+    <motion.div key="assignments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+        <div className="flex items-center justify-between">
+           <h2 className={cn("text-xl font-bold", isKids && "font-display text-primary")}>
+               {isKids ? "📜 Misi Rahasia" : "Daftar Tugas"}
+           </h2>
+       </div>
+
+        {assignments.length === 0 ? (
+            <EmptyState 
+                icon={<ClipboardList size={32}/>} 
+                text={isKids ? "Wah, tidak ada misi rahasia saat ini. Istirahatlah!" : "Tidak ada tugas aktif."} 
+                isKids={isKids} isSMP={isSMP}
+            />
+        ) : (
+            <div className="grid gap-4">
+                {assignments.map((item: any, idx: number) => (
+                    <motion.div 
+                        key={item.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.1 }}
+                        className={cn(
+                            "p-5 rounded-3xl border transition-all cursor-pointer group relative overflow-hidden",
+                            isKids ? "bg-white border-2 border-b-4 border-slate-100 hover:border-purple-400 hover:shadow-lg" : 
+                            isSMP ? "bg-white/70 backdrop-blur-md border-white/60 hover:shadow-lg hover:border-violet-300 hover:bg-white/90" :
+                            isUni ? "bg-slate-800 border-slate-700 hover:border-blue-500" :
+                            "bg-white border-slate-200 hover:border-purple-300 hover:shadow-md"
+                        )}
+                        onClick={() => router.push(`/classroom/${classId}/assignment/${item.id}`)}
+                    >
+                        <div className="flex items-start justify-between relative z-10">
+                            <div className="flex gap-4">
+                                <div className={cn(
+                                    "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm", 
+                                    item.type === 'quiz' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600',
+                                    isKids && "border-2 border-white shadow-md",
+                                    isSMP && (item.type === 'quiz' ? 'bg-orange-50 text-orange-600' : 'bg-fuchsia-50 text-fuchsia-600')
+                                )}>
+                                    {item.type === 'quiz' ? <FileCheck size={28} /> : <ClipboardList size={28} />}
+                                </div>
+                                <div>
+                                    <h3 className={cn("font-bold text-lg group-hover:text-purple-600 transition-colors", isUni ? "text-slate-100" : "text-slate-800")}>{item.title}</h3>
+                                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                        <span className={cn(
+                                            "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide",
+                                            isKids ? "bg-yellow-100 text-yellow-700" : 
+                                            isSMP ? "bg-violet-100 text-violet-700" :
+                                            "bg-slate-100 text-slate-500"
+                                        )}>
+                                            {item.type === 'quiz' ? (isKids ? 'Tantangan Kuis' : 'Kuis') : (isKids ? 'Laporan Misi' : 'Esai')}
+                                        </span>
+                                        {item.deadline && (
+                                            <span className="text-red-500 font-medium flex items-center gap-1 text-xs bg-red-50 px-2 py-0.5 rounded-full">
+                                            <Clock size={12} /> 
+                                            {new Date(item.deadline.seconds * 1000).toLocaleDateString('id-ID')}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            <Button size="sm" className={cn("hidden md:flex rounded-xl font-bold", isKids && "shadow-[0_4px_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-1", isSMP && "bg-violet-600 hover:bg-violet-700")}>
+                                 {isKids ? "Terima Misi" : "Kerjakan"}
+                            </Button>
+                        </div>
+                    </motion.div>
+                ))}
+            </div>
+        )}
+     </motion.div>
+  );
+}
+
+// --- PEOPLE VIEW ---
+export function PeopleView({ classMembers, isKids, isSMP, isUni }: any) {
+  return (
+    <motion.div key="people" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+        <h2 className={cn("text-xl font-bold", isKids && "font-display text-primary")}>
+               {isKids ? "👥 Pasukan Kita" : "Anggota Kelas"}
+        </h2>
+        <div className={cn("rounded-3xl border overflow-hidden shadow-sm", 
+            isUni ? "bg-slate-800 border-slate-700" : 
+            isSMP ? "bg-white/60 backdrop-blur-md border-white/60" :
+            "bg-white border-slate-200"
+        )}>
+            <div className="overflow-x-auto">
+               <table className="w-full text-left">
+                  <thead className={cn("border-b", isUni ? "bg-slate-900 border-slate-700" : "bg-slate-50/50 border-slate-100")}>
+                      <tr>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">Nama</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">Level</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase text-right">XP</th>
+                      </tr>
+                  </thead>
+                  <tbody className={cn("divide-y", isUni ? "divide-slate-700" : "divide-slate-50/50")}>
+                      {classMembers.map((member: any) => (
+                          <tr key={member.uid} className={cn("transition-colors", isUni ? "hover:bg-slate-700" : "hover:bg-slate-50")}>
+                              <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs", isKids ? "bg-primary/10 text-primary border border-primary/20" : isSMP ? "bg-violet-100 text-violet-600" : "bg-slate-200 text-slate-600")}>
+                                          {member.displayName.charAt(0)}
+                                      </div>
+                                      <span className={cn("font-bold", isUni ? "text-slate-200" : "text-slate-700")}>{member.displayName}</span>
+                                  </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                  <span className={cn("px-2.5 py-1 rounded-lg text-xs font-bold", isKids ? "bg-yellow-100 text-yellow-700" : isSMP ? "bg-fuchsia-100 text-fuchsia-700" : "bg-slate-100 text-slate-600")}>
+                                      Lvl {member.level}
+                                  </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                  <span className={cn("font-bold", isKids ? "text-primary" : "text-slate-600")}>{member.xp} XP</span>
+                              </td>
+                          </tr>
+                      ))}
+                  </tbody>
+               </table>
+            </div>
+        </div>
+     </motion.div>
+  );
+}
+
+// --- SHARED SUB COMPONENTS ---
+function StatCard({ icon, label, value, color, theme, onClick, isKids, isSMP, isUni }: any) {
+  const colors: any = { 
+      blue: isKids ? "bg-blue-100 text-blue-600" : isSMP ? "bg-violet-50 text-violet-600" : "bg-blue-50 text-blue-600", 
+      purple: isKids ? "bg-purple-100 text-purple-600" : isSMP ? "bg-fuchsia-50 text-fuchsia-600" : "bg-purple-50 text-purple-600", 
+      yellow: isKids ? "bg-yellow-100 text-yellow-600" : "bg-yellow-50 text-yellow-600", 
+      green: isKids ? "bg-green-100 text-green-600" : "bg-green-50 text-green-600" 
+  }
+  return (
+     <div onClick={onClick} className={cn(
+         "p-4 rounded-3xl border flex flex-col items-center text-center transition-all h-full justify-between",
+         isKids ? "bg-white border-2 border-b-4 border-slate-100 shadow-sm active:border-b-2 active:translate-y-[2px]" : 
+         isSMP ? "bg-white/60 backdrop-blur-md border-white/60 shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-violet-200" :
+         "bg-white border-slate-100 shadow-sm",
+         onClick && "cursor-pointer hover:shadow-md hover:scale-[1.02]"
+     )}>
+        <div className={cn("p-3 rounded-2xl mb-2", colors[color])}>{icon}</div>
+        <div>
+           <div className={cn("text-xl md:text-2xl font-bold text-slate-800", isKids && "font-display text-primary")}>{value}</div>
+           <div className="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-wide">{label}</div>
+        </div>
+     </div>
+  )
+}
+
+function MaterialCard({ item, theme, isKids, isSMP, isUni }: any) {
+  return (
+     <div className={cn(
+         "p-5 rounded-3xl border transition-all cursor-pointer group flex items-center gap-4 relative overflow-hidden",
+         isKids ? "bg-white border-2 border-b-4 border-slate-100 hover:border-blue-400 hover:shadow-lg" : 
+         isSMP ? "bg-white/70 backdrop-blur-md border-white/60 hover:shadow-lg hover:border-violet-300" :
+         isUni ? "bg-slate-800 border-slate-700" :
+         "bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200"
+     )} onClick={() => window.open(item.content, "_blank")}>
+        
+        {isKids && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-blue-50 to-transparent rounded-bl-full -mr-8 -mt-8 pointer-events-none" />}
+        {isSMP && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-violet-100/50 to-transparent rounded-bl-full pointer-events-none" />}
+
+        <div className={cn(
+            "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-110", 
+            item.type === 'video' 
+               ? (isSMP ? 'bg-red-50 text-red-600' : 'bg-red-50 text-red-600') 
+               : (isSMP ? 'bg-violet-50 text-violet-600' : 'bg-blue-50 text-blue-600'),
+            isKids && "border-2 border-white shadow-md"
+        )}>
+           {item.type === 'video' ? <Video size={26} /> : <FileText size={26} />}
+        </div>
+        <div className="flex-1 min-w-0 relative z-10">
+           <h4 className={cn("font-bold text-lg truncate transition-colors group-hover:text-primary", isUni ? "text-slate-100" : "text-slate-800")}>{item.title}</h4>
+           <div className="flex items-center gap-2 mt-1">
+                <span className={cn("text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded", isKids ? "bg-slate-100 text-slate-500" : "bg-slate-100 text-slate-500")}>
+                   {item.type === 'video' ? 'Video' : 'Bacaan'}
+                </span>
+                <span className="text-xs text-slate-400">• {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : 'Baru'}</span>
+           </div>
+        </div>
+        <div className={cn("p-2 rounded-full transition-colors", 
+            isKids ? "bg-blue-50 text-blue-500 group-hover:bg-blue-500 group-hover:text-white" : 
+            isSMP ? "bg-violet-50 text-violet-500 group-hover:bg-violet-600 group-hover:text-white" :
+            "bg-slate-50 text-slate-300 group-hover:text-blue-500"
+        )}>
+            <LinkIcon size={20} />
+        </div>
+     </div>
+  )
+}
+
+function EmptyState({ icon, text, isKids, isSMP }: any) {
+  return (
+     <div className={cn(
+         "text-center py-12 rounded-3xl border-2 border-dashed flex flex-col items-center justify-center",
+         isKids ? "bg-white border-slate-200" : 
+         isSMP ? "bg-white/40 border-violet-200" :
+         "bg-slate-50 border-slate-200"
+     )}>
+        <div className={cn("p-4 rounded-full mb-4", isKids ? "bg-slate-100 text-slate-400" : "bg-white shadow-sm text-slate-300")}>{icon}</div>
+        <p className="text-sm font-medium text-slate-500 max-w-xs mx-auto">{text}</p>
+     </div>
+  )
+}

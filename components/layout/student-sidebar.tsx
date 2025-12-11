@@ -37,22 +37,24 @@ export function StudentSidebar() {
 
   return (
     <aside className={cn(
-      "hidden md:flex w-64 flex-col fixed inset-y-0 z-50 transition-all duration-500 border-r",
-      isKids ? "bg-white border-r-4 border-primary/20 shadow-xl" : 
-      isUni ? "bg-slate-900 border-slate-800 text-slate-100" :
-      isSMP ? "bg-white border-indigo-100" :
-      "bg-white border-slate-200"
+      "hidden md:flex w-64 flex-col fixed z-50 transition-all duration-500 border-r",
+      // THEME STYLES
+      isKids ? "inset-y-0 bg-white border-r-4 border-primary/20 shadow-xl" : 
+      isUni ? "inset-y-0 bg-slate-900 border-slate-800 text-slate-100" :
+      isSMP ? "top-4 left-4 bottom-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-[0_8px_32px_0_rgba(139,92,246,0.15)]" : // Floating Glass for SMP
+      "inset-y-0 bg-white border-slate-200"
     )}>
       {/* BRANDING AREA */}
       <div className={cn(
         "p-6 flex items-center gap-3 transition-all",
         (isUni || theme === 'sma') && "border-b border-border/10",
-        isKids && "pb-8 pt-8"
+        isKids && "pb-8 pt-8",
+        isSMP && "bg-gradient-to-b from-white/50 to-transparent rounded-t-3xl"
       )}>
         <div className={cn(
           "flex items-center justify-center transition-all shrink-0 relative",
           isKids ? "w-14 h-14 bg-primary text-white rounded-3xl shadow-[0_6px_0_rgba(0,0,0,0.2)] rotate-[-6deg] hover:rotate-6 hover:scale-110 cursor-pointer duration-300" : 
-          isSMP ? "w-10 h-10 bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white rounded-xl shadow-lg shadow-violet-500/30" :
+          isSMP ? "w-10 h-10 bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white rounded-xl shadow-lg shadow-violet-500/40 ring-2 ring-white/50" :
           "w-10 h-10 bg-primary text-white rounded-lg shadow-sm"
         )}>
            {isKids && <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full animate-ping" />}
@@ -62,22 +64,23 @@ export function StudentSidebar() {
           <h1 className={cn(
             "font-bold leading-none tracking-tight transition-all",
             isKids ? "text-3xl text-primary font-display uppercase drop-shadow-sm" : 
-            isSMP ? "text-xl text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-indigo-600" :
+            isSMP ? "text-2xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-fuchsia-600" :
             isUni ? "text-lg text-white font-serif tracking-wide" : "text-xl text-slate-800"
           )}>
             SKOOLA
           </h1>
           <p className={cn(
             "text-[10px] font-bold uppercase tracking-widest mt-1",
-            isKids ? "text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full inline-block mt-2" : "text-muted-foreground"
+            isKids ? "text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full inline-block mt-2" : 
+            isSMP ? "text-violet-500" : "text-muted-foreground"
           )}>
-            {theme === 'sd' ? 'Petualang Cilik' : theme === 'smp' ? 'Junior High' : theme === 'sma' ? 'High School' : 'University'}
+            {theme === 'sd' ? 'Petualang Cilik' : theme === 'smp' ? 'Gen-Z Learning' : theme === 'sma' ? 'High School' : 'University'}
           </p>
         </div>
       </div>
 
       {/* NAVIGATION */}
-      <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+      <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto custom-scrollbar">
         <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
           {isKids ? "Peta Utama" : "Menu Utama"}
         </div>
@@ -101,13 +104,9 @@ export function StudentSidebar() {
         <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-8 mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
           {isKids ? "Tas Sekolah" : "Akademik"}
         </div>
-        <SidebarItem 
-          theme={theme}
-          icon={isKids ? <Backpack size={24} /> : <School size={20} />} 
-          label={isKids ? "Kelasku" : "Kelas Saya"} 
-          active={pathname.includes("/classroom")} 
-          onClick={() => router.push("/learn?tab=classes")} 
-        />
+        
+        {/* Item 'Kelasku' dihapus karena redundan dengan Dashboard */}
+        
         <SidebarItem 
           theme={theme}
           icon={isKids ? <Calendar size={24} /> : <Calendar size={20} />} 
@@ -116,22 +115,14 @@ export function StudentSidebar() {
           onClick={() => alert(isKids ? "Jadwal belum dipasang guru!" : "Fitur Jadwal segera hadir!")} 
         />
 
-        <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-8 mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
-           {isKids ? "Identitas" : "Akun"}
-        </div>
-        <SidebarItem 
-          theme={theme}
-          icon={isKids ? <User size={24} /> : <User size={20} />} 
-          label={isKids ? "Kartu Nama" : "Profil Saya"} 
-          active={pathname === "/profile"} 
-          onClick={() => router.push("/profile")} 
-        />
+        {/* Section 'Identitas' dan item 'Profil Saya' dihapus karena sudah ada di User Footer */}
       </nav>
 
       {/* USER FOOTER */}
       <div className={cn(
         "p-4 border-t m-4 rounded-2xl",
         isKids ? "bg-secondary/30 border-2 border-secondary border-b-4" :
+        isSMP ? "mx-4 mb-4 border-none bg-gradient-to-r from-violet-50 to-fuchsia-50 rounded-2xl" :
         isUni ? "bg-slate-800 border-slate-700 m-0 rounded-none border-x-0 border-b-0" : 
         "bg-slate-50 border-slate-100"
       )}>
@@ -167,6 +158,7 @@ export function StudentSidebar() {
           className={cn(
             "flex items-center justify-center gap-2 px-4 py-2.5 w-full font-bold text-xs transition-all rounded-xl",
             isKids ? "bg-white text-red-500 border-2 border-red-100 hover:border-red-500 hover:bg-red-50 shadow-sm" :
+            isSMP ? "bg-white/80 text-slate-600 hover:text-red-500 hover:bg-red-50 shadow-sm border border-slate-100" :
             isUni 
               ? "text-slate-400 hover:text-white hover:bg-slate-700" 
               : "text-slate-500 hover:text-red-600 hover:bg-red-50"
@@ -195,10 +187,10 @@ function SidebarItem({ icon, label, active, onClick, theme }: any) {
         isKids && active && "bg-primary text-white border-primary shadow-[0_4px_0_rgba(185,28,28,0.2)] translate-y-[-2px]",
         isKids && !active && "text-slate-500 hover:bg-white hover:border-secondary hover:text-secondary-foreground hover:shadow-sm hover:translate-x-1",
         
-        // SMP THEME - Gradient & Glow
-        isSMP && "rounded-xl my-1",
-        isSMP && active && "bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 text-violet-700 border-l-4 border-violet-500",
-        isSMP && !active && "text-slate-500 hover:bg-slate-50 hover:text-violet-600",
+        // SMP THEME - Glass & Neon Glow
+        isSMP && "rounded-xl my-1 border border-transparent",
+        isSMP && active && "bg-violet-500/10 text-violet-700 border-violet-200/50 shadow-[0_0_15px_rgba(139,92,246,0.3)] backdrop-blur-md",
+        isSMP && !active && "text-slate-500 hover:bg-violet-50/50 hover:text-violet-600 hover:pl-4",
 
         // UNI THEME - Clean & Minimal
         isUni && "rounded-md",
@@ -213,7 +205,8 @@ function SidebarItem({ icon, label, active, onClick, theme }: any) {
     >
       <span className={cn(
         "transition-transform duration-300", 
-        isKids && (active ? "scale-110 rotate-[-5deg]" : "group-hover:scale-110 group-hover:rotate-6") 
+        isKids && (active ? "scale-110 rotate-[-5deg]" : "group-hover:scale-110 group-hover:rotate-6"),
+        isSMP && active && "drop-shadow-[0_0_5px_rgba(139,92,246,0.5)]"
       )}>
         {icon}
       </span>
@@ -221,7 +214,7 @@ function SidebarItem({ icon, label, active, onClick, theme }: any) {
       
       {/* Active Indicator Dot for SMP */}
       {isSMP && active && (
-          <span className="absolute right-3 w-2 h-2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
+          <span className="absolute right-3 w-1.5 h-1.5 rounded-full bg-violet-500 shadow-[0_0_8px_currentColor] animate-pulse" />
       )}
     </button>
   );
