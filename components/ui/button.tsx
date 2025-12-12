@@ -52,8 +52,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         }[variant || "primary"];
       }
 
-      // 3. SMA & UNI - Futuristic, Tech, Sleek
-      if (theme === "sma" || theme === "uni") {
+      // 3. SMA THEME - Aesthetic Productivity, Glassmorphism
+      if (theme === "sma") {
         return {
           primary: "bg-primary text-primary-foreground shadow-[0_4px_14px_0_rgba(0,0,0,0.1)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.15)] hover:-translate-y-[1px] transition-all border border-white/10 font-medium tracking-wide",
           default: "bg-primary text-primary-foreground shadow-[0_4px_14px_0_rgba(0,0,0,0.1)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.15)] hover:-translate-y-[1px] transition-all border border-white/10 font-medium tracking-wide",
@@ -65,7 +65,20 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         }[variant || "primary"];
       }
 
-      // 4. DEFAULT FALLBACK
+      // 4. UNI THEME - Gen-Z Tech, Neon Glow, Dark Mode Optimized
+      if (theme === "uni") {
+        return {
+          primary: "bg-indigo-600 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] hover:bg-indigo-500 border border-indigo-400/30 transition-all duration-300 font-medium tracking-wide",
+          default: "bg-indigo-600 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] hover:bg-indigo-500 border border-indigo-400/30 transition-all duration-300 font-medium tracking-wide",
+          secondary: "bg-slate-800/80 backdrop-blur-md text-slate-200 border border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white shadow-lg shadow-black/20",
+          outline: "bg-transparent border border-indigo-500/30 text-indigo-400 hover:border-indigo-400 hover:text-indigo-300 hover:shadow-[0_0_15px_rgba(99,102,241,0.2)] tracking-wider uppercase text-xs font-bold",
+          ghost: "text-slate-400 hover:text-white hover:bg-white/10 transition-colors",
+          danger: "bg-rose-600/20 text-rose-400 border border-rose-500/50 hover:bg-rose-600/40 hover:shadow-[0_0_20px_rgba(244,63,94,0.4)]",
+          success: "bg-teal-600/20 text-teal-400 border border-teal-500/50 hover:bg-teal-600/40 hover:shadow-[0_0_20px_rgba(45,212,191,0.4)]",
+        }[variant || "primary"];
+      }
+
+      // 5. DEFAULT FALLBACK
       return {
         primary: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm active:scale-[0.98]",
         default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm active:scale-[0.98]",
@@ -79,29 +92,27 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     // Helper: Tentukan Animation Props
     const getAnimationProps = () => {
-        if (theme === "sd") {
-            return {
-                whileHover: { 
-                    scale: 1.05, 
-                    rotate: disabled ? 0 : [-1, 1, -1, 0], // Wiggle effect
-                },
-                whileTap: { 
-                    scale: 0.9, 
-                    rotate: 0,
-                },
-                transition: { 
-                    type: "spring" as const, 
-                    stiffness: 400, 
-                    damping: 10,
-                    // FIX: Override animasi rotate agar menggunakan 'tween' (keyframes friendly)
-                    // karena spring tidak support array keyframes > 2 nilai
-                    rotate: { type: "tween", duration: 0.3 } 
-                }
-            };
-        }
+      if (theme === "sd") {
         return {
-            whileTap: { scale: 0.98 }
+          whileHover: { 
+            scale: 1.05, 
+            rotate: disabled ? 0 : [-1, 1, -1, 0], // Wiggle effect
+          },
+          whileTap: { 
+            scale: 0.9, 
+            rotate: 0,
+          },
+          transition: { 
+            type: "spring" as const, 
+            stiffness: 400, 
+            damping: 10,
+            rotate: { type: "tween", duration: 0.3 } 
+          }
         };
+      }
+      return {
+        whileTap: { scale: 0.98 }
+      };
     };
 
     return (
@@ -111,7 +122,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled}
         className={cn(
           "inline-flex items-center justify-center whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:grayscale",
-          // Radius dinamis dari globals.css (--radius) akan otomatis terapply via Tailwind theme config atau class utility
+          // Radius dinamis dari globals.css
           theme === "sd" ? "rounded-3xl tracking-wide" : "rounded-xl", 
           sizes[size],
           getVariantClasses(),

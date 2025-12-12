@@ -78,8 +78,8 @@ export default function ProfileClient() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
-        <Loader2 className="animate-spin w-10 h-10 text-teal-500" />
+      <div className={cn("min-h-screen flex items-center justify-center", isUni ? "bg-slate-950 text-white" : "bg-slate-900 text-white")}>
+        <Loader2 className={cn("animate-spin w-10 h-10", isUni ? "text-indigo-500" : "text-teal-500")} />
       </div>
     );
   }
@@ -89,13 +89,28 @@ export default function ProfileClient() {
   const getStreak = () => userProfile?.streak || 0;
 
   // --- STYLING HELPERS ---
-  const bgStyle = isKids ? "bg-yellow-50" : isUni ? "bg-slate-950 text-slate-100" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-transparent text-slate-100" : "bg-slate-50";
+  const bgStyle = isKids ? "bg-yellow-50" 
+    : isUni ? "bg-slate-950 text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-200" 
+    : isSMP ? "bg-slate-50/30" 
+    : isSMA ? "bg-transparent text-slate-100" 
+    : "bg-slate-50";
+  
   const textMuted = (isUni || isSMA) ? "text-slate-400" : "text-slate-500";
   const textPrimary = (isUni || isSMA) ? "text-white" : "text-slate-900";
 
   return (
     <div className={cn("min-h-screen font-sans transition-colors duration-500 pb-20 relative overflow-hidden", bgStyle)}>
       
+      {/* --- UNI THEME BACKGROUND: Animated Mesh --- */}
+      {isUni && (
+         <div className="fixed inset-0 z-0 pointer-events-none">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950" />
+            <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse delay-700" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[100px] animate-pulse delay-1000" />
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
+         </div>
+      )}
+
       {/* --- SMA SPECIAL BACKGROUND: AURORA MESH --- */}
       {isSMA && (
         <div className="fixed inset-0 z-0 pointer-events-none">

@@ -91,27 +91,37 @@
 
 /* =========================================
    THEME 4: UNI (Universitas/Kampus)
-   Vibe: Professional, Academic, Serif, Sharp
+   Vibe: Gen-Z Academic Hub, Modern Tech, Glassmorphism, Vibrant
    ========================================= */
 [data-theme="uni"] {
-  /* Colors: Primary Navy, Secondary Gray */
-  --color-primary: #1e293b; /* Slate-800 */
+  /* Override Global Base for Dark Mode Feel */
+  --background: #0f172a; /* Slate-900 */
+  --foreground: #f8fafc; /* Slate-50 */
+
+  /* Colors: Indigo & Cyan (Tech Vibes) */
+  --color-primary: #6366f1; /* Indigo-500 */
   --color-primary-fg: #ffffff;
   
-  --color-secondary: #e2e8f0; /* Slate-200 */
-  --color-secondary-fg: #0f172a; /* Slate-900 */
+  --color-secondary: #1e293b; /* Slate-800 */
+  --color-secondary-fg: #e2e8f0; /* Slate-200 */
   
-  --color-accent: #3b82f6; /* Blue-500 (Link color) */
-  --color-muted: #f8fafc; /* Slate-50 */
+  --color-accent: #2dd4bf; /* Teal-400 */
+  --color-muted: #334155; /* Slate-700 */
   
   /* UI Attributes */
-  --radius: 0.25rem; /* 4px - Sharp/Formal */
-  --font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace; /* Data Driven feel */
+  --radius: 0.75rem; /* 12px - Modern */
+  --font-family: var(--font-geist-sans), "Inter", sans-serif; /* Clean Sans-Serif */
   
-  --shadow-card: 0 0 0 1px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.05); /* Border-like shadow */
-  --shadow-button: none;
+  /* Glassmorphism Shadows */
+  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.3); /* Deep Glass Shadow */
+  --shadow-button: 0 0 15px rgba(99, 102, 241, 0.4); /* Neon Glow */
   
-  --bg-pattern: none;
+  /* Animated Mesh Gradient Background */
+  --bg-pattern: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%), 
+    radial-gradient(at 100% 0%, rgba(45, 212, 191, 0.15) 0px, transparent 50%), 
+    radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+  --bg-size: 100% 100%;
 }
 
 /* =========================================
@@ -164,4 +174,4 @@ body {
 [data-theme="sd"] ::selection { background: #fca5a5; color: #7f1d1d; }
 [data-theme="smp"] ::selection { background: #ddd6fe; color: #4c1d95; }
 [data-theme="sma"] ::selection { background: #99f6e4; color: #115e59; } /* Teal Selection */
-[data-theme="uni"] ::selection { background: #cbd5e1; color: #0f172a; }
+[data-theme="uni"] ::selection { background: #818cf8; color: #ffffff; } /* Indigo Selection */

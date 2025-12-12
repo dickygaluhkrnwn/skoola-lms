@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LessonContent, QuizQuestion, FlashcardContent } from "@/lib/types/course.types"; 
 import { useSound } from "@/hooks/use-sound";
-import { useTheme } from "@/lib/theme-context"; // Import Theme Context
+import { useTheme } from "@/lib/theme-context";
 
 interface QuizEngineProps {
   lessonTitle: string;
-  content: LessonContent[]; // Bisa Quiz atau Flashcard
+  content: LessonContent[];
   xpReward: number;
   onComplete: (score: number) => void;
   onExit: () => void;
@@ -24,7 +24,7 @@ export default function QuizEngine({
   onComplete, 
   onExit 
 }: QuizEngineProps) {
-  const { theme } = useTheme(); // Cek tema aktif
+  const { theme } = useTheme(); 
   const [currentIndex, setCurrentIndex] = useState(0);
   
   // Quiz State
@@ -53,8 +53,9 @@ export default function QuizEngine({
   const isSMP = theme === "smp";
   const isKids = theme === "sd";
   const isSMA = theme === "sma";
+  const isUni = theme === "uni";
 
-  // Reset state saat pindah soal/materi
+  // Reset state saat pindah soal
   useEffect(() => {
     setSelectedAnswer(null);
     setTextAnswer("");
@@ -159,11 +160,12 @@ export default function QuizEngine({
             isSMP ? "bg-gradient-to-br from-violet-600 to-fuchsia-600 shadow-violet-500/30" : 
             isKids ? "bg-gradient-to-br from-blue-400 to-blue-500" : 
             isSMA ? "bg-gradient-to-br from-teal-600 to-slate-800 shadow-teal-500/30 border-teal-500/20" :
+            isUni ? "bg-gradient-to-br from-indigo-900 to-slate-900 border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.2)]" :
             "bg-slate-800"
           )}>
             <span className="text-6xl mb-6 drop-shadow-md">🤔</span>
             <h3 className="text-3xl font-bold text-center">{card.front}</h3>
-            <p className={cn("mt-8 text-sm font-semibold uppercase tracking-widest animate-pulse", isSMA ? "text-teal-200" : "text-white/70")}>Ketuk untuk balik</p>
+            <p className={cn("mt-8 text-sm font-semibold uppercase tracking-widest animate-pulse", (isSMA || isUni) ? "text-teal-200" : "text-white/70")}>Ketuk untuk balik</p>
           </div>
 
           {/* BACK */}
@@ -172,15 +174,17 @@ export default function QuizEngine({
             isSMP ? "bg-white border-violet-100" : 
             isKids ? "bg-white border-blue-100" : 
             isSMA ? "bg-slate-900 border-teal-900/50 text-slate-200" :
+            isUni ? "bg-slate-950 border-indigo-500/50 text-slate-100" :
             "bg-white border-gray-200"
           )}>
             <span className="text-6xl mb-6">💡</span>
-            <h3 className={cn("text-3xl font-bold text-center", isSMA ? "text-teal-400" : "text-slate-800")}>{card.back}</h3>
+            <h3 className={cn("text-3xl font-bold text-center", isSMA ? "text-teal-400" : isUni ? "text-indigo-400" : "text-slate-800")}>{card.back}</h3>
             {card.explanation && (
               <div className={cn(
                 "mt-6 p-3 rounded-xl border w-full",
                 isSMP ? "bg-fuchsia-50 border-fuchsia-100 text-fuchsia-800" : 
                 isSMA ? "bg-teal-950/50 border-teal-900 text-teal-300" :
+                isUni ? "bg-indigo-950/30 border-indigo-900/50 text-indigo-200" :
                 "bg-blue-50 border-blue-100 text-slate-600"
               )}>
                 <p className="text-sm text-center font-medium">{card.explanation}</p>
@@ -216,19 +220,28 @@ export default function QuizEngine({
                   selectedAnswer === option 
                     ? (isSMP ? "border-violet-500 bg-violet-50 text-violet-900 shadow-violet-200" : 
                        isSMA ? "border-teal-500 bg-teal-500/10 text-teal-300 shadow-[0_0_15px_rgba(20,184,166,0.3)]" :
+                       isUni ? "border-indigo-500 bg-indigo-500/20 text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.4)]" :
                        "border-sky-500 bg-sky-50 text-sky-900")
-                    : (isSMA ? "border-slate-800 bg-slate-900/50 text-slate-300 hover:border-slate-600 hover:bg-slate-800" : 
+                    : ((isSMA || isUni) ? "border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10" : 
                        "border-gray-200 hover:border-gray-300 hover:bg-gray-50"),
+                  
                   // Correct State
-                  isChecked && option === q.correctAnswer && (isSMA ? "border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.4)]" : "border-green-500 bg-green-50 text-green-800 ring-2 ring-green-200"),
+                  isChecked && option === q.correctAnswer && (
+                      (isSMA || isUni) ? "border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.4)]" : 
+                      "border-green-500 bg-green-50 text-green-800 ring-2 ring-green-200"
+                  ),
+                  
                   // Wrong State
-                  isChecked && selectedAnswer === option && !isCorrect && (isSMA ? "border-rose-500 bg-rose-500/20 text-rose-300" : "border-red-500 bg-red-50 text-red-800 ring-2 ring-red-200")
+                  isChecked && selectedAnswer === option && !isCorrect && (
+                      (isSMA || isUni) ? "border-rose-500 bg-rose-500/20 text-rose-300" : 
+                      "border-red-500 bg-red-50 text-red-800 ring-2 ring-red-200"
+                  )
                 )}
               >
                 <div className="flex items-center justify-between">
                    <span className="font-bold text-lg">{option}</span>
-                   {isChecked && option === q.correctAnswer && <CheckCircle2 className={cn(isSMA ? "text-emerald-400" : "text-green-600")} size={24} />}
-                   {isChecked && selectedAnswer === option && !isCorrect && <XCircle className={cn(isSMA ? "text-rose-500" : "text-red-500")} size={24} />}
+                   {isChecked && option === q.correctAnswer && <CheckCircle2 className={cn((isSMA || isUni) ? "text-emerald-400" : "text-green-600")} size={24} />}
+                   {isChecked && selectedAnswer === option && !isCorrect && <XCircle className={cn((isSMA || isUni) ? "text-rose-500" : "text-red-500")} size={24} />}
                 </div>
               </motion.button>
             ))}
@@ -246,16 +259,16 @@ export default function QuizEngine({
               placeholder="Ketik jawabanmu..."
               className={cn(
                 "w-full p-4 text-center text-xl font-bold rounded-xl border-2 outline-none transition-all shadow-sm focus:shadow-md",
-                isChecked && isCorrect ? (isSMA ? "border-emerald-500 bg-emerald-950/30 text-emerald-400" : "border-green-500 bg-green-50 text-green-700") :
-                isChecked && !isCorrect ? (isSMA ? "border-rose-500 bg-rose-950/30 text-rose-400" : "border-red-500 bg-red-50 text-red-700") :
+                isChecked && isCorrect ? ((isSMA || isUni) ? "border-emerald-500 bg-emerald-950/30 text-emerald-400" : "border-green-500 bg-green-50 text-green-700") :
+                isChecked && !isCorrect ? ((isSMA || isUni) ? "border-rose-500 bg-rose-950/30 text-rose-400" : "border-red-500 bg-red-50 text-red-700") :
                 (isSMP ? "border-slate-200 focus:border-violet-500 focus:ring-4 focus:ring-violet-100" : 
-                 isSMA ? "bg-slate-900 border-slate-700 text-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 placeholder:text-slate-600" :
+                 (isSMA || isUni) ? "bg-slate-900/50 border-white/10 text-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 placeholder:text-slate-600" :
                  "border-gray-300 focus:border-sky-500 focus:ring-4 focus:ring-sky-100")
               )}
             />
             {isChecked && !isCorrect && (
               <div className={cn("mt-4 p-3 rounded-lg text-center font-medium animate-in fade-in slide-in-from-bottom-2 border", 
-                  isSMA ? "bg-emerald-950/50 border-emerald-900 text-emerald-400" : "bg-green-100 text-green-800 border-green-200"
+                  (isSMA || isUni) ? "bg-emerald-950/50 border-emerald-900 text-emerald-400" : "bg-green-100 text-green-800 border-green-200"
               )}>
                 Jawaban benar: <span className="font-bold">{String(q.correctAnswer)}</span>
               </div>
@@ -270,11 +283,11 @@ export default function QuizEngine({
             <div className={cn(
                "min-h-[100px] border-2 border-dashed rounded-2xl flex flex-wrap justify-center gap-2 p-6 transition-colors items-center",
                isSMP ? "bg-violet-50/50 border-violet-200" : 
-               isSMA ? "bg-slate-900/50 border-slate-700" :
+               (isSMA || isUni) ? "bg-white/5 border-white/10" :
                "bg-slate-50 border-slate-200"
             )}>
                {arrangedWords.length === 0 && !isChecked && (
-                 <span className={cn("italic flex items-center gap-2", isSMA ? "text-slate-500" : "text-slate-400")}>
+                 <span className={cn("italic flex items-center gap-2", (isSMA || isUni) ? "text-slate-500" : "text-slate-400")}>
                     <HelpCircle size={16} /> Ketuk kata di bawah untuk menyusun
                  </span>
                )}
@@ -286,7 +299,7 @@ export default function QuizEngine({
                    className={cn(
                       "px-4 py-2 rounded-xl font-bold shadow-sm transition-colors border-2",
                       isSMP ? "bg-white border-violet-200 text-violet-700 hover:border-red-200 hover:text-red-500" : 
-                      isSMA ? "bg-slate-800 border-slate-600 text-teal-400 hover:border-rose-500/50 hover:text-rose-400" :
+                      (isSMA || isUni) ? "bg-slate-800 border-slate-600 text-slate-200 hover:border-rose-500/50 hover:text-rose-400" :
                       "bg-white border-sky-200 text-sky-700 hover:text-red-500"
                    )}
                  >
@@ -306,7 +319,7 @@ export default function QuizEngine({
                   whileTap={{ scale: 0.95 }}
                   className={cn(
                       "border-2 shadow-sm text-lg px-6 py-3 rounded-xl font-medium transition-all",
-                      isSMA ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-500" :
+                      (isSMA || isUni) ? "bg-slate-800/50 border-white/10 text-slate-300 hover:bg-slate-700 hover:border-white/20" :
                       "bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
                   )}
                 >
@@ -317,9 +330,9 @@ export default function QuizEngine({
 
             {isChecked && !isCorrect && (
                <div className={cn("p-4 rounded-xl text-center border", 
-                  isSMA ? "bg-emerald-950/50 border-emerald-900 text-emerald-400" : "bg-green-50 text-green-800 border-green-200"
+                  (isSMA || isUni) ? "bg-emerald-950/50 border-emerald-900 text-emerald-400" : "bg-green-50 text-green-800 border-green-200"
                )}>
-                  <p className={cn("text-xs font-bold uppercase mb-1", isSMA ? "text-emerald-600" : "text-green-600")}>Susunan Benar</p>
+                  <p className={cn("text-xs font-bold uppercase mb-1", (isSMA || isUni) ? "text-emerald-500" : "text-green-600")}>Susunan Benar</p>
                   <p className="font-bold text-lg">{Array.isArray(q.correctAnswer) ? q.correctAnswer.join(" ") : q.correctAnswer}</p>
                </div>
             )}
@@ -339,36 +352,36 @@ export default function QuizEngine({
     return (
       <div className={cn(
           "flex flex-col items-center justify-center min-h-screen p-6 text-center animate-in zoom-in-95 duration-500",
-          isSMA ? "bg-slate-950 text-slate-100" : "bg-white"
+          (isSMA || isUni) ? "bg-slate-950 text-slate-100" : "bg-white"
       )}>
         <div className={cn(
            "w-32 h-32 rounded-full flex items-center justify-center mb-6 shadow-lg relative",
-           isSMP ? "bg-violet-100" : isSMA ? "bg-teal-900/30 shadow-[0_0_30px_rgba(20,184,166,0.3)]" : "bg-yellow-100"
+           isSMP ? "bg-violet-100" : isSMA ? "bg-teal-900/30 shadow-[0_0_30px_rgba(20,184,166,0.3)]" : isUni ? "bg-indigo-900/30 shadow-[0_0_30px_rgba(99,102,241,0.3)]" : "bg-yellow-100"
         )}>
-          {isSMA ? <Trophy size={64} className="text-teal-400 animate-bounce" /> : <span className="text-6xl animate-bounce">🏆</span>}
+          {(isSMA || isUni) ? <Trophy size={64} className={cn("animate-bounce", isUni ? "text-indigo-400" : "text-teal-400")} /> : <span className="text-6xl animate-bounce">🏆</span>}
           <div className="absolute -top-2 -right-2 bg-red-500 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold border-4 border-white dark:border-slate-800">
              {percentage >= 90 ? "A+" : percentage >= 70 ? "B" : "C"}
           </div>
         </div>
-        <h1 className={cn("text-3xl font-extrabold mb-2", isSMA ? "text-white" : "text-slate-800")}>Pelajaran Selesai!</h1>
-        <p className={cn("mb-8 max-w-xs", isSMA ? "text-slate-400" : "text-slate-500")}>Kamu telah menyelesaikan sesi ini dengan sangat baik.</p>
+        <h1 className={cn("text-3xl font-extrabold mb-2", (isSMA || isUni) ? "text-white" : "text-slate-800")}>Pelajaran Selesai!</h1>
+        <p className={cn("mb-8 max-w-xs", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>Kamu telah menyelesaikan sesi ini dengan sangat baik.</p>
         
         <div className="grid grid-cols-2 gap-4 w-full max-w-sm mb-8">
           <div className={cn("p-4 rounded-2xl border", 
               isSMP ? "bg-violet-50 border-violet-100" : 
-              isSMA ? "bg-teal-950/30 border-teal-900/50" :
+              (isSMA || isUni) ? "bg-white/5 border-white/10" :
               "bg-sky-50 border-sky-100"
           )}>
             <div className={cn("font-bold text-xs uppercase tracking-wider mb-1", 
-                isSMP ? "text-violet-500" : isSMA ? "text-teal-500" : "text-sky-500"
+                isSMP ? "text-violet-500" : isSMA ? "text-teal-500" : isUni ? "text-indigo-400" : "text-sky-500"
             )}>Total XP</div>
-            <div className={cn("text-3xl font-black", isSMA ? "text-teal-300" : "text-slate-800")}>+{xpReward}</div>
+            <div className={cn("text-3xl font-black", (isSMA || isUni) ? "text-white" : "text-slate-800")}>+{xpReward}</div>
           </div>
           <div className={cn("p-4 rounded-2xl border", 
-             isSMA ? "bg-orange-950/30 border-orange-900/50" : "bg-orange-50 border-orange-100"
+             (isSMA || isUni) ? "bg-orange-950/30 border-orange-900/50" : "bg-orange-50 border-orange-100"
           )}>
             <div className="text-orange-500 font-bold text-xs uppercase tracking-wider mb-1">Akurasi</div>
-            <div className={cn("text-3xl font-black", isSMA ? "text-orange-300" : "text-slate-800")}>{percentage}%</div>
+            <div className={cn("text-3xl font-black", (isSMA || isUni) ? "text-orange-300" : "text-slate-800")}>{percentage}%</div>
           </div>
         </div>
 
@@ -376,7 +389,9 @@ export default function QuizEngine({
           onClick={() => onComplete(percentage)} 
           className={cn(
              "w-full max-w-xs font-bold py-4 rounded-xl transition-all hover:translate-y-[-2px]",
-             isSMA ? "bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-900/50" : "bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-200"
+             isSMA ? "bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-900/50" : 
+             isUni ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50" :
+             "bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-200"
           )}
         >
           Lanjut ke Dashboard
@@ -390,24 +405,25 @@ export default function QuizEngine({
     <div className={cn(
        "min-h-screen flex flex-col max-w-2xl mx-auto shadow-2xl transition-colors duration-500",
        isSMP ? "bg-white/90 backdrop-blur-xl shadow-violet-500/10" : 
-       isSMA ? "bg-slate-950/80 backdrop-blur-2xl shadow-teal-500/5 border-x border-white/5" :
+       (isSMA || isUni) ? "bg-slate-950/80 backdrop-blur-2xl shadow-black/50 border-x border-white/5" :
        "bg-white shadow-slate-100/50"
     )}>
       
       {/* TOP BAR */}
-      <div className={cn("p-4 flex items-center gap-4 border-b sticky top-0 z-20", 
-         isSMA ? "bg-slate-950/90 border-white/10" : "bg-white/80 border-slate-100"
+      <div className={cn("p-4 flex items-center gap-4 border-b sticky top-0 z-20 backdrop-blur-md", 
+         (isSMA || isUni) ? "bg-slate-950/80 border-white/10" : "bg-white/80 border-slate-100"
       )}>
         <button onClick={onExit} className={cn("p-2 rounded-full transition-colors", 
-           isSMA ? "hover:bg-white/10 text-slate-400 hover:text-white" : "hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+           (isSMA || isUni) ? "hover:bg-white/10 text-slate-400 hover:text-white" : "hover:bg-slate-100 text-slate-400 hover:text-slate-600"
         )}>
           <X size={24} />
         </button>
-        <div className={cn("flex-1 h-3 rounded-full overflow-hidden relative", isSMA ? "bg-slate-800" : "bg-slate-100")}>
+        <div className={cn("flex-1 h-3 rounded-full overflow-hidden relative", (isSMA || isUni) ? "bg-slate-800" : "bg-slate-100")}>
           <motion.div 
             className={cn("h-full rounded-full", 
                isSMP ? "bg-gradient-to-r from-violet-500 to-fuchsia-500" : 
                isSMA ? "bg-gradient-to-r from-teal-500 to-emerald-400 shadow-[0_0_10px_rgba(20,184,166,0.5)]" :
+               isUni ? "bg-gradient-to-r from-indigo-500 to-purple-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" :
                "bg-green-500"
             )}
             initial={{ width: 0 }}
@@ -416,7 +432,7 @@ export default function QuizEngine({
           />
         </div>
         <div className={cn("flex items-center gap-1.5 font-bold px-3 py-1 rounded-full border",
-           isSMA ? "text-rose-400 bg-rose-950/30 border-rose-900/50" : "text-red-500 bg-red-50 border-red-100"
+           (isSMA || isUni) ? "text-rose-400 bg-rose-950/30 border-rose-900/50" : "text-red-500 bg-red-50 border-red-100"
         )}>
           <span>❤️</span>
           <span>{lives}</span>
@@ -441,21 +457,22 @@ export default function QuizEngine({
                        "inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3",
                        isSMP ? "bg-violet-100 text-violet-600" : 
                        isSMA ? "bg-teal-950/50 text-teal-400 border border-teal-900" :
+                       isUni ? "bg-indigo-950/50 text-indigo-400 border border-indigo-900" :
                        "bg-blue-100 text-blue-600"
                     )}>
                        Kartu Pintar
                     </span>
-                    <h2 className={cn("text-2xl font-bold", isSMA ? "text-slate-100" : "text-slate-800")}>Hafalkan Konsep Ini</h2>
+                    <h2 className={cn("text-2xl font-bold", (isSMA || isUni) ? "text-slate-100" : "text-slate-800")}>Hafalkan Konsep Ini</h2>
                 </div>
             ) : (
-                <h2 className={cn("text-2xl md:text-3xl font-bold mb-8 text-center leading-relaxed", isSMA ? "text-slate-100" : "text-slate-800")}>
+                <h2 className={cn("text-2xl md:text-3xl font-bold mb-8 text-center leading-relaxed", (isSMA || isUni) ? "text-slate-100" : "text-slate-800")}>
                     {(currentItem as QuizQuestion).question}
                 </h2>
             )}
 
             {/* Media */}
             {currentItem.type !== 'flashcard' && (currentItem as QuizQuestion).mediaUrl && (
-              <div className={cn("mb-8 rounded-2xl overflow-hidden shadow-sm border-2", isSMA ? "border-slate-800 bg-slate-900" : "border-slate-100 bg-slate-50")}>
+              <div className={cn("mb-8 rounded-2xl overflow-hidden shadow-sm border-2", (isSMA || isUni) ? "border-slate-800 bg-slate-900" : "border-slate-100 bg-slate-50")}>
                 <img src={(currentItem as QuizQuestion).mediaUrl} alt="Soal Visual" className="w-full h-auto object-contain max-h-64 mx-auto" />
               </div>
             )}
@@ -472,13 +489,13 @@ export default function QuizEngine({
 
       {/* BOTTOM ACTION BAR */}
       <div className={cn(
-        "p-6 border-t transition-colors duration-300 safe-area-pb sticky bottom-0 z-20",
+        "p-6 border-t transition-colors duration-300 safe-area-pb sticky bottom-0 z-20 backdrop-blur-md",
         isChecked 
           ? (isCorrect || currentItem.type === 'flashcard' 
-              ? (isSMA ? "bg-emerald-950/80 border-emerald-900" : "bg-green-50 border-green-200") 
-              : (isSMA ? "bg-rose-950/80 border-rose-900" : "bg-red-50 border-red-200")
+              ? ((isSMA || isUni) ? "bg-emerald-950/80 border-emerald-900" : "bg-green-50 border-green-200") 
+              : ((isSMA || isUni) ? "bg-rose-950/80 border-rose-900" : "bg-red-50 border-red-200")
             ) 
-          : (isSMA ? "bg-slate-950/90 border-white/10" : "bg-white border-slate-100")
+          : ((isSMA || isUni) ? "bg-slate-950/80 border-white/10" : "bg-white border-slate-100")
       )}>
         <div className="max-w-2xl mx-auto flex justify-between items-center gap-4">
           <div className="flex-1 min-w-0">
@@ -486,30 +503,30 @@ export default function QuizEngine({
                 <div className="flex items-start gap-3 animate-in slide-in-from-bottom-2 duration-300">
                   <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shadow-sm shrink-0", 
                       isCorrect 
-                        ? (isSMA ? "bg-emerald-900 text-emerald-400" : "bg-white text-green-500") 
-                        : (isSMA ? "bg-rose-900 text-rose-400" : "bg-white text-red-500")
+                        ? ((isSMA || isUni) ? "bg-emerald-900 text-emerald-400" : "bg-white text-green-500") 
+                        : ((isSMA || isUni) ? "bg-rose-900 text-rose-400" : "bg-white text-red-500")
                   )}>
                       {isCorrect ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
                   </div>
                   <div className="overflow-hidden">
                       <div className={cn("font-bold text-lg leading-tight", 
                           isCorrect 
-                            ? (isSMA ? "text-emerald-400" : "text-green-800") 
-                            : (isSMA ? "text-rose-400" : "text-red-800")
+                            ? ((isSMA || isUni) ? "text-emerald-400" : "text-green-800") 
+                            : ((isSMA || isUni) ? "text-rose-400" : "text-red-800")
                       )}>
                           {isCorrect ? "Benar Sekali!" : "Yah, Kurang Tepat..."}
                       </div>
                       {!isCorrect && (currentItem as QuizQuestion).explanation && (
-                          <p className={cn("text-sm mt-1 truncate", isSMA ? "text-rose-300/80" : "text-red-700/80")}>{(currentItem as QuizQuestion).explanation}</p>
+                          <p className={cn("text-sm mt-1 truncate", (isSMA || isUni) ? "text-rose-300/80" : "text-red-700/80")}>{(currentItem as QuizQuestion).explanation}</p>
                       )}
                   </div>
                 </div>
             ) : currentItem.type === 'flashcard' ? (
-                <div className={cn("text-sm font-medium flex items-center gap-2", isSMA ? "text-slate-400" : "text-slate-500")}>
+                <div className={cn("text-sm font-medium flex items-center gap-2", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>
                    <RotateCcw size={16} /> Ketuk kartu untuk membalik
                 </div>
             ) : (
-                <div className={cn("hidden md:block text-sm font-bold uppercase tracking-wider", isSMA ? "text-slate-500" : "text-slate-400")}>
+                <div className={cn("hidden md:block text-sm font-bold uppercase tracking-wider", (isSMA || isUni) ? "text-slate-500" : "text-slate-400")}>
                    Jawab soal untuk melanjutkan
                 </div>
             )}
@@ -522,7 +539,7 @@ export default function QuizEngine({
               "px-8 py-6 rounded-xl font-bold text-white transition-all shadow-lg active:scale-95 active:shadow-none ml-auto text-lg",
               isChecked || currentItem.type === 'flashcard'
                 ? (isCorrect || currentItem.type === 'flashcard' ? "bg-green-500 hover:bg-green-600 shadow-green-200" : "bg-red-500 hover:bg-red-600 shadow-red-200")
-                : (isSMP ? "bg-violet-600 hover:bg-violet-700 shadow-violet-200" : isSMA ? "bg-teal-600 hover:bg-teal-500 shadow-teal-500/20" : "bg-sky-500 hover:bg-sky-600 shadow-sky-200")
+                : (isSMP ? "bg-violet-600 hover:bg-violet-700 shadow-violet-200" : isSMA ? "bg-teal-600 hover:bg-teal-500 shadow-teal-500/20" : isUni ? "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/20" : "bg-sky-500 hover:bg-sky-600 shadow-sky-200")
             )}
           >
             {isChecked || currentItem.type === 'flashcard' ? (

@@ -35,8 +35,8 @@ export function MobileNav() {
       // SMA THEME: Dark Glass Sleek
       isSMA ? "bg-slate-950/80 backdrop-blur-xl border-t border-white/10 text-slate-400 shadow-[0_-4px_20px_rgba(0,0,0,0.2)]" :
 
-      // UNI THEME
-      isUni ? "bg-slate-900 border-t border-slate-800 text-slate-400" : 
+      // UNI THEME: Fully Glass & Neon
+      isUni ? "bg-slate-950/70 backdrop-blur-xl border-t border-white/5 text-slate-400 shadow-[0_-8px_32px_rgba(0,0,0,0.5)]" : 
       
       // DEFAULT
       "bg-white border-t border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
@@ -80,6 +80,7 @@ export function MobileNav() {
           theme === "sd" ? "text-red-300 hover:text-red-500 active:scale-95" : 
           theme === "smp" ? "text-slate-400 hover:text-red-500" : 
           theme === "sma" ? "text-slate-500 hover:text-rose-500" :
+          isUni ? "text-slate-500 hover:text-rose-400 hover:bg-rose-900/20" :
           "text-slate-400 hover:text-red-500"
         )}
       >
@@ -104,23 +105,24 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
       className={cn(
         "flex flex-col items-center gap-1 p-2 transition-all relative",
         
-        // Kids Theme: Bouncy & Colorful
+        // Kids Theme
         isKids ? "rounded-2xl w-16" : "rounded-md",
         isKids && active && "text-white bg-primary shadow-lg shadow-primary/30 -translate-y-4 scale-110 border-4 border-white",
         isKids && !active && "text-gray-400 hover:text-primary hover:bg-primary/5",
         
-        // Uni Theme (High Contrast)
-        isUni && active && "text-white bg-slate-800 border-t-2 border-white", 
-        isUni && !active && "text-slate-500 hover:text-slate-300",
+        // Uni Theme: Neon Glow without heavy borders
+        isUni && "rounded-lg",
+        isUni && active && "text-indigo-400 drop-shadow-[0_0_10px_rgba(99,102,241,0.8)] scale-110",
+        isUni && !active && "text-slate-500 hover:text-slate-300 hover:scale-105",
 
-        // SMP Theme (Glowing)
+        // SMP Theme
         isSMP && active && "text-violet-600 scale-110",
         
-        // SMA Theme (Neon Minimal)
+        // SMA Theme
         isSMA && active && "text-teal-400 scale-105 drop-shadow-[0_0_8px_rgba(45,212,191,0.5)]",
         isSMA && !active && "text-slate-500 hover:text-slate-300",
 
-        // Default / Pro Theme
+        // Default
         !isKids && !isUni && !isSMP && !isSMA && active && "text-primary bg-primary/10",
         !isKids && !isUni && !isSMP && !isSMA && !active && "text-slate-400 hover:text-slate-600"
       )}
@@ -142,6 +144,9 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
       
       {/* Active Indicator for SMA */}
       {isSMA && active && <div className="absolute -bottom-1 w-1 h-1 bg-teal-400 rounded-full shadow-[0_0_5px_currentColor]" />}
+
+      {/* Active Glow for Uni */}
+      {isUni && active && <div className="absolute -bottom-1 w-12 h-1 bg-indigo-500/50 rounded-full blur-[4px]" />}
     </button>
   );
 }

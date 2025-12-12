@@ -195,9 +195,13 @@ export default function SocialClient() {
   };
 
   // --- STYLES ---
-  const bgStyle = isKids ? "bg-yellow-50" : isUni ? "bg-slate-950 text-slate-200" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-transparent" : "bg-slate-50";
+  const bgStyle = isKids ? "bg-yellow-50" 
+    : isUni ? "bg-slate-950 text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-200" 
+    : isSMP ? "bg-slate-50/30" 
+    : isSMA ? "bg-transparent text-slate-100" 
+    : "bg-slate-50";
   
-  const sidebarStyle = isUni ? "bg-slate-900 border-slate-800" : 
+  const sidebarStyle = isUni ? "bg-slate-950/30 backdrop-blur-xl border-white/5 text-slate-300 border-r" : 
                        isSMP ? "m-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-[0_8px_32px_0_rgba(139,92,246,0.15)]" :
                        isSMA ? "m-4 rounded-2xl bg-slate-950/40 backdrop-blur-xl border border-white/5 shadow-2xl h-[calc(100vh-2rem)]" :
                        "bg-white border-slate-200";
@@ -205,7 +209,7 @@ export default function SocialClient() {
   const activeItemStyle = isKids 
     ? "bg-yellow-100 text-yellow-800" 
     : isUni 
-      ? "bg-blue-900/50 text-blue-200 border-l-2 border-blue-500" 
+      ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)] backdrop-blur-md" 
       : isSMP
         ? "bg-violet-500/10 text-violet-700 border border-violet-200 shadow-sm backdrop-blur-md"
         : isSMA
@@ -215,6 +219,16 @@ export default function SocialClient() {
   return (
     <div className={cn("flex min-h-screen font-sans transition-colors duration-500 relative", bgStyle)}>
       
+      {/* --- UNI THEME BACKGROUND: Animated Mesh --- */}
+      {isUni && (
+         <div className="fixed inset-0 z-0">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950" />
+            <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse delay-700" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[100px] animate-pulse delay-1000" />
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
+         </div>
+      )}
+
       {/* --- SMA THEME: AURORA MESH --- */}
       {isSMA && (
         <div className="fixed inset-0 z-0 pointer-events-none">
@@ -240,24 +254,24 @@ export default function SocialClient() {
         <aside className={cn("w-64 flex-shrink-0 border-r flex flex-col hidden md:flex h-full", sidebarStyle, (isSMP || isSMA) ? "rounded-3xl border-r-0 mr-0 h-[calc(100vh-2rem)]" : "")}>
           
           {/* HEADER SIDEBAR: BUTTON BACK -> TITLE */}
-          <div className={cn("p-4 border-b border-inherit flex items-center gap-3", (isSMP || isSMA) && "border-white/5")}>
+          <div className={cn("p-4 border-b border-inherit flex items-center gap-3", (isSMP || isSMA || isUni) && "border-white/5")}>
             <button 
                 onClick={() => router.back()} 
                 className={cn(
                     "p-1.5 rounded-lg transition-colors -ml-1 hover:scale-105 active:scale-95",
-                    isUni ? "hover:bg-slate-800 text-slate-400" : isSMA ? "text-slate-400 hover:text-white hover:bg-white/10" : "hover:bg-slate-100 text-slate-500"
+                    (isUni || isSMA) ? "text-slate-400 hover:text-white hover:bg-white/10" : "hover:bg-slate-100 text-slate-500"
                 )}
                 title="Kembali ke Dashboard"
             >
                 <ArrowLeft size={20} />
             </button>
-            <h2 className={cn("font-bold text-sm uppercase tracking-wider opacity-70", isSMA && "text-slate-300")}>Forum Diskusi</h2>
+            <h2 className={cn("font-bold text-sm uppercase tracking-wider opacity-70", (isSMA || isUni) && "text-slate-300")}>Forum Diskusi</h2>
           </div>
           
           <div className="flex-1 overflow-y-auto p-3 space-y-6 custom-scrollbar">
             {/* ... List Navigasi ... */}
             <div className="space-y-1">
-              <p className={cn("px-3 text-[10px] font-bold uppercase opacity-50 mb-1", isSMA && "text-slate-400")}>Publik</p>
+              <p className={cn("px-3 text-[10px] font-bold uppercase opacity-50 mb-1", (isSMA || isUni) && "text-slate-400")}>Publik</p>
               <ContextButton 
                 active={activeContext.id === "global"} 
                 onClick={() => setActiveContext({ id: "global", name: "Lobi Sekolah", type: "school", icon: <School size={18}/> })}
@@ -266,6 +280,7 @@ export default function SocialClient() {
                 themeStyle={activeItemStyle}
                 isSMP={isSMP}
                 isSMA={isSMA}
+                isUni={isUni}
               />
               <ContextButton 
                 active={activeContext.id === "major_science"} 
@@ -275,14 +290,15 @@ export default function SocialClient() {
                 themeStyle={activeItemStyle}
                 isSMP={isSMP}
                 isSMA={isSMA}
+                isUni={isUni}
               />
             </div>
 
             <div className="space-y-1">
               <div className="flex justify-between items-center px-3 mb-1">
-                 <p className={cn("text-[10px] font-bold uppercase opacity-50", isSMA && "text-slate-400")}>Kelas Saya</p>
+                 <p className={cn("text-[10px] font-bold uppercase opacity-50", (isSMA || isUni) && "text-slate-400")}>Kelas Saya</p>
               </div>
-              {myClasses.length === 0 && <p className={cn("px-3 text-xs italic opacity-50", isSMA && "text-slate-500")}>Belum masuk kelas.</p>}
+              {myClasses.length === 0 && <p className={cn("px-3 text-xs italic opacity-50", (isSMA || isUni) && "text-slate-500")}>Belum masuk kelas.</p>}
               {myClasses.map(c => (
                 <ContextButton 
                   key={c.id}
@@ -293,14 +309,15 @@ export default function SocialClient() {
                   themeStyle={activeItemStyle}
                   isSMP={isSMP}
                   isSMA={isSMA}
+                  isUni={isUni}
                 />
               ))}
             </div>
 
             <div className="space-y-1">
               <div className="flex justify-between items-center px-3 mb-1">
-                 <p className={cn("text-[10px] font-bold uppercase opacity-50", isSMA && "text-slate-400")}>Kelompok</p>
-                 <button onClick={() => setIsCreateGroupOpen(true)} className={cn("p-1 rounded transition-colors", isSMA ? "text-slate-400 hover:text-white hover:bg-white/10" : "hover:bg-slate-200")}><Plus size={12}/></button>
+                 <p className={cn("text-[10px] font-bold uppercase opacity-50", (isSMA || isUni) && "text-slate-400")}>Kelompok</p>
+                 <button onClick={() => setIsCreateGroupOpen(true)} className={cn("p-1 rounded transition-colors", (isSMA || isUni) ? "text-slate-400 hover:text-white hover:bg-white/10" : "hover:bg-slate-200")}><Plus size={12}/></button>
               </div>
               {myGroups.map(g => (
                 <ContextButton 
@@ -312,6 +329,7 @@ export default function SocialClient() {
                   themeStyle={activeItemStyle}
                   isSMP={isSMP}
                   isSMA={isSMA}
+                  isUni={isUni}
                 />
               ))}
               {myGroups.length === 0 && (
@@ -319,7 +337,7 @@ export default function SocialClient() {
                    onClick={() => setIsCreateGroupOpen(true)}
                    className={cn(
                       "w-full text-left px-3 py-2 text-xs opacity-60 hover:opacity-100 flex items-center gap-2 rounded-lg transition-all",
-                      isSMA ? "text-slate-400 hover:bg-white/5 hover:text-white" : "hover:bg-slate-100"
+                      (isSMA || isUni) ? "text-slate-400 hover:bg-white/5 hover:text-white" : "hover:bg-slate-100"
                    )}
                  >
                     <Plus size={14} /> Buat Kelompok Baru
@@ -333,7 +351,7 @@ export default function SocialClient() {
         <main className="flex-1 flex flex-col min-w-0 bg-transparent relative">
           {/* Channel Header */}
           <header className={cn("h-16 border-b flex items-center justify-between px-6 shrink-0 backdrop-blur-md bg-opacity-90 z-10", 
-             isUni ? "bg-slate-900 border-slate-700" : 
+             isUni ? "bg-slate-950/40 border-white/5" : 
              isSMP ? "bg-white/60 border-white/40 shadow-sm" : 
              isSMA ? "bg-slate-950/40 border-white/10" :
              "bg-white border-slate-200"
@@ -342,7 +360,7 @@ export default function SocialClient() {
                 {/* Mobile Back Button */}
                 <button 
                     onClick={() => router.back()} 
-                    className={cn("md:hidden p-2 rounded-full mr-2", isSMA ? "text-slate-400 hover:bg-white/10" : "hover:bg-black/5")}
+                    className={cn("md:hidden p-2 rounded-full mr-2", (isSMA || isUni) ? "text-slate-400 hover:bg-white/10" : "hover:bg-black/5")}
                 >
                     <ArrowLeft size={20} />
                 </button>
@@ -351,13 +369,14 @@ export default function SocialClient() {
                    isKids ? "bg-yellow-100 text-yellow-600" : 
                    isSMP ? "bg-violet-100 text-violet-600" :
                    isSMA ? "bg-teal-500/10 text-teal-400 border border-teal-500/20" :
-                   isUni ? "bg-slate-800 text-blue-400" : "bg-blue-50 text-blue-600"
+                   isUni ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30" : 
+                   "bg-blue-50 text-blue-600"
                 )}>
                    {activeContext.icon}
                 </div>
                 <div>
-                   <h1 className={cn("font-bold text-lg leading-tight", isSMA ? "text-slate-200" : "text-slate-900")}>{activeContext.name}</h1>
-                   <p className={cn("text-xs opacity-60 flex items-center gap-1", isSMA ? "text-slate-400" : "text-slate-500")}>
+                   <h1 className={cn("font-bold text-lg leading-tight", (isSMA || isUni) ? "text-slate-200" : "text-slate-900")}>{activeContext.name}</h1>
+                   <p className={cn("text-xs opacity-60 flex items-center gap-1", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>
                       {activeContext.type === 'school' ? 'Diskusi tingkat sekolah' : 
                        activeContext.type === 'class' ? 'Forum privat kelas' : 'Diskusi kelompok'}
                    </p>
@@ -368,12 +387,12 @@ export default function SocialClient() {
           {/* Chat List */}
           <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 custom-scrollbar">
              {loading ? (
-                <div className={cn("text-center py-10 opacity-50", isSMA && "text-slate-400")}>Memuat diskusi...</div>
+                <div className={cn("text-center py-10 opacity-50", (isSMA || isUni) && "text-slate-400")}>Memuat diskusi...</div>
              ) : posts.length === 0 ? (
                 <div className="text-center py-20 opacity-50 flex flex-col items-center">
-                   <MessageSquare size={48} className={cn("mb-4 opacity-20", isSMA ? "text-teal-500" : "text-slate-400")}/>
-                   <p className={cn(isSMA && "text-slate-400")}>Belum ada percakapan di sini.</p>
-                   <p className={cn("text-sm", isSMA && "text-slate-500")}>Jadilah yang pertama menyapa!</p>
+                   <MessageSquare size={48} className={cn("mb-4 opacity-20", (isSMA || isUni) ? "text-teal-500" : "text-slate-400")}/>
+                   <p className={cn((isSMA || isUni) && "text-slate-400")}>Belum ada percakapan di sini.</p>
+                   <p className={cn("text-sm", (isSMA || isUni) && "text-slate-500")}>Jadilah yang pertama menyapa!</p>
                 </div>
              ) : (
                 posts.map(post => (
@@ -383,19 +402,19 @@ export default function SocialClient() {
                       animate={{ opacity: 1, y: 0 }}
                       className={cn(
                         "flex gap-3 group p-3 rounded-2xl transition-colors",
-                        isUni ? "hover:bg-slate-900/50" : 
+                        isUni ? "hover:bg-white/5" : 
                         isSMP ? "bg-white/40 hover:bg-white/70 border border-white/40 shadow-sm" : 
                         isSMA ? "bg-white/5 border border-white/5 hover:bg-white/10 hover:border-teal-500/20" :
                         "hover:bg-slate-50"
                       )}
                    >
-                      <div className={cn("w-10 h-10 rounded-full shrink-0 overflow-hidden border", isSMA ? "bg-slate-800 border-slate-700" : "bg-gray-200 border-white/50")}>
+                      <div className={cn("w-10 h-10 rounded-full shrink-0 overflow-hidden border", (isSMA || isUni) ? "bg-slate-800 border-slate-700" : "bg-gray-200 border-white/50")}>
                          {post.userAvatar ? <img src={post.userAvatar} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-xs">User</div>}
                       </div>
                       <div className="flex-1 min-w-0">
                          <div className="flex items-baseline gap-2">
                             <span className={cn("font-bold text-sm", (isUni || isSMA) ? "text-slate-200" : "text-slate-900")}>{post.userName}</span>
-                            <span className={cn("text-[10px] opacity-50", isSMA ? "text-slate-400" : "text-slate-500")}>{post.timestamp?.seconds ? new Date(post.timestamp.seconds * 1000).toLocaleString() : 'Just now'}</span>
+                            <span className={cn("text-[10px] opacity-50", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>{post.timestamp?.seconds ? new Date(post.timestamp.seconds * 1000).toLocaleString() : 'Just now'}</span>
                          </div>
                          <p className={cn("text-sm leading-relaxed whitespace-pre-wrap mt-0.5", (isUni || isSMA) ? "text-slate-300" : "text-slate-700")}>
                             {post.content}
@@ -409,7 +428,7 @@ export default function SocialClient() {
           {/* Input Area */}
           <div className="p-4 border-t border-inherit bg-inherit shrink-0 pb-safe md:pb-4">
              <div className={cn("flex gap-2 items-end p-2 rounded-xl border transition-all focus-within:ring-2", 
-                isUni ? "bg-slate-800 border-slate-700 focus-within:ring-blue-900" : 
+                isUni ? "bg-slate-950/50 border-white/10 focus-within:border-indigo-500/50 focus-within:ring-indigo-500/20" : 
                 isSMP ? "bg-white/80 border-white/60 focus-within:ring-violet-200 focus-within:border-violet-300 shadow-sm" :
                 isSMA ? "bg-slate-950/60 border-white/10 focus-within:border-teal-500/50 focus-within:ring-teal-500/20" :
                 "bg-white border-slate-300 focus-within:ring-blue-100"
@@ -418,7 +437,7 @@ export default function SocialClient() {
                    value={newPostContent}
                    onChange={e => setNewPostContent(e.target.value)}
                    placeholder={`Kirim pesan ke #${activeContext.name}...`}
-                   className={cn("flex-1 bg-transparent border-none outline-none resize-none max-h-32 min-h-[44px] py-2.5 px-2 text-sm", isSMA ? "text-slate-200 placeholder:text-slate-600" : "text-slate-800")}
+                   className={cn("flex-1 bg-transparent border-none outline-none resize-none max-h-32 min-h-[44px] py-2.5 px-2 text-sm", (isSMA || isUni) ? "text-slate-200 placeholder:text-slate-600" : "text-slate-800")}
                    onKeyDown={e => {
                       if(e.key === 'Enter' && !e.shiftKey) {
                          e.preventDefault();
@@ -430,10 +449,11 @@ export default function SocialClient() {
                    size="icon" 
                    onClick={handlePostSubmit} 
                    disabled={!newPostContent.trim() || isPosting}
-                   className={cn("mb-1 rounded-lg", 
+                   className={cn("mb-1 rounded-lg transition-all", 
                       isKids ? "bg-yellow-400 hover:bg-yellow-500 text-yellow-900" : 
                       isSMP ? "bg-violet-600 hover:bg-violet-700" : 
                       isSMA ? "bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-500/20" :
+                      isUni ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)]" :
                       "bg-blue-600 hover:bg-blue-700"
                    )}
                 >
@@ -452,7 +472,7 @@ export default function SocialClient() {
                     initial={{scale:0.95}} animate={{scale:1}} exit={{scale:0.95}} 
                     className={cn(
                        "p-6 rounded-2xl w-full max-w-sm relative z-10 shadow-xl",
-                       isSMA ? "bg-slate-900 border border-white/10 text-white" : "bg-white"
+                       (isSMA || isUni) ? "bg-slate-900 border border-white/10 text-white" : "bg-white"
                     )}
                  >
                     <h2 className="text-lg font-bold mb-4">Buat Kelompok Belajar</h2>
@@ -462,7 +482,7 @@ export default function SocialClient() {
                           placeholder="Nama Kelompok (misal: Tim Roket)"
                           className={cn(
                              "w-full p-3 border rounded-xl mb-4 outline-none focus:ring-2",
-                             isSMA 
+                             (isSMA || isUni) 
                                ? "bg-slate-800 border-slate-700 text-white focus:ring-teal-500 placeholder:text-slate-500" 
                                : "bg-slate-50 border-slate-200 focus:ring-blue-500"
                           )}
@@ -470,8 +490,8 @@ export default function SocialClient() {
                           onChange={e => setNewGroupName(e.target.value)}
                        />
                        <div className="flex justify-end gap-2">
-                          <Button type="button" variant="ghost" onClick={() => setIsCreateGroupOpen(false)} className={isSMA ? "text-slate-400 hover:text-white hover:bg-white/10" : ""}>Batal</Button>
-                          <Button type="submit" className={isSMA ? "bg-teal-600 hover:bg-teal-500 text-white" : ""}>Buat</Button>
+                          <Button type="button" variant="ghost" onClick={() => setIsCreateGroupOpen(false)} className={(isSMA || isUni) ? "text-slate-400 hover:text-white hover:bg-white/10" : ""}>Batal</Button>
+                          <Button type="submit" className={(isSMA || isUni) ? "bg-teal-600 hover:bg-teal-500 text-white" : ""}>Buat</Button>
                        </div>
                     </form>
                  </motion.div>
@@ -485,7 +505,7 @@ export default function SocialClient() {
 }
 
 // Sub-Component for Sidebar Button
-function ContextButton({ active, onClick, icon, label, themeStyle, isSMP, isSMA }: any) {
+function ContextButton({ active, onClick, icon, label, themeStyle, isSMP, isSMA, isUni }: any) {
    return (
       <button
          onClick={onClick}
@@ -495,8 +515,8 @@ function ContextButton({ active, onClick, icon, label, themeStyle, isSMP, isSMA 
                ? themeStyle 
                : (isSMP 
                    ? "text-slate-500 hover:bg-violet-50/50 hover:text-violet-600" 
-                   : isSMA
-                     ? "text-slate-400 hover:bg-white/5 hover:text-teal-400"
+                   : (isSMA || isUni)
+                     ? "text-slate-400 hover:bg-white/5 hover:text-white"
                      : "text-slate-500 hover:bg-slate-100")
          )}
       >

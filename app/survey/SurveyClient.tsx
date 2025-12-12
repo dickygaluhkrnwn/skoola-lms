@@ -78,10 +78,38 @@ const QUESTIONS: Question[] = [
 
 // Tipe Hasil Bakat
 const ARCHETYPES = {
-  logic: { label: "The Thinker 🧠", desc: "Kamu jago analisis dan memecahkan masalah rumit!", color: "text-blue-600", bg: "bg-blue-100" },
-  creative: { label: "The Creator 🎨", desc: "Imajinasimu luar biasa, penuh ide-ide segar!", color: "text-purple-600", bg: "bg-purple-100" },
-  social: { label: "The Leader 🤝", desc: "Kamu punya jiwa kepemimpinan dan sosial yang tinggi.", color: "text-orange-600", bg: "bg-orange-100" },
-  practical: { label: "The Maker 🛠️", desc: "Kamu suka praktik langsung dan hasil nyata.", color: "text-green-600", bg: "bg-green-100" }
+  logic: { 
+      label: "The Thinker 🧠", 
+      desc: "Kamu jago analisis dan memecahkan masalah rumit!", 
+      color: "text-blue-600", 
+      bg: "bg-blue-100",
+      uniColor: "text-blue-400",
+      uniBg: "bg-blue-500/20 border-blue-500/30"
+  },
+  creative: { 
+      label: "The Creator 🎨", 
+      desc: "Imajinasimu luar biasa, penuh ide-ide segar!", 
+      color: "text-purple-600", 
+      bg: "bg-purple-100",
+      uniColor: "text-purple-400",
+      uniBg: "bg-purple-500/20 border-purple-500/30"
+  },
+  social: { 
+      label: "The Leader 🤝", 
+      desc: "Kamu punya jiwa kepemimpinan dan sosial yang tinggi.", 
+      color: "text-orange-600", 
+      bg: "bg-orange-100",
+      uniColor: "text-orange-400",
+      uniBg: "bg-orange-500/20 border-orange-500/30"
+  },
+  practical: { 
+      label: "The Maker 🛠️", 
+      desc: "Kamu suka praktik langsung dan hasil nyata.", 
+      color: "text-green-600", 
+      bg: "bg-green-100",
+      uniColor: "text-green-400",
+      uniBg: "bg-green-500/20 border-green-500/30"
+  }
 };
 
 export default function SurveyClient() {
@@ -100,6 +128,8 @@ export default function SurveyClient() {
   // Helper Theme
   const isKids = theme === "sd";
   const isUni = theme === "uni";
+  const isSMP = theme === "smp";
+  const isSMA = theme === "sma";
 
   const handleAnswer = () => {
     if (selectedOption === null) return;
@@ -155,27 +185,41 @@ export default function SurveyClient() {
   };
 
   // Styles Helpers
-  const bgStyle = isKids ? "bg-yellow-50" : isUni ? "bg-slate-950 text-slate-200" : "bg-slate-50";
+  const bgStyle = isKids ? "bg-yellow-50" : isUni ? "bg-slate-950 text-slate-200" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-slate-950 text-slate-200" : "bg-slate-50";
+  
   const cardStyle = isKids 
     ? "bg-white border-yellow-200 rounded-3xl border-4" 
     : isUni 
-      ? "bg-slate-900 border-slate-700 text-slate-200 rounded-xl border" 
-      : "bg-white border-slate-200 rounded-xl border";
+      ? "bg-slate-900/60 border-white/10 text-slate-200 rounded-2xl border backdrop-blur-xl shadow-2xl" 
+      : isSMA 
+        ? "bg-slate-900/40 border-white/10 text-slate-200 rounded-2xl border backdrop-blur-xl shadow-2xl"
+        : "bg-white border-slate-200 rounded-xl border shadow-sm";
 
   if (showIntro) {
     return (
-      <div className={cn("min-h-screen flex items-center justify-center p-6 transition-colors font-sans", bgStyle)}>
-        <div className={cn("max-w-md w-full p-8 shadow-xl text-center", cardStyle)}>
+      <div className={cn("min-h-screen flex items-center justify-center p-6 transition-colors font-sans relative overflow-hidden", bgStyle)}>
+        
+        {/* Background Effects for Uni/SMA */}
+        {(isUni || isSMA) && (
+           <div className="fixed inset-0 z-0 pointer-events-none">
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950 opacity-80" />
+              <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse delay-700" />
+              <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[100px] animate-pulse delay-1000" />
+              {isUni && <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />}
+           </div>
+        )}
+
+        <div className={cn("max-w-md w-full p-8 text-center relative z-10", cardStyle)}>
           <div className={cn(
             "w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-6 text-5xl shadow-sm animate-bounce",
-            isKids ? "bg-sky-100" : isUni ? "bg-slate-800" : "bg-white border border-slate-100"
+            isKids ? "bg-sky-100" : isUni ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" : isSMA ? "bg-teal-500/20 text-teal-300 border border-teal-500/30" : "bg-white border border-slate-100"
           )}>
-            ✨
+            {isUni || isSMA ? <Sparkles size={40} /> : "✨"}
           </div>
-          <h1 className={cn("text-2xl font-bold mb-3", isUni ? "text-white" : "text-slate-900")}>
+          <h1 className={cn("text-2xl font-bold mb-3", (isUni || isSMA) ? "text-white" : "text-slate-900")}>
             Tes Minat & Bakat
           </h1>
-          <p className={cn("mb-8 leading-relaxed", isUni ? "text-slate-400" : "text-slate-500")}>
+          <p className={cn("mb-8 leading-relaxed", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>
             Yuk cari tahu potensi tersembunyi kamu! Apakah kamu seorang pemikir, seniman, atau pemimpin?
           </p>
           <Button 
@@ -185,15 +229,17 @@ export default function SurveyClient() {
               isKids 
                 ? "rounded-xl bg-sky-500 hover:bg-sky-600 text-white" 
                 : isUni 
-                  ? "rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-                  : "bg-slate-900 hover:bg-slate-800 text-white"
+                  ? "rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)]"
+                  : isSMA
+                    ? "rounded-xl bg-teal-600 hover:bg-teal-500 text-white shadow-teal-500/20"
+                    : "bg-slate-900 hover:bg-slate-800 text-white rounded-lg"
             )}
           >
             Mulai Petualangan
           </Button>
           <button 
              onClick={() => router.push("/learn")}
-             className={cn("mt-6 text-xs hover:underline block mx-auto", isUni ? "text-slate-500" : "text-slate-400")}
+             className={cn("mt-6 text-xs hover:underline block mx-auto", (isUni || isSMA) ? "text-slate-500 hover:text-slate-300" : "text-slate-400")}
           >
              Lewati tes ini
           </button>
@@ -206,40 +252,52 @@ export default function SurveyClient() {
   if (result) {
     const archetype = ARCHETYPES[result];
     return (
-      <div className={cn("min-h-screen flex items-center justify-center p-6 font-sans", bgStyle)}>
+      <div className={cn("min-h-screen flex items-center justify-center p-6 font-sans relative overflow-hidden", bgStyle)}>
+        
+        {/* Background Effects for Uni/SMA */}
+        {(isUni || isSMA) && (
+           <div className="fixed inset-0 z-0 pointer-events-none">
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950 opacity-80" />
+              <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse delay-700" />
+           </div>
+        )}
+
         <motion.div 
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="text-center max-w-md w-full"
+          className="text-center max-w-md w-full relative z-10"
         >
           <div className="mb-8 relative inline-block">
             <div className={cn(
-               "w-32 h-32 rounded-full flex items-center justify-center text-6xl shadow-xl mx-auto border-4 border-white",
-               archetype.bg
+               "w-32 h-32 rounded-full flex items-center justify-center text-6xl shadow-xl mx-auto border-4",
+               (isUni || isSMA) ? archetype.uniBg : `${archetype.bg} border-white`
             )}>
-               {result === 'logic' && <Brain className={archetype.color} size={64}/>}
-               {result === 'creative' && <Palette className={archetype.color} size={64}/>}
-               {result === 'social' && <Users className={archetype.color} size={64}/>}
-               {result === 'practical' && <Calculator className={archetype.color} size={64}/>}
+               {result === 'logic' && <Brain className={cn((isUni || isSMA) ? archetype.uniColor : archetype.color)} size={64}/>}
+               {result === 'creative' && <Palette className={cn((isUni || isSMA) ? archetype.uniColor : archetype.color)} size={64}/>}
+               {result === 'social' && <Users className={cn((isUni || isSMA) ? archetype.uniColor : archetype.color)} size={64}/>}
+               {result === 'practical' && <Calculator className={cn((isUni || isSMA) ? archetype.uniColor : archetype.color)} size={64}/>}
             </div>
             <motion.div 
               initial={{ scale: 0 }} 
               animate={{ scale: 1 }} 
               transition={{ delay: 0.5 }} 
-              className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 px-4 py-1 rounded-full text-xs font-bold border-2 border-white whitespace-nowrap shadow-sm"
+              className={cn(
+                  "absolute -bottom-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-bold border-2 whitespace-nowrap shadow-sm",
+                  (isUni || isSMA) ? "bg-slate-800 text-white border-slate-700" : "bg-yellow-400 text-yellow-900 border-white"
+              )}
             >
               Hasil Kamu
             </motion.div>
           </div>
           
-          <h2 className={cn("text-3xl font-extrabold mb-2", isUni ? "text-white" : "text-slate-900")}>
+          <h2 className={cn("text-3xl font-extrabold mb-2", (isUni || isSMA) ? "text-white" : "text-slate-900")}>
              {archetype.label}
           </h2>
-          <p className={cn("mb-8 text-lg font-medium", isUni ? "text-slate-400" : "text-slate-600")}>
+          <p className={cn("mb-8 text-lg font-medium", (isUni || isSMA) ? "text-slate-400" : "text-slate-600")}>
             {archetype.desc}
           </p>
 
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground animate-pulse">
+          <div className={cn("flex items-center justify-center gap-2 text-sm animate-pulse", (isUni || isSMA) ? "text-indigo-400" : "text-muted-foreground")}>
             <Loader2 className="animate-spin" size={16} />
             Menyesuaikan profil kamu...
           </div>
@@ -249,11 +307,19 @@ export default function SurveyClient() {
   }
 
   return (
-    <div className={cn("min-h-screen flex flex-col font-sans transition-colors duration-500", bgStyle)}>
+    <div className={cn("min-h-screen flex flex-col font-sans transition-colors duration-500 relative overflow-hidden", bgStyle)}>
+      
+      {/* Background Effects for Uni/SMA */}
+      {(isUni || isSMA) && (
+          <div className="fixed inset-0 z-0 pointer-events-none">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950 opacity-80" />
+          </div>
+      )}
+
       {/* Header Progress */}
-      <div className="p-6 md:p-8">
+      <div className="p-6 md:p-8 relative z-10">
         <div className="max-w-2xl mx-auto flex items-center justify-between mb-3">
-          <span className="text-xs font-bold uppercase tracking-widest opacity-60">
+          <span className={cn("text-xs font-bold uppercase tracking-widest", (isUni || isSMA) ? "text-slate-500" : "text-slate-400 opacity-60")}>
             Pertanyaan {currentIndex + 1} / {QUESTIONS.length}
           </span>
           <div className="flex gap-1">
@@ -262,7 +328,9 @@ export default function SurveyClient() {
                   key={i} 
                   className={cn(
                      "w-2 h-2 rounded-full transition-colors",
-                     i <= currentIndex ? (isKids ? "bg-yellow-400" : "bg-blue-600") : "bg-gray-200"
+                     i <= currentIndex 
+                        ? (isKids ? "bg-yellow-400" : isUni ? "bg-indigo-500" : isSMA ? "bg-teal-500" : "bg-blue-600") 
+                        : ((isUni || isSMA) ? "bg-slate-800" : "bg-gray-200")
                   )}
                 />
              ))}
@@ -271,14 +339,14 @@ export default function SurveyClient() {
       </div>
 
       {/* Soal Area */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6 -mt-20">
+      <main className="flex-1 flex flex-col items-center justify-center p-6 -mt-20 relative z-10">
         <div className="max-w-xl w-full space-y-8">
           
           <motion.h2 
             key={currentIndex}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={cn("text-2xl md:text-3xl font-bold text-center leading-snug", isUni ? "text-white" : "text-slate-800")}
+            className={cn("text-2xl md:text-3xl font-bold text-center leading-snug", (isUni || isSMA) ? "text-white" : "text-slate-800")}
           >
             {currentQuestion.question}
           </motion.h2>
@@ -291,18 +359,22 @@ export default function SurveyClient() {
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
                    setSelectedOption(idx);
-                   // Opsional: Auto advance setelah delay dikit biar smooth
                 }}
                 className={cn(
                   "p-5 rounded-2xl border-2 text-left font-medium text-lg transition-all flex items-center justify-between group shadow-sm",
                   selectedOption === idx 
-                    ? (isKids ? "border-sky-400 bg-sky-50 text-sky-800" : "border-blue-600 bg-blue-50 text-blue-800")
-                    : (isUni ? "border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600" : "border-slate-100 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50")
+                    ? (isKids ? "border-sky-400 bg-sky-50 text-sky-800" : 
+                       isUni ? "border-indigo-500 bg-indigo-500/20 text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.3)]" :
+                       isSMA ? "border-teal-500 bg-teal-500/20 text-teal-300" :
+                       "border-blue-600 bg-blue-50 text-blue-800")
+                    : (isUni ? "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-600" : 
+                       isSMA ? "border-slate-800 bg-slate-900/40 text-slate-300 hover:border-slate-600" :
+                       "border-slate-100 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50")
                 )}
               >
                 {option.text}
                 {selectedOption === idx && (
-                  <CheckCircle2 className={cn("w-6 h-6", isKids ? "text-sky-500" : "text-blue-600")} />
+                  <CheckCircle2 className={cn("w-6 h-6", isKids ? "text-sky-500" : isUni ? "text-indigo-400" : isSMA ? "text-teal-400" : "text-blue-600")} />
                 )}
               </motion.button>
             ))}
@@ -318,8 +390,10 @@ export default function SurveyClient() {
                 isKids 
                   ? "rounded-xl bg-green-500 hover:bg-green-600 text-white" 
                   : isUni 
-                    ? "rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-                    : "bg-slate-900 hover:bg-slate-800 rounded-xl text-white"
+                    ? "rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)]"
+                    : isSMA
+                      ? "rounded-xl bg-teal-600 hover:bg-teal-500 text-white shadow-teal-500/20"
+                      : "bg-slate-900 hover:bg-slate-800 rounded-xl text-white"
               )}
             >
               Lanjut <ArrowRight className="ml-2" />

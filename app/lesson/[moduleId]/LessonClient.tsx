@@ -151,8 +151,8 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
   if (loading) {
     return (
-      <div className={cn("min-h-screen flex flex-col items-center justify-center", isSMA ? "bg-slate-950 text-white" : "bg-white text-gray-500")}>
-        <Loader2 className={cn("animate-spin w-10 h-10 mb-4", isSMA ? "text-teal-500" : "text-primary")} />
+      <div className={cn("min-h-screen flex flex-col items-center justify-center", (isSMA || isUni) ? "bg-slate-950 text-white" : "bg-white text-gray-500")}>
+        <Loader2 className={cn("animate-spin w-10 h-10 mb-4", (isSMA || isUni) ? "text-teal-500" : "text-primary")} />
         <p className="font-medium animate-pulse">Memuat Materi...</p>
       </div>
     );
@@ -160,13 +160,13 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
   if (error) {
     return (
-      <div className={cn("min-h-screen flex flex-col items-center justify-center p-6 text-center", isSMA ? "bg-slate-950 text-slate-200" : "bg-white")}>
-        <div className={cn("w-20 h-20 rounded-full flex items-center justify-center mb-6", isSMA ? "bg-red-900/20 text-red-500" : "bg-red-100 text-red-500")}>
+      <div className={cn("min-h-screen flex flex-col items-center justify-center p-6 text-center", (isSMA || isUni) ? "bg-slate-950 text-slate-200" : "bg-white")}>
+        <div className={cn("w-20 h-20 rounded-full flex items-center justify-center mb-6", (isSMA || isUni) ? "bg-red-900/20 text-red-500" : "bg-red-100 text-red-500")}>
           <AlertCircle size={40} />
         </div>
-        <h2 className={cn("text-xl font-bold mb-2", isSMA ? "text-white" : "text-gray-800")}>Ups, Ada Masalah</h2>
-        <p className={cn("mb-8 max-w-xs", isSMA ? "text-slate-400" : "text-gray-500")}>{error}</p>
-        <Button onClick={() => router.push("/learn")} className={cn("gap-2", isSMA ? "bg-slate-800 hover:bg-slate-700 text-white" : "bg-slate-800 hover:bg-slate-900 text-white")}>
+        <h2 className={cn("text-xl font-bold mb-2", (isSMA || isUni) ? "text-white" : "text-gray-800")}>Ups, Ada Masalah</h2>
+        <p className={cn("mb-8 max-w-xs", (isSMA || isUni) ? "text-slate-400" : "text-gray-500")}>{error}</p>
+        <Button onClick={() => router.push("/learn")} className={cn("gap-2", (isSMA || isUni) ? "bg-slate-800 hover:bg-slate-700 text-white" : "bg-slate-800 hover:bg-slate-900 text-white")}>
           <ArrowLeft size={18} /> Kembali ke Dashboard
         </Button>
       </div>
@@ -175,10 +175,10 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
   if (isSaving) {
     return (
-      <div className={cn("min-h-screen flex flex-col items-center justify-center", isSMA ? "bg-slate-950 text-white" : "bg-white text-gray-500")}>
+      <div className={cn("min-h-screen flex flex-col items-center justify-center", (isSMA || isUni) ? "bg-slate-950 text-white" : "bg-white text-gray-500")}>
         <Loader2 className="animate-spin w-12 h-12 text-green-500 mb-4" />
         <h2 className="text-xl font-bold text-green-600 animate-pulse">Menyimpan Progres...</h2>
-        <p className={cn("text-sm mt-2", isSMA ? "text-slate-400" : "text-gray-400")}>Jangan tutup halaman ini.</p>
+        <p className={cn("text-sm mt-2", (isSMA || isUni) ? "text-slate-400" : "text-gray-400")}>Jangan tutup halaman ini.</p>
       </div>
     );
   }
@@ -187,9 +187,19 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
   return (
     <div className={cn(
        "min-h-screen relative overflow-hidden font-sans transition-colors duration-500",
-       isKids ? "bg-yellow-50" : isUni ? "bg-slate-900" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-slate-950" : "bg-slate-50"
+       isKids ? "bg-yellow-50" : isUni ? "bg-slate-950" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-slate-950" : "bg-slate-50"
     )}>
       
+      {/* --- UNI THEME: Animated Mesh --- */}
+      {isUni && (
+         <div className="fixed inset-0 z-0">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950" />
+            <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse delay-700" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[100px] animate-pulse delay-1000" />
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
+         </div>
+      )}
+
       {/* --- SMA THEME: AURORA MESH --- */}
       {isSMA && (
         <div className="fixed inset-0 z-0 pointer-events-none">

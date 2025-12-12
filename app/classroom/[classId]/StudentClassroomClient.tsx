@@ -120,13 +120,13 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
   const classTotalXP = classMembers.reduce((total, member: any) => total + (member.xp || 0), 0);
 
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white">
+    <div className={cn("min-h-screen flex flex-col items-center justify-center", isUni ? "bg-slate-950 text-white" : "bg-slate-900 text-white")}>
       {isKids ? (
           <motion.div animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity }}>
               <span className="text-6xl">🏰</span>
           </motion.div>
       ) : (
-          <Loader2 className="animate-spin w-10 h-10 text-teal-500 mb-4"/> 
+          <Loader2 className={cn("animate-spin w-10 h-10 mb-4", isUni ? "text-indigo-500" : "text-teal-500")} /> 
       )}
       <p className={cn("font-medium animate-pulse mt-4", isKids && "font-display text-xl text-primary")}>
           {isKids ? "Membuka Gerbang Kelas..." : "Memuat Ruang Kelas..."}
@@ -134,7 +134,12 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
     </div>
   );
 
-  const bgSoft = isKids ? "bg-yellow-50" : isUni ? "bg-slate-900" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-transparent text-slate-100" : "bg-slate-50";
+  // Background logic update for Uni Theme
+  const bgSoft = isKids ? "bg-yellow-50" 
+    : isUni ? "bg-slate-950 text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-200" 
+    : isSMP ? "bg-slate-50/30" 
+    : isSMA ? "bg-transparent text-slate-100" 
+    : "bg-slate-50";
 
   // Data Adapter for Adventure Map
   const mapModules = [...materials, ...assignments].map(item => ({
@@ -148,6 +153,16 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
   return (
     <div className={cn("min-h-screen font-sans transition-colors duration-500 pb-24 md:pb-0 md:flex relative overflow-hidden", bgSoft)}>
       
+      {/* --- UNI THEME BACKGROUND: Animated Mesh --- */}
+      {isUni && (
+         <div className="fixed inset-0 z-0">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950" />
+            <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse delay-700" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[100px] animate-pulse delay-1000" />
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
+         </div>
+      )}
+
       {/* --- SMP THEME: AMBIENT BACKGROUND BLOBS --- */}
       {isSMP && (
         <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
@@ -184,7 +199,6 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
          isKids={isKids}
          isUni={isUni}
          isSMP={isSMP}
-         // Note: Pass isSMA ke MobileHeader nanti di step selanjutnya
       />
 
       {/* 3. MOBILE NAV */}
@@ -195,12 +209,11 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
          isUni={isUni}
          isSMP={isSMP}
          theme={theme}
-         // Note: Pass isSMA ke MobileNav nanti
       />
 
       {/* 4. MAIN CONTENT AREA */}
       <main className={cn("flex-1 p-4 md:p-8 pt-20 md:pt-8 overflow-y-auto min-h-screen z-10", isUni && "text-slate-200")}>
-         <div className="max-w-5xl mx-auto space-y-8">
+         <div className="max-w-6xl mx-auto space-y-8">
             <AnimatePresence mode="wait">
                 
                 {activeTab === "dashboard" && (

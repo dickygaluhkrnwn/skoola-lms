@@ -52,11 +52,12 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
         };
       case 'uni':
         return {
-          barBg: "bg-slate-100 border-slate-200",
-          fillGradient: "from-slate-700 to-slate-900",
-          textColor: "text-slate-600",
-          levelBadge: "bg-slate-800 text-white rounded-sm",
-          icon: <GraduationCap size={12} />,
+          // Cyberpunk/Futuristic Academic Style
+          barBg: "bg-slate-900/50 border border-indigo-500/30 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] backdrop-blur-md",
+          fillGradient: "from-indigo-600 via-violet-500 to-fuchsia-500 shadow-[0_0_20px_rgba(99,102,241,0.5)]",
+          textColor: "text-indigo-300",
+          levelBadge: "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.3)] rounded-md backdrop-blur-md font-mono",
+          icon: <GraduationCap size={12} className="text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" />,
           label: "Scholar"
         };
       default: // Fallback same as SD
@@ -73,6 +74,7 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
 
   const config = getThemeConfig();
   const isSMA = theme === 'sma';
+  const isUni = theme === 'uni';
 
   return (
     <div className={cn("w-full max-w-sm", className)}>
@@ -88,14 +90,14 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
           </span>
         </div>
         <span className={cn("text-[10px] font-bold font-mono tracking-tight", config.textColor)}>
-          {currentXP} <span className={cn("opacity-60", isSMA && "text-slate-500")}>/ {maxXP} XP</span>
+          {currentXP} <span className={cn("opacity-60", (isSMA || isUni) && "text-slate-500")}>/ {maxXP} XP</span>
         </span>
       </div>
 
       {/* Bar Container */}
       <div className={cn(
           "w-full overflow-hidden border relative transition-all",
-          isSMA ? "h-2 rounded-full" : "h-3.5 rounded-full shadow-inner", // SMA lebih tipis & sleek
+          (isSMA || isUni) ? "h-2 rounded-full" : "h-3.5 rounded-full shadow-inner", // SMA & Uni lebih tipis & sleek
           config.barBg
       )}>
         {/* Fill Animation */}
@@ -106,7 +108,7 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
           transition={{ duration: 1, ease: "easeOut" }}
         >
           {/* Shine Effect (Only for non-flat/non-neon themes, neon has its own glow) */}
-          {!isSMA && (
+          {(!isSMA && !isUni) && (
              <div className="absolute top-0 left-0 bottom-0 w-full bg-gradient-to-b from-white/20 to-transparent" />
           )}
           
@@ -114,7 +116,7 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
           {percentage > 0 && (
             <div className={cn(
                 "absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10",
-                isSMA ? "scale-125" : ""
+                (isSMA || isUni) ? "scale-125" : ""
             )}>
               {config.icon}
             </div>
