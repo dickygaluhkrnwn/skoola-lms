@@ -5,13 +5,25 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, XCircle, X, ArrowRight, RotateCcw, HelpCircle, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { LessonContent, QuizQuestion, FlashcardContent } from "@/lib/types/course.types"; 
+import { QuizQuestion } from "@/lib/types/course.types"; 
 import { useSound } from "@/hooks/use-sound";
 import { useTheme } from "@/lib/theme-context";
 
+// Asumsi struktur Flashcard yang masuk adalah object dengan front/back (atau QuizQuestion yang di-adapt)
+interface FlashcardItem {
+    type: 'flashcard';
+    front: string;
+    back: string;
+    explanation?: string;
+    // ... properti lain jika ada
+}
+
+// Menggunakan tipe QuizQuestion sebagai base, dan menambahkan FlashcardItem untuk fleksibilitas
+type QuizEngineContent = QuizQuestion | FlashcardItem;
+
 interface QuizEngineProps {
   lessonTitle: string;
-  content: LessonContent[];
+  content: QuizEngineContent[]; // Menggunakan union type yang lebih aman
   xpReward: number;
   onComplete: (score: number) => void;
   onExit: () => void;
@@ -46,7 +58,7 @@ export default function QuizEngine({
 
   const { playSound } = useSound(); 
 
-  const currentItem = content[currentIndex];
+  const currentItem = content[currentIndex] as QuizEngineContent;
   const progress = content.length > 0 ? ((currentIndex) / content.length) * 100 : 0;
 
   // Helper Theme Colors
@@ -65,6 +77,7 @@ export default function QuizEngine({
 
     if (currentItem?.type === 'arrange') {
       const q = currentItem as QuizQuestion;
+      // Memastikan correctAnswer adalah array untuk tipe 'arrange'
       if (Array.isArray(q.correctAnswer)) {
         const shuffled = [...q.correctAnswer].sort(() => Math.random() - 0.5);
         setAvailableWords(shuffled);
@@ -88,19 +101,30 @@ export default function QuizEngine({
     let correct = false;
     const q = currentItem as QuizQuestion;
 
-    if (q.type === 'multiple-choice' || q.type === 'listening') {
-      correct = selectedAnswer === q.correctAnswer;
+    // Gabungkan tipe yang menggunakan pilihan (MC, Listening, True-False, Drag-Match)
+    if (q.type === 'multiple-choice' || q.type === 'true-false' || q.type === 'drag-match' || (q.type as string) === 'listening') { 
+        const correctAnswerString = String(q.correctAnswer); 
+        
+        // Cek apakah selectedAnswer (index string) cocok dengan correctAnswer (string/number)
+        correct = selectedAnswer === correctAnswerString || selectedAnswer === String(q.options?.[Number(q.correctAnswer)]);
     } 
-    else if (q.type === 'fill-blank') {
+    // Gabungkan tipe yang menggunakan input teks (short-answer, fill-blank)
+    else if (q.type === 'short-answer' || (q.type as string) === 'fill-blank') { 
       const correctText = Array.isArray(q.correctAnswer) ? q.correctAnswer[0] : q.correctAnswer;
-      const userAnswerClean = textAnswer.trim().toLowerCase();
-      const correctAnswerClean = String(correctText).trim().toLowerCase();
+      
+      // FIX 1 & 3: Pastikan konversi ke string dan casting eksplisit untuk .trim()
+      const userAnswerString: string = String(textAnswer);
+      const correctTextString: string = String(correctText);
+      
+      const userAnswerClean = userAnswerString.trim().toLowerCase(); 
+      const correctAnswerClean = correctTextString.trim().toLowerCase(); 
+      
       correct = userAnswerClean === correctAnswerClean;
     } 
     else if (q.type === 'arrange') {
       const userAnswer = arrangedWords.join(" ");
       const correctAnswer = Array.isArray(q.correctAnswer) ? q.correctAnswer.join(" ") : q.correctAnswer;
-      correct = userAnswer === correctAnswer;
+      correct = userAnswer.trim() === correctAnswer.trim();
     }
 
     setIsCorrect(correct);
@@ -125,6 +149,11 @@ export default function QuizEngine({
       setCurrentIndex(prev => prev + 1);
     } else {
       setShowResult(true);
+      // Hitung skor akhir berdasarkan persentase jawaban benar (bukan hanya +10)
+      const maxScore = content.filter(c => c.type !== 'flashcard').length * 10;
+      const finalScore = maxScore > 0 ? Math.round((score / maxScore) * 100) : 100;
+
+      onComplete(finalScore); // Panggil onComplete dari sini
       playSound("levelUp");
     }
   };
@@ -144,7 +173,7 @@ export default function QuizEngine({
 
   // --- RENDERERS ---
 
-  const renderFlashcard = (card: FlashcardContent) => (
+  const renderFlashcard = (card: FlashcardItem) => (
     <div className="flex flex-col items-center justify-center py-8">
       <div 
         className="relative w-full max-w-sm aspect-[4/5] perspective-1000 cursor-pointer group"
@@ -199,7 +228,9 @@ export default function QuizEngine({
   const renderQuiz = (q: QuizQuestion) => {
     switch (q.type) {
       case 'multiple-choice':
-      case 'listening': 
+      case 'listening' as any: // Cast untuk kompatibilitas legacy data
+      case 'true-false': 
+      case 'drag-match':
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             {q.options?.map((option, idx) => (
@@ -209,7 +240,8 @@ export default function QuizEngine({
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
                   if (!isChecked) {
-                    setSelectedAnswer(option);
+                    // Simpan jawaban dalam bentuk index string
+                    setSelectedAnswer(String(idx)); 
                     playSound("click");
                   }
                 }}
@@ -217,7 +249,7 @@ export default function QuizEngine({
                 className={cn(
                   "p-6 rounded-2xl border-2 text-left transition-all relative overflow-hidden group shadow-sm",
                   // Default State
-                  selectedAnswer === option 
+                  String(selectedAnswer) === String(idx) 
                     ? (isSMP ? "border-violet-500 bg-violet-50 text-violet-900 shadow-violet-200" : 
                        isSMA ? "border-teal-500 bg-teal-500/10 text-teal-300 shadow-[0_0_15px_rgba(20,184,166,0.3)]" :
                        isUni ? "border-indigo-500 bg-indigo-500/20 text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.4)]" :
@@ -226,13 +258,13 @@ export default function QuizEngine({
                        "border-gray-200 hover:border-gray-300 hover:bg-gray-50"),
                   
                   // Correct State
-                  isChecked && option === q.correctAnswer && (
+                  isChecked && String(q.correctAnswer) === String(idx) && (
                       (isSMA || isUni) ? "border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.4)]" : 
                       "border-green-500 bg-green-50 text-green-800 ring-2 ring-green-200"
                   ),
                   
-                  // Wrong State
-                  isChecked && selectedAnswer === option && !isCorrect && (
+                  // Wrong State (jika dipilih salah)
+                  isChecked && String(selectedAnswer) === String(idx) && String(selectedAnswer) !== String(q.correctAnswer) && (
                       (isSMA || isUni) ? "border-rose-500 bg-rose-500/20 text-rose-300" : 
                       "border-red-500 bg-red-50 text-red-800 ring-2 ring-red-200"
                   )
@@ -240,15 +272,16 @@ export default function QuizEngine({
               >
                 <div className="flex items-center justify-between">
                    <span className="font-bold text-lg">{option}</span>
-                   {isChecked && option === q.correctAnswer && <CheckCircle2 className={cn((isSMA || isUni) ? "text-emerald-400" : "text-green-600")} size={24} />}
-                   {isChecked && selectedAnswer === option && !isCorrect && <XCircle className={cn((isSMA || isUni) ? "text-rose-500" : "text-red-500")} size={24} />}
+                   {isChecked && String(q.correctAnswer) === String(idx) && <CheckCircle2 className={cn((isSMA || isUni) ? "text-emerald-400" : "text-green-600")} size={24} />}
+                   {isChecked && String(selectedAnswer) === String(idx) && String(selectedAnswer) !== String(q.correctAnswer) && <XCircle className={cn((isSMA || isUni) ? "text-rose-500" : "text-red-500")} size={24} />}
                 </div>
               </motion.button>
             ))}
           </div>
         );
 
-      case 'fill-blank':
+      case 'fill-blank' as any: // Cast untuk kompatibilitas legacy data
+      case 'short-answer': 
         return (
           <div className="max-w-md mx-auto mt-8">
             <input
@@ -267,9 +300,7 @@ export default function QuizEngine({
               )}
             />
             {isChecked && !isCorrect && (
-              <div className={cn("mt-4 p-3 rounded-lg text-center font-medium animate-in fade-in slide-in-from-bottom-2 border", 
-                  (isSMA || isUni) ? "bg-emerald-950/50 border-emerald-900 text-emerald-400" : "bg-green-100 text-green-800 border-green-200"
-              )}>
+              <div className="mt-4 p-3 rounded-lg text-center font-medium animate-in fade-in slide-in-from-bottom-2 border border-green-200 bg-green-100 text-green-800">
                 Jawaban benar: <span className="font-bold">{String(q.correctAnswer)}</span>
               </div>
             )}
@@ -281,31 +312,31 @@ export default function QuizEngine({
           <div className="mt-8 space-y-8">
             {/* Area Jawaban */}
             <div className={cn(
-               "min-h-[100px] border-2 border-dashed rounded-2xl flex flex-wrap justify-center gap-2 p-6 transition-colors items-center",
-               isSMP ? "bg-violet-50/50 border-violet-200" : 
-               (isSMA || isUni) ? "bg-white/5 border-white/10" :
-               "bg-slate-50 border-slate-200"
+                "min-h-[100px] border-2 border-dashed rounded-2xl flex flex-wrap justify-center gap-2 p-6 transition-colors items-center",
+                isSMP ? "bg-violet-50/50 border-violet-200" : 
+                (isSMA || isUni) ? "bg-white/5 border-white/10" :
+                "bg-slate-50 border-slate-200"
             )}>
-               {arrangedWords.length === 0 && !isChecked && (
-                 <span className={cn("italic flex items-center gap-2", (isSMA || isUni) ? "text-slate-500" : "text-slate-400")}>
-                    <HelpCircle size={16} /> Ketuk kata di bawah untuk menyusun
-                 </span>
-               )}
-               {arrangedWords.map((word, idx) => (
-                 <motion.button 
-                   layoutId={`word-${word}-${idx}`} // Unik ID untuk animasi
-                   key={`arranged-${word}-${idx}`} 
-                   onClick={() => handleWordClick(word, false)}
-                   className={cn(
-                      "px-4 py-2 rounded-xl font-bold shadow-sm transition-colors border-2",
-                      isSMP ? "bg-white border-violet-200 text-violet-700 hover:border-red-200 hover:text-red-500" : 
-                      (isSMA || isUni) ? "bg-slate-800 border-slate-600 text-slate-200 hover:border-rose-500/50 hover:text-rose-400" :
-                      "bg-white border-sky-200 text-sky-700 hover:text-red-500"
-                   )}
-                 >
-                   {word}
-                 </motion.button>
-               ))}
+                {arrangedWords.length === 0 && !isChecked && (
+                  <span className={cn("italic flex items-center gap-2", (isSMA || isUni) ? "text-slate-500" : "text-slate-400")}>
+                      <HelpCircle size={16} /> Ketuk kata di bawah untuk menyusun
+                  </span>
+                )}
+                {arrangedWords.map((word, idx) => (
+                  <motion.button 
+                    layoutId={`word-${word}-${idx}`} // Unik ID untuk animasi
+                    key={`arranged-${word}-${idx}`} 
+                    onClick={() => handleWordClick(word, false)}
+                    className={cn(
+                        "px-4 py-2 rounded-xl font-bold shadow-sm transition-colors border-2",
+                        isSMP ? "bg-white border-violet-200 text-violet-700 hover:border-red-200 hover:text-red-500" : 
+                        (isSMA || isUni) ? "bg-slate-800 border-slate-600 text-slate-200 hover:border-rose-500/50 hover:text-rose-400" :
+                        "bg-white border-sky-200 text-sky-700 hover:text-red-500"
+                    )}
+                  >
+                    {word}
+                  </motion.button>
+                ))}
             </div>
 
             {/* Area Pilihan Kata */}
@@ -329,12 +360,10 @@ export default function QuizEngine({
             </div>
 
             {isChecked && !isCorrect && (
-               <div className={cn("p-4 rounded-xl text-center border", 
-                  (isSMA || isUni) ? "bg-emerald-950/50 border-emerald-900 text-emerald-400" : "bg-green-50 text-green-800 border-green-200"
-               )}>
-                  <p className={cn("text-xs font-bold uppercase mb-1", (isSMA || isUni) ? "text-emerald-500" : "text-green-600")}>Susunan Benar</p>
-                  <p className="font-bold text-lg">{Array.isArray(q.correctAnswer) ? q.correctAnswer.join(" ") : q.correctAnswer}</p>
-               </div>
+                <div className="p-4 rounded-xl text-center border bg-green-50 text-green-800 border-green-200">
+                    <p className="text-xs font-bold uppercase mb-1 text-green-600">Susunan Benar</p>
+                    <p className="font-bold text-lg">{Array.isArray(q.correctAnswer) ? q.correctAnswer.join(" ") : q.correctAnswer}</p>
+                </div>
             )}
           </div>
         )
@@ -358,9 +387,9 @@ export default function QuizEngine({
            "w-32 h-32 rounded-full flex items-center justify-center mb-6 shadow-lg relative",
            isSMP ? "bg-violet-100" : isSMA ? "bg-teal-900/30 shadow-[0_0_30px_rgba(20,184,166,0.3)]" : isUni ? "bg-indigo-900/30 shadow-[0_0_30px_rgba(99,102,241,0.3)]" : "bg-yellow-100"
         )}>
-          {(isSMA || isUni) ? <Trophy size={64} className={cn("animate-bounce", isUni ? "text-indigo-400" : "text-teal-400")} /> : <span className="text-6xl animate-bounce">🏆</span>}
+          <Trophy size={64} className={cn("animate-bounce", isUni ? "text-indigo-400" : "text-teal-400")} />
           <div className="absolute -top-2 -right-2 bg-red-500 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold border-4 border-white dark:border-slate-800">
-             {percentage >= 90 ? "A+" : percentage >= 70 ? "B" : "C"}
+              {percentage >= 90 ? "A+" : percentage >= 70 ? "B" : "C"}
           </div>
         </div>
         <h1 className={cn("text-3xl font-extrabold mb-2", (isSMA || isUni) ? "text-white" : "text-slate-800")}>Pelajaran Selesai!</h1>
@@ -372,12 +401,10 @@ export default function QuizEngine({
               (isSMA || isUni) ? "bg-white/5 border-white/10" :
               "bg-sky-50 border-sky-100"
           )}>
-            <div className={cn("font-bold text-xs uppercase tracking-wider mb-1", 
-                isSMP ? "text-violet-500" : isSMA ? "text-teal-500" : isUni ? "text-indigo-400" : "text-sky-500"
-            )}>Total XP</div>
-            <div className={cn("text-3xl font-black", (isSMA || isUni) ? "text-white" : "text-slate-800")}>+{xpReward}</div>
+            <div className="font-bold text-xs uppercase tracking-wider mb-1 text-sky-500">Total XP</div>
+            <div className="text-3xl font-black">{xpReward}</div>
           </div>
-          <div className={cn("p-4 rounded-2xl border", 
+          <div className className={cn("p-4 rounded-2xl border", 
              (isSMA || isUni) ? "bg-orange-950/30 border-orange-900/50" : "bg-orange-50 border-orange-100"
           )}>
             <div className="text-orange-500 font-bold text-xs uppercase tracking-wider mb-1">Akurasi</div>
@@ -403,15 +430,15 @@ export default function QuizEngine({
   // --- MAIN RENDER ---
   return (
     <div className={cn(
-       "min-h-screen flex flex-col max-w-2xl mx-auto shadow-2xl transition-colors duration-500",
-       isSMP ? "bg-white/90 backdrop-blur-xl shadow-violet-500/10" : 
-       (isSMA || isUni) ? "bg-slate-950/80 backdrop-blur-2xl shadow-black/50 border-x border-white/5" :
-       "bg-white shadow-slate-100/50"
+        "min-h-screen flex flex-col max-w-2xl mx-auto shadow-2xl transition-colors duration-500",
+        isSMP ? "bg-white/90 backdrop-blur-xl shadow-violet-500/10" : 
+        (isSMA || isUni) ? "bg-slate-950/80 backdrop-blur-2xl shadow-black/50 border-x border-white/5" :
+        "bg-white shadow-slate-100/50"
     )}>
       
       {/* TOP BAR */}
       <div className={cn("p-4 flex items-center gap-4 border-b sticky top-0 z-20 backdrop-blur-md", 
-         (isSMA || isUni) ? "bg-slate-950/80 border-white/10" : "bg-white/80 border-slate-100"
+          (isSMA || isUni) ? "bg-slate-950/80 border-white/10" : "bg-white/80 border-slate-100"
       )}>
         <button onClick={onExit} className={cn("p-2 rounded-full transition-colors", 
            (isSMA || isUni) ? "hover:bg-white/10 text-slate-400 hover:text-white" : "hover:bg-slate-100 text-slate-400 hover:text-slate-600"
@@ -421,18 +448,18 @@ export default function QuizEngine({
         <div className={cn("flex-1 h-3 rounded-full overflow-hidden relative", (isSMA || isUni) ? "bg-slate-800" : "bg-slate-100")}>
           <motion.div 
             className={cn("h-full rounded-full", 
-               isSMP ? "bg-gradient-to-r from-violet-500 to-fuchsia-500" : 
-               isSMA ? "bg-gradient-to-r from-teal-500 to-emerald-400 shadow-[0_0_10px_rgba(20,184,166,0.5)]" :
-               isUni ? "bg-gradient-to-r from-indigo-500 to-purple-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" :
-               "bg-green-500"
+                isSMP ? "bg-gradient-to-r from-violet-500 to-fuchsia-500" : 
+                isSMA ? "bg-gradient-to-r from-teal-500 to-emerald-400 shadow-[0_0_10px_rgba(20,184,166,0.5)]" :
+                isUni ? "bg-gradient-to-r from-indigo-500 to-purple-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" :
+                "bg-green-500"
             )}
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.5 }}
           />
         </div>
-        <div className={cn("flex items-center gap-1.5 font-bold px-3 py-1 rounded-full border",
-           (isSMA || isUni) ? "text-rose-400 bg-rose-950/30 border-rose-900/50" : "text-red-500 bg-red-50 border-red-100"
+        <div className={cn("flex items-center gap-1.5 px-3 py-1 rounded-full border",
+            (isSMA || isUni) ? "text-rose-400 bg-rose-950/30 border-rose-900/50" : "text-red-500 bg-red-50 border-red-100"
         )}>
           <span>❤️</span>
           <span>{lives}</span>
@@ -454,19 +481,19 @@ export default function QuizEngine({
             {currentItem.type === 'flashcard' ? (
                 <div className="text-center mb-6">
                     <span className={cn(
-                       "inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3",
-                       isSMP ? "bg-violet-100 text-violet-600" : 
-                       isSMA ? "bg-teal-950/50 text-teal-400 border border-teal-900" :
-                       isUni ? "bg-indigo-950/50 text-indigo-400 border border-indigo-900" :
-                       "bg-blue-100 text-blue-600"
+                        "inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3",
+                        isSMP ? "bg-violet-100 text-violet-600" : 
+                        isSMA ? "bg-teal-950/50 text-teal-400 border border-teal-900" :
+                        isUni ? "bg-indigo-950/50 text-indigo-400 border border-indigo-900" :
+                        "bg-blue-100 text-blue-600"
                     )}>
-                       Kartu Pintar
+                        Kartu Pintar
                     </span>
                     <h2 className={cn("text-2xl font-bold", (isSMA || isUni) ? "text-slate-100" : "text-slate-800")}>Hafalkan Konsep Ini</h2>
                 </div>
             ) : (
                 <h2 className={cn("text-2xl md:text-3xl font-bold mb-8 text-center leading-relaxed", (isSMA || isUni) ? "text-slate-100" : "text-slate-800")}>
-                    {(currentItem as QuizQuestion).question}
+                    {(currentItem as QuizQuestion).text}
                 </h2>
             )}
 
@@ -479,7 +506,7 @@ export default function QuizEngine({
 
             {/* Render Body */}
             {currentItem.type === 'flashcard' 
-                ? renderFlashcard(currentItem as FlashcardContent)
+                ? renderFlashcard(currentItem as FlashcardItem)
                 : renderQuiz(currentItem as QuizQuestion)
             }
 
@@ -522,12 +549,12 @@ export default function QuizEngine({
                   </div>
                 </div>
             ) : currentItem.type === 'flashcard' ? (
-                <div className={cn("text-sm font-medium flex items-center gap-2", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>
+                <div className="text-sm font-medium flex items-center gap-2">
                    <RotateCcw size={16} /> Ketuk kartu untuk membalik
                 </div>
             ) : (
                 <div className={cn("hidden md:block text-sm font-bold uppercase tracking-wider", (isSMA || isUni) ? "text-slate-500" : "text-slate-400")}>
-                   Jawab soal untuk melanjutkan
+                    Jawab soal untuk melanjutkan
                 </div>
             )}
           </div>
