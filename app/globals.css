@@ -59,27 +59,34 @@
 
 /* =========================================
    THEME 3: SMA (Sekolah Menengah Atas)
-   Vibe: Clean, Aesthetic, Productivity, Minimal
+   Vibe: Aesthetic Productivity, Gen-Z, Glassmorphism, Gradient Mesh
    ========================================= */
 [data-theme="sma"] {
-  /* Colors: Primary Sage/Emerald, Secondary Beige */
-  --color-primary: #10b981; /* Emerald-500 */
+  /* Colors: Deep Teal & Midnight Slate - Aesthetic Vibes */
+  --color-primary: #0d9488; /* Teal-600: Lebih deep & mature daripada hijau biasa */
   --color-primary-fg: #ffffff;
   
-  --color-secondary: #fffbeb; /* Amber-50 */
-  --color-secondary-fg: #78350f; /* Amber-900 */
+  --color-secondary: #f8fafc; /* Slate-50: Clean, almost white but cool tone */
+  --color-secondary-fg: #0f172a; /* Slate-900 */
   
-  --color-accent: #64748b; /* Slate-500 */
-  --color-muted: #f8fafc; /* Slate-50 */
+  --color-accent: #0f172a; /* Slate-900: High contrast accents */
+  --color-muted: #e2e8f0; /* Slate-200 */
   
   /* UI Attributes */
-  --radius: 0.5rem; /* 8px - Sleek */
-  --font-family: var(--font-geist-sans), sans-serif;
+  --radius: 0.75rem; /* 12px - Modern Sleek (App-like) */
+  --font-family: var(--font-geist-sans), "Inter", sans-serif;
   
-  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); /* Subtle */
-  --shadow-button: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  /* Soft Glass Shadows */
+  --shadow-card: 0 8px 32px 0 rgba(31, 38, 135, 0.05); 
+  --shadow-button: 0 4px 10px rgba(13, 148, 136, 0.2);
   
-  --bg-pattern: none;
+  /* Gradient Mesh Background - Kunci tampilan 'Gen Z' */
+  --bg-pattern: 
+    radial-gradient(at 0% 0%, rgba(13, 148, 136, 0.12) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(15, 23, 42, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(13, 148, 136, 0.08) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(248, 250, 252, 1) 0px, transparent 50%);
+  --bg-size: 100% 100%;
 }
 
 /* =========================================
@@ -137,6 +144,8 @@ body {
   background-color: var(--background);
   background-image: var(--bg-pattern);
   background-size: var(--bg-size, auto);
+  background-attachment: fixed; /* Agar pattern tidak ikut scroll */
+  background-repeat: no-repeat;
   color: var(--foreground);
   font-family: var(--font-family);
   
@@ -146,7 +155,7 @@ body {
 
 /* Element Transitions */
 *, *::before, *::after {
-  transition-property: border-radius, background-color, border-color, color, box-shadow, transform;
+  transition-property: border-radius, background-color, border-color, color, box-shadow, transform, filter, backdrop-filter;
   transition-duration: 0.3s;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -154,5 +163,5 @@ body {
 /* Selection Color per Theme (Optional Polish) */
 [data-theme="sd"] ::selection { background: #fca5a5; color: #7f1d1d; }
 [data-theme="smp"] ::selection { background: #ddd6fe; color: #4c1d95; }
-[data-theme="sma"] ::selection { background: #d1fae5; color: #064e3b; }
+[data-theme="sma"] ::selection { background: #99f6e4; color: #115e59; } /* Teal Selection */
 [data-theme="uni"] ::selection { background: #cbd5e1; color: #0f172a; }

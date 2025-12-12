@@ -11,6 +11,7 @@ import { Button } from "../../../components/ui/button";
 import { LessonContent } from "../../../lib/types/course.types";
 import { useTheme } from "../../../lib/theme-context";
 import { cn } from "../../../lib/utils";
+import { motion } from "framer-motion";
 
 interface LessonData {
   title: string;
@@ -35,6 +36,8 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
   // Helper Theme
   const isKids = theme === "sd";
   const isUni = theme === "uni";
+  const isSMP = theme === "smp";
+  const isSMA = theme === "sma";
 
   // 1. Cek Auth State
   useEffect(() => {
@@ -42,7 +45,7 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
       if (user) {
         setUserId(user.uid);
       } else {
-        // Redirect jika belum login (opsional, tergantung flow)
+        // Redirect jika belum login (opsional)
         // router.push("/auth/login");
       }
     });
@@ -55,8 +58,6 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
       if (!moduleId) return;
 
       try {
-        // Coba fetch dari 'global_modules' (Legacy BIPA)
-        // Nanti bisa dikembangkan untuk fetch dari 'classrooms/materials' jika perlu
         const docRef = doc(db, "global_modules", moduleId);
         const docSnap = await getDoc(docRef);
 
@@ -64,7 +65,6 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
           const data = docSnap.data();
           let combinedContent: LessonContent[] = [];
 
-          // Support struktur data
           if (data.lessons && Array.isArray(data.lessons)) {
             data.lessons.forEach((l: any) => {
               if (l.interactiveContent) combinedContent.push(...l.interactiveContent);
@@ -110,7 +110,6 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
     setIsSaving(true);
 
-    // Hitung XP (Score >= 60% dapat Full XP, di bawah itu dapat 25%)
     const passingScore = 60;
     const isPassed = score >= passingScore;
     const earnedXP = isPassed ? lesson.xp : Math.floor(lesson.xp / 4);
@@ -118,26 +117,20 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
     try {
       const userRef = doc(db, "users", userId);
       
-      // Update XP & Level Global
-      // Kita pakai increment agar aman dari race condition
       await updateDoc(userRef, {
          xp: increment(earnedXP),
-         // Jika gamification nested object, perlu dihandle hati-hati atau diflatkan strukturnya di masa depan
          "gamification.xp": increment(earnedXP) 
       });
       
-      // Update Status Penyelesaian (JIKA LULUS)
       if (isPassed) {
         await updateDoc(userRef, {
           completedModules: arrayUnion(moduleId), 
           lastActiveModule: moduleId,
-          // Opsional: Update streak jika login hari ini (sudah dihandle di Auth/Login biasanya)
         });
       }
       
-      // Delay visual
       setTimeout(() => {
-        router.push("/learn"); // Kembali ke dashboard
+        router.push("/learn"); 
         router.refresh(); 
       }, 1500);
 
@@ -158,8 +151,8 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-500">
-        <Loader2 className="animate-spin w-10 h-10 text-primary mb-4" />
+      <div className={cn("min-h-screen flex flex-col items-center justify-center", isSMA ? "bg-slate-950 text-white" : "bg-white text-gray-500")}>
+        <Loader2 className={cn("animate-spin w-10 h-10 mb-4", isSMA ? "text-teal-500" : "text-primary")} />
         <p className="font-medium animate-pulse">Memuat Materi...</p>
       </div>
     );
@@ -167,13 +160,13 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6 text-center">
-        <div className="w-20 h-20 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6">
+      <div className={cn("min-h-screen flex flex-col items-center justify-center p-6 text-center", isSMA ? "bg-slate-950 text-slate-200" : "bg-white")}>
+        <div className={cn("w-20 h-20 rounded-full flex items-center justify-center mb-6", isSMA ? "bg-red-900/20 text-red-500" : "bg-red-100 text-red-500")}>
           <AlertCircle size={40} />
         </div>
-        <h2 className="text-xl font-bold text-gray-800 mb-2">Ups, Ada Masalah</h2>
-        <p className="text-gray-500 mb-8 max-w-xs">{error}</p>
-        <Button onClick={() => router.push("/learn")} className="bg-slate-800 hover:bg-slate-900 text-white gap-2">
+        <h2 className={cn("text-xl font-bold mb-2", isSMA ? "text-white" : "text-gray-800")}>Ups, Ada Masalah</h2>
+        <p className={cn("mb-8 max-w-xs", isSMA ? "text-slate-400" : "text-gray-500")}>{error}</p>
+        <Button onClick={() => router.push("/learn")} className={cn("gap-2", isSMA ? "bg-slate-800 hover:bg-slate-700 text-white" : "bg-slate-800 hover:bg-slate-900 text-white")}>
           <ArrowLeft size={18} /> Kembali ke Dashboard
         </Button>
       </div>
@@ -182,10 +175,10 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
   if (isSaving) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-500">
+      <div className={cn("min-h-screen flex flex-col items-center justify-center", isSMA ? "bg-slate-950 text-white" : "bg-white text-gray-500")}>
         <Loader2 className="animate-spin w-12 h-12 text-green-500 mb-4" />
         <h2 className="text-xl font-bold text-green-600 animate-pulse">Menyimpan Progres...</h2>
-        <p className="text-sm text-gray-400 mt-2">Jangan tutup halaman ini.</p>
+        <p className={cn("text-sm mt-2", isSMA ? "text-slate-400" : "text-gray-400")}>Jangan tutup halaman ini.</p>
       </div>
     );
   }
@@ -193,19 +186,40 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
   // Tampilan Utama (Wrapper untuk Quiz Engine)
   return (
     <div className={cn(
-       "min-h-screen",
-       isKids ? "bg-yellow-50" : isUni ? "bg-slate-900" : "bg-slate-50"
+       "min-h-screen relative overflow-hidden font-sans transition-colors duration-500",
+       isKids ? "bg-yellow-50" : isUni ? "bg-slate-900" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-slate-950" : "bg-slate-50"
     )}>
-      {lesson && (
-        <QuizEngine 
-          lessonTitle={lesson.title}
-          content={lesson.content}
-          xpReward={lesson.xp}
-          // Adaptasi signature callback: QuizEngine kirim (score, answers), kita cuma butuh score di sini
-          onComplete={(score) => handleLessonComplete(score)}
-          onExit={handleExit}
-        />
+      
+      {/* --- SMA THEME: AURORA MESH --- */}
+      {isSMA && (
+        <div className="fixed inset-0 z-0 pointer-events-none">
+           <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950" />
+           <div className="absolute top-[-20%] right-[-10%] w-[700px] h-[700px] bg-teal-600/20 rounded-full blur-[120px] animate-pulse" />
+           <div className="absolute bottom-[10%] left-[-10%] w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[150px]" />
+           <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+        </div>
       )}
+
+      {/* --- SMP THEME: AMBIENT BLOBS --- */}
+      {isSMP && (
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+            <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-400/20 rounded-full blur-[100px] animate-pulse" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-cyan-400/20 rounded-full blur-[100px] animate-pulse delay-700" />
+        </div>
+      )}
+
+      {/* Content Wrapper */}
+      <div className="relative z-10">
+        {lesson && (
+          <QuizEngine 
+            lessonTitle={lesson.title}
+            content={lesson.content}
+            xpReward={lesson.xp}
+            onComplete={(score) => handleLessonComplete(score)}
+            onExit={handleExit}
+          />
+        )}
+      </div>
     </div>
   );
 }

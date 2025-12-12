@@ -33,6 +33,7 @@ export function StudentSidebar() {
 
   const isKids = theme === "sd";
   const isSMP = theme === "smp";
+  const isSMA = theme === "sma";
   const isUni = theme === "uni";
 
   return (
@@ -41,13 +42,17 @@ export function StudentSidebar() {
       // THEME STYLES
       isKids ? "inset-y-0 bg-white border-r-4 border-primary/20 shadow-xl" : 
       isUni ? "inset-y-0 bg-slate-900 border-slate-800 text-slate-100" :
-      isSMP ? "top-4 left-4 bottom-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-[0_8px_32px_0_rgba(139,92,246,0.15)]" : // Floating Glass for SMP
+      isSMP ? "top-4 left-4 bottom-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-[0_8px_32px_0_rgba(139,92,246,0.15)]" : 
+      
+      // SMA THEME: Floating Dark Glass
+      isSMA ? "top-4 left-4 bottom-4 rounded-2xl bg-slate-950/40 backdrop-blur-xl border border-white/5 shadow-2xl" :
+      
       "inset-y-0 bg-white border-slate-200"
     )}>
       {/* BRANDING AREA */}
       <div className={cn(
         "p-6 flex items-center gap-3 transition-all",
-        (isUni || theme === 'sma') && "border-b border-border/10",
+        (isUni || theme === 'sma') && "border-b border-white/5",
         isKids && "pb-8 pt-8",
         isSMP && "bg-gradient-to-b from-white/50 to-transparent rounded-t-3xl"
       )}>
@@ -55,6 +60,7 @@ export function StudentSidebar() {
           "flex items-center justify-center transition-all shrink-0 relative",
           isKids ? "w-14 h-14 bg-primary text-white rounded-3xl shadow-[0_6px_0_rgba(0,0,0,0.2)] rotate-[-6deg] hover:rotate-6 hover:scale-110 cursor-pointer duration-300" : 
           isSMP ? "w-10 h-10 bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white rounded-xl shadow-lg shadow-violet-500/40 ring-2 ring-white/50" :
+          isSMA ? "w-10 h-10 bg-gradient-to-br from-teal-500 to-slate-800 text-white rounded-lg shadow-lg shadow-teal-900/50" :
           "w-10 h-10 bg-primary text-white rounded-lg shadow-sm"
         )}>
            {isKids && <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full animate-ping" />}
@@ -65,6 +71,7 @@ export function StudentSidebar() {
             "font-bold leading-none tracking-tight transition-all",
             isKids ? "text-3xl text-primary font-display uppercase drop-shadow-sm" : 
             isSMP ? "text-2xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-fuchsia-600" :
+            isSMA ? "text-xl font-bold text-slate-100 tracking-tight" :
             isUni ? "text-lg text-white font-serif tracking-wide" : "text-xl text-slate-800"
           )}>
             SKOOLA
@@ -72,7 +79,9 @@ export function StudentSidebar() {
           <p className={cn(
             "text-[10px] font-bold uppercase tracking-widest mt-1",
             isKids ? "text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full inline-block mt-2" : 
-            isSMP ? "text-violet-500" : "text-muted-foreground"
+            isSMP ? "text-violet-500" : 
+            isSMA ? "text-teal-400/80" :
+            "text-muted-foreground"
           )}>
             {theme === 'sd' ? 'Petualang Cilik' : theme === 'smp' ? 'Gen-Z Learning' : theme === 'sma' ? 'High School' : 'University'}
           </p>
@@ -81,7 +90,7 @@ export function StudentSidebar() {
 
       {/* NAVIGATION */}
       <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto custom-scrollbar">
-        <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
+        <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mb-2 opacity-70", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>
           {isKids ? "Peta Utama" : "Menu Utama"}
         </div>
         
@@ -101,11 +110,9 @@ export function StudentSidebar() {
           onClick={() => router.push("/social")} 
         />
         
-        <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-8 mb-2 opacity-70", isUni ? "text-slate-400" : "text-slate-500")}>
+        <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-8 mb-2 opacity-70", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>
           {isKids ? "Tas Sekolah" : "Akademik"}
         </div>
-        
-        {/* Item 'Kelasku' dihapus karena redundan dengan Dashboard */}
         
         <SidebarItem 
           theme={theme}
@@ -114,8 +121,6 @@ export function StudentSidebar() {
           active={pathname === "/schedule"} 
           onClick={() => alert(isKids ? "Jadwal belum dipasang guru!" : "Fitur Jadwal segera hadir!")} 
         />
-
-        {/* Section 'Identitas' dan item 'Profil Saya' dihapus karena sudah ada di User Footer */}
       </nav>
 
       {/* USER FOOTER */}
@@ -123,6 +128,7 @@ export function StudentSidebar() {
         "p-4 border-t m-4 rounded-2xl",
         isKids ? "bg-secondary/30 border-2 border-secondary border-b-4" :
         isSMP ? "mx-4 mb-4 border-none bg-gradient-to-r from-violet-50 to-fuchsia-50 rounded-2xl" :
+        isSMA ? "mx-4 mb-4 border border-white/5 bg-white/5 backdrop-blur-sm rounded-xl" :
         isUni ? "bg-slate-800 border-slate-700 m-0 rounded-none border-x-0 border-b-0" : 
         "bg-slate-50 border-slate-100"
       )}>
@@ -131,6 +137,7 @@ export function StudentSidebar() {
           className={cn(
             "flex items-center gap-3 mb-3 p-2 transition-all cursor-pointer group rounded-xl",
             isKids ? "hover:bg-white/50" : 
+            isSMA ? "hover:bg-white/10" :
             isUni ? "hover:bg-slate-700" : "hover:bg-white hover:shadow-sm"
           )}
         >
@@ -140,14 +147,13 @@ export function StudentSidebar() {
              ? "w-10 h-10 bg-white text-secondary-foreground border-2 border-secondary rounded-full overflow-hidden" 
              : "w-9 h-9 bg-primary/10 text-primary rounded-full"
            )}>
-             {/* Jika nanti ada avatar image, taruh sini. Sementara inisial */}
              <span className="font-bold text-sm">{name.charAt(0)}</span>
            </div>
            <div className="flex-1 overflow-hidden">
-             <p className={cn("text-sm font-bold truncate", isUni ? "text-slate-200" : "text-slate-800")}>
+             <p className={cn("text-sm font-bold truncate", (isUni || isSMA) ? "text-slate-200" : "text-slate-800")}>
                {name}
              </p>
-             <p className={cn("text-[10px] truncate opacity-70 font-medium", isUni ? "text-slate-400" : "text-slate-500")}>
+             <p className={cn("text-[10px] truncate opacity-70 font-medium", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>
                {isKids ? "Level 1 Explorer" : "Lihat Profil"}
              </p>
            </div>
@@ -159,6 +165,7 @@ export function StudentSidebar() {
             "flex items-center justify-center gap-2 px-4 py-2.5 w-full font-bold text-xs transition-all rounded-xl",
             isKids ? "bg-white text-red-500 border-2 border-red-100 hover:border-red-500 hover:bg-red-50 shadow-sm" :
             isSMP ? "bg-white/80 text-slate-600 hover:text-red-500 hover:bg-red-50 shadow-sm border border-slate-100" :
+            isSMA ? "bg-white/5 text-slate-400 hover:bg-rose-500/20 hover:text-rose-400 border border-white/5" :
             isUni 
               ? "text-slate-400 hover:text-white hover:bg-slate-700" 
               : "text-slate-500 hover:text-red-600 hover:bg-red-50"
@@ -175,6 +182,7 @@ function SidebarItem({ icon, label, active, onClick, theme }: any) {
   const isKids = theme === "sd";
   const isUni = theme === "uni";
   const isSMP = theme === "smp";
+  const isSMA = theme === "sma";
 
   return (
     <button 
@@ -182,31 +190,37 @@ function SidebarItem({ icon, label, active, onClick, theme }: any) {
       className={cn(
         "flex items-center gap-3 px-3 py-3 w-full transition-all text-sm font-bold group relative overflow-hidden",
         
-        // KIDS THEME - Chunky & Bouncy
+        // KIDS THEME
         isKids && "rounded-2xl border-2 border-transparent my-1",
         isKids && active && "bg-primary text-white border-primary shadow-[0_4px_0_rgba(185,28,28,0.2)] translate-y-[-2px]",
         isKids && !active && "text-slate-500 hover:bg-white hover:border-secondary hover:text-secondary-foreground hover:shadow-sm hover:translate-x-1",
         
-        // SMP THEME - Glass & Neon Glow
+        // SMP THEME
         isSMP && "rounded-xl my-1 border border-transparent",
         isSMP && active && "bg-violet-500/10 text-violet-700 border-violet-200/50 shadow-[0_0_15px_rgba(139,92,246,0.3)] backdrop-blur-md",
         isSMP && !active && "text-slate-500 hover:bg-violet-50/50 hover:text-violet-600 hover:pl-4",
 
-        // UNI THEME - Clean & Minimal
+        // SMA THEME - Dark Aesthetic
+        isSMA && "rounded-lg my-1",
+        isSMA && active && "bg-teal-500/10 text-teal-400 border-l-2 border-teal-500 pl-4",
+        isSMA && !active && "text-slate-400 hover:bg-white/5 hover:text-slate-200 hover:pl-4",
+
+        // UNI THEME
         isUni && "rounded-md",
         isUni && active && "bg-slate-800 text-white border-l-2 border-blue-400 pl-[10px]", 
         isUni && !active && "text-slate-400 hover:text-slate-200 hover:bg-slate-800",
 
         // DEFAULT THEME
-        !isKids && !isUni && !isSMP && "rounded-lg",
-        !isKids && !isUni && !isSMP && active && "bg-primary/10 text-primary",
-        !isKids && !isUni && !isSMP && !active && "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+        !isKids && !isUni && !isSMP && !isSMA && "rounded-lg",
+        !isKids && !isUni && !isSMP && !isSMA && active && "bg-primary/10 text-primary",
+        !isKids && !isUni && !isSMP && !isSMA && !active && "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
       )}
     >
       <span className={cn(
         "transition-transform duration-300", 
         isKids && (active ? "scale-110 rotate-[-5deg]" : "group-hover:scale-110 group-hover:rotate-6"),
-        isSMP && active && "drop-shadow-[0_0_5px_rgba(139,92,246,0.5)]"
+        isSMP && active && "drop-shadow-[0_0_5px_rgba(139,92,246,0.5)]",
+        isSMA && active && "text-teal-400 drop-shadow-[0_0_8px_rgba(45,212,191,0.5)]"
       )}>
         {icon}
       </span>

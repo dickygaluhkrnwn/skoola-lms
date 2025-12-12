@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   School, LayoutDashboard, Clock, Calendar, CheckCircle, 
-  AlertCircle, BookOpen, TrendingUp, Plus, ArrowRight, Star, Map, Scroll
+  AlertCircle, BookOpen, TrendingUp, Plus, ArrowRight, Star, Map, Scroll, Zap, Sparkles, Loader2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../lib/firebase";
@@ -11,7 +11,7 @@ import {
   doc, getDoc, collection, query, where, getDocs, orderBy, limit, onSnapshot, updateDoc, arrayUnion, increment 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { motion, Variants } from "framer-motion"; // Animasi Engine
+import { motion, Variants } from "framer-motion";
 
 // --- IMPORTS ---
 import { StudentSidebar } from "../../components/layout/student-sidebar";
@@ -27,20 +27,22 @@ const containerVariants: Variants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1
+      staggerChildren: 0.15,
+      delayChildren: 0.2
     }
   }
 };
 
 const itemVariants: Variants = {
-  hidden: { y: 20, opacity: 0 },
+  hidden: { y: 30, opacity: 0, scale: 0.9 },
   visible: {
     y: 0,
     opacity: 1,
+    scale: 1,
     transition: {
       type: "spring",
-      stiffness: 100,
-      damping: 10
+      stiffness: 120,
+      damping: 12
     }
   }
 };
@@ -61,8 +63,8 @@ export default function LearnClient() {
   // Helper Theme Logic
   const isKids = theme === "sd";
   const isSMP = theme === "smp";
-  const isUni = theme === "uni";
   const isSMA = theme === "sma";
+  const isUni = theme === "uni";
 
   // --- INITIAL FETCH ---
   useEffect(() => {
@@ -72,13 +74,11 @@ export default function LearnClient() {
         return;
       }
 
-      // 1. Fetch User Profile Realtime
       const unsubUser = onSnapshot(doc(db, "users", user.uid), async (docSnap) => {
         if (docSnap.exists()) {
           const userData = docSnap.data();
           setUserProfile(userData);
 
-          // 2. Fetch Classes
           const enrolled = userData.enrolledClasses || [];
           if (enrolled.length > 0) {
             fetchClassesAndAssignments(enrolled);
@@ -96,7 +96,6 @@ export default function LearnClient() {
 
   const fetchClassesAndAssignments = async (classIds: string[]) => {
     try {
-      // A. Fetch Classes Detail
       const classesPromises = classIds.map(async (cid) => {
         const cDoc = await getDoc(doc(db, "classrooms", cid));
         return cDoc.exists() ? { id: cDoc.id, ...cDoc.data() } as any : null;
@@ -105,7 +104,6 @@ export default function LearnClient() {
       const validClasses = classesRes.filter(c => c !== null);
       setMyClasses(validClasses);
 
-      // B. Fetch Upcoming Assignments (Simple aggregation from first class for demo)
       if (validClasses.length > 0) {
         const firstClassId = validClasses[0].id;
         const assignRef = collection(db, "classrooms", firstClassId, "assignments");
@@ -137,7 +135,6 @@ export default function LearnClient() {
     try {
       const codeUpper = code.toUpperCase();
       
-      // Cek apakah sudah join di state lokal
       if (myClasses.some(c => c.code === codeUpper)) {
         alert(isKids ? "Kamu sudah punya tiket ke petualangan ini!" : "Anda sudah terdaftar di kelas ini.");
         setJoining(false);
@@ -164,7 +161,7 @@ export default function LearnClient() {
         enrolledClasses: arrayUnion(classId)
       });
 
-      alert(isKids ? "Hore! Berhasil bergabung ke petualangan baru!" : "Berhasil bergabung!");
+      alert("Berhasil bergabung!");
       setIsJoinModalOpen(false);
     } catch (error) {
       console.error(error);
@@ -174,117 +171,130 @@ export default function LearnClient() {
     }
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 15) return "Good Afternoon";
+    if (hour < 18) return "Good Evening";
+    return "Good Night";
+  };
 
-  // --- RENDER HELPERS ---
-  
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
       <div className="flex flex-col items-center gap-4">
-        {isKids ? (
-            <motion.div 
-                animate={{ y: [0, -20, 0] }} 
-                transition={{ repeat: Infinity, duration: 0.8 }}
-                className="text-4xl"
-            >
-                🚀
-            </motion.div>
-        ) : (
-            <School className="w-10 h-10 animate-pulse text-primary" />
-        )}
-        <span className={cn("font-bold", isKids ? "text-xl font-display text-primary" : "text-sm text-slate-500")}>
-          {isKids ? "Sedang Membuka Peta..." : "Memuat Dashboard..."}
-        </span>
+        <Loader2 className="w-10 h-10 animate-spin text-teal-400" />
+        <span className="font-bold text-sm tracking-widest uppercase">Loading Experience...</span>
       </div>
     </div>
   );
 
+  // --- BACKGROUND LOGIC ---
+  // Kita paksa background berwarna gelap/gradien untuk SMA agar tidak putih polos
+  const mainBgClass = isSMA 
+    ? "bg-slate-950 text-slate-100 selection:bg-teal-500/30 selection:text-teal-200" 
+    : isKids 
+      ? "bg-yellow-50 text-slate-900"
+      : isSMP
+        ? "bg-slate-50 text-slate-900"
+        : "bg-slate-50 text-slate-900";
+
   return (
-    <div className={cn(
-      "flex min-h-screen font-sans text-foreground transition-colors duration-500",
-      // FIX: Hapus bg-background solid agar pattern dari body terlihat
-      // Tambahkan tint halus untuk keterbacaan jika perlu
-      isSMP ? "bg-slate-50/30" : "bg-transparent"
-    )}>
+    <div className={cn("flex min-h-screen font-sans transition-colors duration-500 relative overflow-hidden", mainBgClass)}>
       
-      {/* --- SMP THEME: AMBIENT BACKGROUND BLOBS --- */}
+      {/* --- SMA SPECIAL BACKGROUND: AURORA MESH --- */}
+      {isSMA && (
+        <div className="fixed inset-0 z-0">
+           {/* Base Dark Gradient */}
+           <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950" />
+           
+           {/* Animated Orbs/Blobs */}
+           <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-teal-600/20 rounded-full blur-[120px] animate-pulse" />
+           <div className="absolute bottom-[10%] left-[-10%] w-[500px] h-[500px] bg-violet-600/20 rounded-full blur-[120px] animate-pulse delay-1000" />
+           <div className="absolute top-[40%] left-[40%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[150px] animate-pulse delay-500" />
+           
+           {/* Noise Texture Overlay (Optional for grit) */}
+           <div className="absolute inset-0 opacity-[0.03] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+        </div>
+      )}
+
+      {/* --- SMP THEME BLOBS --- */}
       {isSMP && (
         <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-            {/* Top Left Violet */}
             <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-400/20 rounded-full blur-[100px] animate-pulse" />
-            {/* Bottom Right Cyan */}
             <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-cyan-400/20 rounded-full blur-[100px] animate-pulse delay-700" />
-            {/* Center Fuchsia */}
-            <div className="absolute top-[40%] left-[30%] w-[300px] h-[300px] bg-fuchsia-400/20 rounded-full blur-[80px] animate-pulse delay-1000" />
         </div>
       )}
 
       <StudentSidebar />
 
       <motion.div 
-        className="flex-1 md:ml-64 relative pb-24 p-4 md:p-8 z-10" // z-10 agar konten di atas blobs
+        className="flex-1 md:ml-64 relative pb-24 p-4 md:p-8 z-10"
         initial="hidden"
         animate="visible"
         variants={containerVariants}
       >
         
-        {/* HEADER SECTION: GREETING & STATS */}
         <div className="max-w-6xl mx-auto space-y-8">
           
-          {/* 1. Welcome Banner */}
+          {/* 1. WELCOME HERO SECTION */}
           <motion.div 
             variants={itemVariants}
             className={cn(
               "rounded-3xl p-8 relative overflow-hidden transition-all",
-              isKids ? "bg-primary text-white shadow-[0_8px_0_rgba(0,0,0,0.15)] mb-8" : 
-              // SMP: Glassmorphism yang lebih kuat
-              isSMP ? "bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-600 text-white shadow-2xl shadow-violet-500/30 ring-1 ring-white/30 backdrop-blur-3xl" :
-              isUni ? "bg-slate-900 text-white border border-slate-800" :
-              "bg-white border border-slate-200 text-slate-800"
+              isKids ? "bg-primary text-white shadow-lg mb-8" : 
+              isSMP ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-xl" :
+              // SMA: Transparent Glass Dark Mode
+              isSMA ? "bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl" :
+              "bg-white border border-slate-200"
             )}
           >
-            <div className="relative z-10">
-              <h1 className={cn("font-bold mb-2", isKids ? "text-4xl font-display drop-shadow-md" : "text-2xl md:text-3xl")}>
-                {isKids ? `Halo, Petualang ${userProfile?.displayName?.split(' ')[0]}! 👋` : 
-                 isSMP ? `Yo, ${userProfile?.displayName?.split(' ')[0]}! 🔥` :
-                 isUni ? `Selamat Datang, ${userProfile?.displayName}` : 
-                 `Hai, ${userProfile?.displayName}!`}
-              </h1>
-              <p className={cn("max-w-xl opacity-90", isUni ? "text-slate-300" : "")}>
-                {isKids ? "Siap menaklukkan misi belajar hari ini? Ayo kumpulkan bintang!" : 
-                 isSMP ? "Level up skill kamu hari ini. Cek jadwal dan tugas terbaru, jangan sampai streak putus!" :
-                 isUni ? "Fokus pada akademik dan pengembangan riset Anda." : 
-                 "Semoga harimu menyenangkan dan produktif."}
-              </p>
+            <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2 opacity-80">
+                   {isSMA && <Sparkles size={16} className="text-teal-400" />}
+                   <span className="text-xs font-bold uppercase tracking-widest">
+                      {isSMA ? new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : "Dashboard"}
+                   </span>
+                </div>
+                <h1 className={cn("font-bold leading-tight", 
+                   isKids ? "text-4xl font-display" : 
+                   isSMA ? "text-4xl md:text-5xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-white" : 
+                   "text-3xl"
+                )}>
+                  {isSMA ? `${getGreeting()},` : isKids ? `Halo, ${userProfile?.displayName?.split(' ')[0]}!` : `Hai, ${userProfile?.displayName}`}
+                  <br/>
+                  <span className={cn(isSMA ? "text-white" : "")}>{isSMA ? userProfile?.displayName?.split(' ')[0] : ""}</span>
+                </h1>
+                <p className={cn("mt-2 max-w-lg", isSMA ? "text-slate-400" : "opacity-90")}>
+                  {isSMA 
+                    ? "Siap untuk produktif hari ini? Ada beberapa tugas yang menunggu penyelesaianmu." 
+                    : "Lanjutkan progres belajarmu hari ini."}
+                </p>
+              </div>
+
+              {/* Action Button for SMA */}
+              {isSMA && (
+                 <Button className="bg-teal-600 hover:bg-teal-500 text-white border-0 shadow-[0_0_20px_rgba(20,184,166,0.3)] rounded-full px-6">
+                    Lihat Jadwal <ArrowRight size={16} className="ml-2"/>
+                 </Button>
+              )}
             </div>
             
-            {/* Background Decorations */}
-            <div className={cn(
-              "absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl opacity-20 -mr-16 -mt-16 pointer-events-none",
-              isKids ? "bg-yellow-300" : isSMP ? "bg-cyan-400 opacity-40 animate-pulse" : "bg-primary"
-            )} />
-            
-            {isKids && (
-                <div className="absolute bottom-0 right-8 text-6xl opacity-20 rotate-12 pointer-events-none">
-                    🎒
-                </div>
-            )}
-            
-            {isSMP && (
-               <>
-                 <div className="absolute bottom-[-10%] right-[-5%] w-40 h-40 bg-fuchsia-400 rounded-full blur-2xl opacity-30 animate-blob" />
-                 <div className="absolute top-[20%] right-[20%] w-20 h-20 bg-violet-400 rounded-full blur-xl opacity-20 animate-blob animation-delay-2000" />
-               </>
+            {/* Decorations */}
+            {isSMA && (
+               <div className="absolute right-0 bottom-0 w-64 h-64 bg-gradient-to-tl from-teal-500/20 to-transparent blur-3xl pointer-events-none" />
             )}
           </motion.div>
 
-          {/* 2. Quick Stats Grid */}
+          {/* 2. STATS GRID (BENTO STYLE) */}
           <motion.div variants={containerVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard 
-              label={isKids ? "Petualangan" : "Kelas"} 
+              label={isKids ? "Petualangan" : "Kelas Diikuti"} 
               value={myClasses.length} 
               icon={isKids ? <Map /> : <School />} 
               theme={theme}
               variants={itemVariants}
+              delay={0}
             />
             <StatCard 
               label={isKids ? "Misi Aktif" : "Tugas Pending"} 
@@ -292,13 +302,15 @@ export default function LearnClient() {
               icon={isKids ? <Scroll /> : <BookOpen />} 
               theme={theme}
               variants={itemVariants}
+              delay={0.1}
             />
             <StatCard 
               label={isKids ? "Kehadiran" : "Presensi"} 
-              value="100%" 
+              value="98%" 
               icon={<CheckCircle />} 
               theme={theme}
               variants={itemVariants}
+              delay={0.2}
             />
             <StatCard 
               label={isKids ? "Bintang XP" : "Total XP"} 
@@ -306,150 +318,126 @@ export default function LearnClient() {
               icon={isKids ? <Star className="fill-yellow-400 text-yellow-500" /> : <TrendingUp />} 
               theme={theme}
               variants={itemVariants}
+              delay={0.3}
             />
           </motion.div>
 
+          {/* 3. MAIN CONTENT GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            {/* LEFT COLUMN: CLASSES */}
+            {/* LEFT: CLASS LIST */}
             <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className={cn("text-xl font-bold flex items-center gap-2", isKids && "font-display text-2xl text-primary")}>
-                  {isKids ? <Map className="w-6 h-6" /> : <School className="w-5 h-5" />}
+                <h2 className={cn("text-xl font-bold flex items-center gap-2", 
+                   isSMA ? "text-white" : "text-slate-800"
+                )}>
                   {isKids ? "Peta Petualangan" : "Daftar Kelas"}
                 </h2>
                 <Button 
                   onClick={() => setIsJoinModalOpen(true)}
-                  variant={isKids ? "secondary" : "primary"}
+                  variant={isKids ? "secondary" : "ghost"}
                   size="sm"
-                  className={cn(isKids ? "shadow-sm border-2" : "", isSMP && "bg-violet-600 hover:bg-violet-700 shadow-lg shadow-violet-200")}
+                  className={cn(
+                      isSMA && "text-teal-400 hover:text-teal-300 hover:bg-teal-950/30"
+                  )}
                 >
-                  <Plus size={16} className="mr-2" /> {isKids ? "Gabung Tim Baru" : "Gabung Kelas"}
+                  <Plus size={16} className="mr-2" /> Gabung Kelas
                 </Button>
               </div>
 
               {myClasses.length === 0 ? (
                 <div className={cn(
                     "text-center p-12 border-2 border-dashed rounded-3xl transition-all",
-                    isKids ? "border-primary/30 bg-primary/5" : 
-                    isSMP ? "border-violet-200 bg-white/40 backdrop-blur-sm" :
-                    "border-gray-200 bg-gray-50"
+                    isSMA ? "border-slate-800 bg-slate-900/50" : "border-gray-200 bg-gray-50"
                 )}>
-                  <div className={cn(
-                      "w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4",
-                      isKids ? "bg-white shadow-md text-primary" : 
-                      isSMP ? "bg-white shadow-lg text-violet-500 shadow-violet-100" :
-                      "bg-gray-200 text-gray-500"
-                  )}>
+                  <div className="w-16 h-16 mx-auto mb-4 bg-slate-800 rounded-full flex items-center justify-center text-slate-500">
                     <School size={32} />
                   </div>
-                  <h3 className={cn("font-bold mb-1", isKids ? "text-xl text-primary font-display" : "text-gray-600")}>
-                      {isKids ? "Belum Ada Peta!" : "Belum ada kelas"}
+                  <h3 className={cn("font-bold mb-1", isSMA ? "text-slate-300" : "text-gray-600")}>
+                      Belum ada kelas
                   </h3>
-                  <p className="text-sm text-gray-400 mb-6">
-                      {isKids ? "Minta kode rahasia dari guru untuk mulai berpetualang." : "Minta Kode Kelas dari gurumu untuk bergabung."}
-                  </p>
-                  <Button onClick={() => setIsJoinModalOpen(true)} variant={isKids ? "primary" : "outline"} className={cn(isSMP && "border-violet-500 text-violet-600 hover:bg-violet-50")}>
-                    {isKids ? "Masukkan Kode Rahasia" : "Gabung Kelas Sekarang"}
+                  <Button onClick={() => setIsJoinModalOpen(true)} variant="outline" className="mt-4">
+                    Gabung Kelas Sekarang
                   </Button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {myClasses.map((cls, index) => (
+                  {myClasses.map((cls) => (
                     <motion.div 
                       key={cls.id}
-                      whileHover={{ scale: isKids ? 1.03 : 1.02, translateY: -4 }}
+                      whileHover={{ scale: 1.02, y: -4 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => router.push(`/classroom/${cls.id}`)}
                       className={cn(
                         "group relative p-6 rounded-3xl border transition-all cursor-pointer overflow-hidden",
-                        isKids ? "bg-white border-2 border-b-8 border-gray-100 hover:border-primary hover:shadow-xl shadow-sm" : 
-                        // SMP: Card Style - Glass & Gradient Border
-                        isSMP ? "bg-white/70 backdrop-blur-md hover:shadow-[0_8px_30px_rgb(139,92,246,0.15)] border-violet-100 hover:border-violet-300 shadow-sm" :
-                        isUni ? "bg-slate-800 border-slate-700 hover:border-primary" :
+                        // SMA CARD STYLE: Dark Glass
+                        isSMA ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-teal-500/50 hover:shadow-[0_0_30px_rgba(20,184,166,0.1)]" :
+                        isKids ? "bg-white border-2 border-b-8 border-gray-100 hover:border-primary" : 
                         "bg-white border-gray-200 hover:border-primary hover:shadow-md"
                       )}
                     >
-                      {/* Class Icon / Initials */}
                       <div className="flex items-start justify-between mb-4">
                         <div className={cn(
-                          "w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-xl shadow-sm transition-transform group-hover:scale-110",
-                          isKids ? "bg-secondary text-secondary-foreground border-2 border-orange-200" : 
-                          isSMP ? "bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-violet-200" :
+                          "w-12 h-12 flex items-center justify-center font-bold text-xl rounded-2xl shadow-sm",
+                          isSMA ? "bg-gradient-to-br from-teal-500 to-emerald-600 text-white" :
                           "bg-primary/10 text-primary"
                         )}>
                           {cls.name.charAt(0)}
                         </div>
                         <span className={cn(
                           "text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider",
-                          isKids ? "bg-blue-100 text-blue-700 border border-blue-200" :
-                          isSMP ? "bg-violet-50 text-violet-600 border border-violet-100" :
-                          isUni ? "bg-slate-700 text-slate-300" : "bg-gray-100 text-gray-500"
+                          isSMA ? "bg-slate-800 text-slate-400 border border-slate-700" :
+                          "bg-gray-100 text-gray-500"
                         )}>
                           {cls.category || "Umum"}
                         </span>
                       </div>
                       
-                      <h3 className={cn("font-bold text-lg truncate mb-1", isKids && "font-display text-xl", isUni && "text-white")}>
+                      <h3 className={cn("font-bold text-lg truncate mb-1", isSMA ? "text-slate-100" : "text-slate-800")}>
                           {cls.name}
                       </h3>
-                      <p className={cn("text-xs truncate mb-6", isKids ? "text-gray-400" : "text-gray-500")}>
-                          {cls.description || (isKids ? "Ayo jelajahi dunia ini!" : "Tidak ada deskripsi")}
+                      <p className={cn("text-xs truncate mb-6", isSMA ? "text-slate-500" : "text-gray-500")}>
+                          {cls.description || "Tidak ada deskripsi"}
                       </p>
                       
                       <div className={cn(
                           "flex items-center text-xs font-bold transition-transform group-hover:translate-x-1",
-                          isKids ? "text-primary uppercase tracking-widest" : 
-                          isSMP ? "text-violet-600" : "text-primary"
+                          isSMA ? "text-teal-400" : "text-primary"
                       )}>
-                        {isKids ? "Mulai Petualangan" : "Masuk Kelas"} <ArrowRight size={14} className="ml-1" />
+                        Masuk Kelas <ArrowRight size={14} className="ml-1" />
                       </div>
-
-                      {/* Decoration for Kids */}
-                      {isKids && (
-                          <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-primary/5 rounded-full" />
-                      )}
-                      {/* Decoration for SMP */}
-                      {isSMP && (
-                          <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-violet-100/50 to-transparent rounded-bl-[4rem] pointer-events-none" />
-                      )}
                     </motion.div>
                   ))}
                 </div>
               )}
             </motion.div>
 
-            {/* RIGHT COLUMN: SCHEDULE & TASKS */}
+            {/* RIGHT: TASKS & WIDGETS */}
             <motion.div variants={itemVariants} className="space-y-6">
               
-              {/* Upcoming Assignments */}
+              {/* Task Widget */}
               <div className={cn(
-                "p-6 rounded-3xl border",
-                isKids ? "bg-white border-2 border-b-4 border-orange-100 shadow-sm" :
-                isSMP ? "bg-white/60 backdrop-blur-md border-white/50 shadow-sm" :
-                isUni ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-gray-200"
+                "p-6 rounded-3xl border transition-all",
+                isSMA ? "bg-white/5 border-white/10 backdrop-blur-md" : "bg-white border-gray-200"
               )}>
                 <h3 className={cn("font-bold mb-4 flex items-center gap-2", 
-                    isKids ? "text-orange-600 font-display text-lg" : 
-                    isSMP ? "text-slate-800" : ""
+                    isSMA ? "text-white" : "text-slate-800"
                 )}>
-                  {isKids ? <Scroll size={20} /> : <AlertCircle size={18} className={isSMP ? "text-fuchsia-500" : "text-orange-500"} />}
-                  {isKids ? "Papan Misi" : "Tugas Segera"}
+                  <AlertCircle size={18} className={isSMA ? "text-rose-400" : "text-orange-500"} />
+                  Tugas Segera
                 </h3>
                 
                 <div className="space-y-3">
                   {upcomingAssignments.length > 0 ? (
                     upcomingAssignments.map((task) => (
-                      <div key={task.id} className="flex gap-3 items-start pb-3 border-b border-dashed last:border-0 border-gray-100/50">
-                        <div className={cn("mt-1.5 w-2 h-2 rounded-full shrink-0", isKids ? "bg-orange-400" : isSMP ? "bg-fuchsia-500" : "bg-orange-500")} />
+                      <div key={task.id} className={cn("flex gap-3 items-start pb-3 border-b border-dashed last:border-0", isSMA ? "border-white/10" : "border-gray-100")}>
+                        <div className={cn("mt-1.5 w-2 h-2 rounded-full shrink-0", isSMA ? "bg-rose-500" : "bg-orange-500")} />
                         <div>
-                          <p className={cn("text-sm font-bold line-clamp-1", isKids && "text-gray-700")}>{task.title}</p>
-                          <p className="text-xs opacity-60 mb-1">{task.className}</p>
+                          <p className={cn("text-sm font-bold line-clamp-1", isSMA ? "text-slate-200" : "text-gray-700")}>{task.title}</p>
+                          <p className={cn("text-xs opacity-60 mb-1", isSMA ? "text-slate-400" : "")}>{task.className}</p>
                           <p className={cn(
                               "text-[10px] font-mono px-1.5 py-0.5 rounded inline-block",
-                              isKids ? "bg-yellow-100 text-yellow-800" : 
-                              isSMP ? "bg-fuchsia-50 text-fuchsia-700" :
-                              "bg-gray-100 text-gray-600 dark:bg-slate-700"
+                              isSMA ? "bg-slate-800 text-slate-300" : "bg-gray-100 text-gray-600"
                           )}>
                              {task.deadline ? new Date(task.deadline.seconds * 1000).toLocaleDateString() : 'No Deadline'}
                           </p>
@@ -459,29 +447,23 @@ export default function LearnClient() {
                   ) : (
                     <div className="text-center py-6 opacity-50">
                       <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-xs">{isKids ? "Semua misi selesai! Hebat!" : "Tidak ada tugas aktif."}</p>
+                      <p className={cn("text-xs", isSMA ? "text-slate-400" : "")}>Tidak ada tugas aktif.</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Schedule Mockup */}
+              {/* Schedule Widget */}
               <div className={cn(
-                "p-6 rounded-3xl border",
-                isKids ? "bg-blue-50 border-2 border-blue-100" :
-                isSMP ? "bg-gradient-to-b from-white/80 to-violet-50/30 border-violet-100 backdrop-blur-sm" :
-                isUni ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-gray-200"
+                "p-6 rounded-3xl border transition-all",
+                isSMA ? "bg-gradient-to-br from-indigo-900/40 to-slate-900/40 border-white/10" : "bg-white border-gray-200"
               )}>
-                <h3 className={cn("font-bold mb-4 flex items-center gap-2", 
-                    isKids ? "text-blue-600 font-display text-lg" : 
-                    isSMP ? "text-slate-800" : ""
-                )}>
-                  <Calendar size={18} className={isKids ? "text-blue-500" : isSMP ? "text-violet-500" : "text-primary"} />
-                  {isKids ? "Agenda Petualang" : "Jadwal Hari Ini"}
+                <h3 className={cn("font-bold mb-4 flex items-center gap-2", isSMA ? "text-white" : "text-slate-800")}>
+                  <Calendar size={18} className={isSMA ? "text-indigo-400" : "text-primary"} />
+                  Jadwal Hari Ini
                 </h3>
-                {/* Mock Empty State for now */}
                 <div className="text-center py-4">
-                  <p className="text-xs opacity-50 italic">{isKids ? "Belum ada agenda hari ini. Waktunya bermain!" : "Fitur Jadwal akan segera hadir."}</p>
+                  <p className={cn("text-xs italic", isSMA ? "text-slate-500" : "opacity-50")}>Fitur Jadwal akan segera hadir.</p>
                 </div>
               </div>
 
@@ -493,7 +475,6 @@ export default function LearnClient() {
 
       <MobileNav />
 
-      {/* Modal Join Class */}
       <JoinClassModal 
         isOpen={isJoinModalOpen} 
         onClose={() => setIsJoinModalOpen(false)} 
@@ -506,34 +487,33 @@ export default function LearnClient() {
 }
 
 // Simple Stat Card Component
-function StatCard({ label, value, icon, theme, variants }: any) {
+function StatCard({ label, value, icon, theme, variants, delay }: any) {
   const isKids = theme === "sd";
   const isSMP = theme === "smp";
-  const isUni = theme === "uni";
+  const isSMA = theme === "sma";
 
   return (
     <motion.div 
       variants={variants}
       className={cn(
-        "p-5 rounded-3xl border flex flex-col justify-between h-32 transition-all cursor-default",
-        isKids ? "bg-white border-2 border-b-4 border-gray-100 hover:-translate-y-1 hover:border-primary hover:shadow-lg" : 
-        // SMP: Glassy Card
-        isSMP ? "bg-white/60 backdrop-blur-md border-white/60 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:bg-white/80 transition-all duration-300" :
-        isUni ? "bg-slate-800 border-slate-700 text-white" :
-        "bg-white border-gray-200 shadow-sm hover:shadow-md"
+        "p-5 flex flex-col justify-between h-32 transition-all cursor-default",
+        isKids ? "bg-white border-2 border-b-4 border-gray-100 hover:-translate-y-1 hover:border-primary hover:shadow-lg rounded-3xl" : 
+        // SMA: Ultra Clean Glass Card
+        isSMA ? "bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-300 rounded-2xl" :
+        "bg-white border-gray-200 shadow-sm hover:shadow-md rounded-xl"
       )}
     >
       <div className={cn(
         "self-start p-2.5 rounded-xl mb-2",
         isKids ? "bg-secondary text-secondary-foreground shadow-sm" : 
-        isSMP ? "bg-violet-50 text-violet-600" :
+        isSMA ? "bg-white/10 text-teal-400" :
         "bg-primary/10 text-primary"
       )}>
         {React.cloneElement(icon, { size: 20 })}
       </div>
       <div>
-        <h4 className={cn("text-3xl font-bold leading-none mb-1", isKids && "font-display text-primary")}>{value}</h4>
-        <p className={cn("text-[10px] font-bold uppercase tracking-wider opacity-60", isKids && "text-gray-500")}>{label}</p>
+        <h4 className={cn("text-3xl font-bold leading-none mb-1", isSMA ? "text-white" : "text-slate-900")}>{value}</h4>
+        <p className={cn("text-[10px] font-bold uppercase tracking-wider", isSMA ? "text-slate-500" : "text-gray-500")}>{label}</p>
       </div>
     </motion.div>
   );

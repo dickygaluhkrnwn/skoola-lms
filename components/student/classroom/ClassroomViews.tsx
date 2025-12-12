@@ -13,7 +13,7 @@ import { AdventureMap } from "@/components/learn/adventure-map";
 import { useRouter } from "next/navigation";
 
 // --- DASHBOARD VIEW ---
-export function DashboardView({ classData, classTotalXP, assignments, classMembers, setActiveTab, isKids, isSMP, isUni, theme }: any) {
+export function DashboardView({ classData, classTotalXP, assignments, classMembers, setActiveTab, isKids, isSMP, isUni, isSMA, theme }: any) {
   return (
     <motion.div 
          key="dashboard"
@@ -27,25 +27,38 @@ export function DashboardView({ classData, classTotalXP, assignments, classMembe
            "rounded-3xl p-6 md:p-10 text-white relative overflow-hidden shadow-lg transition-all",
            isKids ? "bg-primary border-b-8 border-red-700" : 
            isSMP ? "bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-600 shadow-2xl shadow-violet-500/30 ring-1 ring-white/20 backdrop-blur-3xl" :
+           isSMA ? "bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl" :
            isUni ? "bg-slate-800 border border-slate-700" :
            "bg-blue-600"
        )}>
           {/* Deco */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full opacity-10 -mr-16 -mt-16 blur-3xl pointer-events-none" />
+          <div className={cn(
+              "absolute top-0 right-0 w-64 h-64 rounded-full opacity-10 -mr-16 -mt-16 blur-3xl pointer-events-none",
+              isSMA ? "bg-teal-400" : "bg-white"
+          )} />
           {isKids && <div className="absolute bottom-4 right-4 text-6xl animate-bounce">🏰</div>}
           
           <div className="relative z-10">
              <div className="flex flex-wrap gap-2 mb-3">
-                <span className="inline-block px-3 py-1 rounded-full bg-white/20 border border-white/30 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
+                <span className={cn(
+                    "inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-sm",
+                    isSMA ? "bg-teal-500/20 text-teal-300 border border-teal-500/30" : "bg-white/20 border border-white/30"
+                )}>
                    Kode: {classData?.code}
                 </span>
                 {classData?.gradeLevel && (
-                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/20 border border-white/30 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
+                   <span className={cn(
+                       "inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-sm",
+                       isSMA ? "bg-white/10 text-slate-300 border border-white/10" : "bg-white/20 border border-white/30"
+                   )}>
                       <GraduationCap size={12}/> {classData.gradeLevel}
                    </span>
                 )}
                 {classData?.category && (
-                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/20 border border-white/30 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
+                   <span className={cn(
+                       "inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-sm",
+                       isSMA ? "bg-white/10 text-slate-300 border border-white/10" : "bg-white/20 border border-white/30"
+                   )}>
                       <Palette size={12}/> {classData.category}
                    </span>
                 )}
@@ -53,7 +66,7 @@ export function DashboardView({ classData, classTotalXP, assignments, classMembe
              <h1 className={cn("text-2xl md:text-4xl font-bold mb-2", isKids && "font-display tracking-wide drop-shadow-md")}>
                  {isKids ? `Selamat Datang di Markas ${classData?.name}! 👋` : `Selamat Datang di ${classData?.name}`}
              </h1>
-             <p className="text-white/90 max-w-xl text-sm md:text-base font-medium">
+             <p className={cn("max-w-xl text-sm md:text-base font-medium", isSMA ? "text-slate-400" : "text-white/90")}>
                  {classData?.description || (isKids ? "Siap untuk petualangan seru hari ini?" : "Deskripsi kelas belum diatur.")}
              </p>
           </div>
@@ -66,7 +79,7 @@ export function DashboardView({ classData, classTotalXP, assignments, classMembe
              label={isKids ? "Peta Utama" : "Peta Belajar"} 
              value={isKids ? "Buka Peta" : "Akses"} 
              color="blue" 
-             isKids={isKids} isSMP={isSMP} isUni={isUni}
+             isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA}
              onClick={() => setActiveTab("adventure")} 
           />
           <StatCard 
@@ -74,7 +87,7 @@ export function DashboardView({ classData, classTotalXP, assignments, classMembe
              label={isKids ? "Misi Rahasia" : "Tugas Aktif"} 
              value={assignments.length} 
              color="purple" 
-             isKids={isKids} isSMP={isSMP} isUni={isUni}
+             isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA}
              onClick={() => setActiveTab("assignments")} 
           />
           <StatCard 
@@ -82,14 +95,14 @@ export function DashboardView({ classData, classTotalXP, assignments, classMembe
              label={isKids ? "Harta Karun" : "XP Kelas"} 
              value={classTotalXP} 
              color="yellow" 
-             isKids={isKids} isSMP={isSMP} isUni={isUni}
+             isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA}
           />
           <StatCard 
              icon={<Users size={isKids ? 24 : 20}/>} 
              label={isKids ? "Pasukan" : "Anggota"} 
              value={classMembers.length || classData?.studentCount || 0} 
              color="green" 
-             isKids={isKids} isSMP={isSMP} isUni={isUni}
+             isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA}
              onClick={() => setActiveTab("people")} 
           />
        </div>
@@ -98,7 +111,7 @@ export function DashboardView({ classData, classTotalXP, assignments, classMembe
 }
 
 // --- ADVENTURE VIEW ---
-export function AdventureView({ mapModules, isKids, isSMP, isUni }: any) {
+export function AdventureView({ mapModules, isKids, isSMP, isUni, isSMA }: any) {
   return (
     <motion.div 
          key="adventure"
@@ -108,10 +121,10 @@ export function AdventureView({ mapModules, isKids, isSMP, isUni }: any) {
          className="space-y-6"
      >
          <div className="text-center mb-8">
-             <h2 className={cn("text-2xl font-bold mb-2", isKids ? "text-primary font-display" : "text-slate-800")}>
+             <h2 className={cn("text-2xl font-bold mb-2", isKids ? "text-primary font-display" : isSMA ? "text-white" : "text-slate-800")}>
                  {isKids ? "🗺️ Peta Perjalanan Belajar" : "Peta Kurikulum"}
              </h2>
-             <p className="text-slate-500 text-sm">
+             <p className={cn("text-sm", isSMA ? "text-slate-400" : "text-slate-500")}>
                  {isKids ? "Ikuti jejak ini untuk menemukan harta karun ilmu!" : "Ikuti alur pembelajaran ini secara berurutan."}
              </p>
          </div>
@@ -119,9 +132,13 @@ export function AdventureView({ mapModules, isKids, isSMP, isUni }: any) {
          {mapModules.length > 0 ? (
              <AdventureMap modules={mapModules} />
          ) : (
-             <div className={cn("text-center py-12 border-2 border-dashed rounded-3xl", isSMP ? "bg-white/40 border-violet-200" : "bg-slate-50 border-slate-200")}>
-                 <Map className="w-12 h-12 mx-auto text-slate-300 mb-4" />
-                 <p className="text-slate-400 font-medium">Peta masih kosong. Tunggu guru menggambar peta ya!</p>
+             <div className={cn("text-center py-12 border-2 border-dashed rounded-3xl", 
+                isSMP ? "bg-white/40 border-violet-200" : 
+                isSMA ? "bg-white/5 border-white/10" :
+                "bg-slate-50 border-slate-200"
+             )}>
+                 <Map className={cn("w-12 h-12 mx-auto mb-4", isSMA ? "text-slate-600" : "text-slate-300")} />
+                 <p className={cn("font-medium", isSMA ? "text-slate-500" : "text-slate-400")}>Peta masih kosong. Tunggu guru menggambar peta ya!</p>
              </div>
          )}
      </motion.div>
@@ -129,11 +146,11 @@ export function AdventureView({ mapModules, isKids, isSMP, isUni }: any) {
 }
 
 // --- MATERIALS VIEW ---
-export function MaterialsView({ materials, isKids, isSMP, isUni, theme }: any) {
+export function MaterialsView({ materials, isKids, isSMP, isUni, isSMA, theme }: any) {
   return (
     <motion.div key="materials" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
        <div className="flex items-center justify-between">
-           <h2 className={cn("text-xl font-bold", isKids && "font-display text-primary")}>
+           <h2 className={cn("text-xl font-bold", isKids && "font-display text-primary", isSMA && "text-white")}>
                {isKids ? "🎒 Bekal Petualangan" : "Materi Pembelajaran"}
            </h2>
        </div>
@@ -142,13 +159,13 @@ export function MaterialsView({ materials, isKids, isSMP, isUni, theme }: any) {
            <EmptyState 
                icon={<BookOpen size={32}/>} 
                text={isKids ? "Belum ada bekal ilmu dari Kapten Guru." : "Belum ada materi yang diunggah."} 
-               isKids={isKids} isSMP={isSMP}
+               isKids={isKids} isSMP={isSMP} isSMA={isSMA}
            />
        ) : (
            <div className="grid md:grid-cols-2 gap-4">
               {materials.map((item: any, idx: number) => (
                   <motion.div key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }}>
-                      <MaterialCard item={item} theme={theme} isKids={isKids} isSMP={isSMP} isUni={isUni} />
+                      <MaterialCard item={item} theme={theme} isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} />
                   </motion.div>
               ))}
            </div>
@@ -158,11 +175,11 @@ export function MaterialsView({ materials, isKids, isSMP, isUni, theme }: any) {
 }
 
 // --- ASSIGNMENTS VIEW ---
-export function AssignmentsView({ assignments, isKids, isSMP, isUni, theme, router, classId }: any) {
+export function AssignmentsView({ assignments, isKids, isSMP, isUni, isSMA, theme, router, classId }: any) {
   return (
     <motion.div key="assignments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
         <div className="flex items-center justify-between">
-           <h2 className={cn("text-xl font-bold", isKids && "font-display text-primary")}>
+           <h2 className={cn("text-xl font-bold", isKids && "font-display text-primary", isSMA && "text-white")}>
                {isKids ? "📜 Misi Rahasia" : "Daftar Tugas"}
            </h2>
        </div>
@@ -171,7 +188,7 @@ export function AssignmentsView({ assignments, isKids, isSMP, isUni, theme, rout
             <EmptyState 
                 icon={<ClipboardList size={32}/>} 
                 text={isKids ? "Wah, tidak ada misi rahasia saat ini. Istirahatlah!" : "Tidak ada tugas aktif."} 
-                isKids={isKids} isSMP={isSMP}
+                isKids={isKids} isSMP={isSMP} isSMA={isSMA}
             />
         ) : (
             <div className="grid gap-4">
@@ -185,6 +202,7 @@ export function AssignmentsView({ assignments, isKids, isSMP, isUni, theme, rout
                             "p-5 rounded-3xl border transition-all cursor-pointer group relative overflow-hidden",
                             isKids ? "bg-white border-2 border-b-4 border-slate-100 hover:border-purple-400 hover:shadow-lg" : 
                             isSMP ? "bg-white/70 backdrop-blur-md border-white/60 hover:shadow-lg hover:border-violet-300 hover:bg-white/90" :
+                            isSMA ? "bg-white/5 backdrop-blur-xl border-white/10 hover:bg-white/10 hover:border-teal-500/50 hover:shadow-[0_0_20px_rgba(20,184,166,0.1)]" :
                             isUni ? "bg-slate-800 border-slate-700 hover:border-blue-500" :
                             "bg-white border-slate-200 hover:border-purple-300 hover:shadow-md"
                         )}
@@ -196,23 +214,27 @@ export function AssignmentsView({ assignments, isKids, isSMP, isUni, theme, rout
                                     "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm", 
                                     item.type === 'quiz' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600',
                                     isKids && "border-2 border-white shadow-md",
-                                    isSMP && (item.type === 'quiz' ? 'bg-orange-50 text-orange-600' : 'bg-fuchsia-50 text-fuchsia-600')
+                                    isSMP && (item.type === 'quiz' ? 'bg-orange-50 text-orange-600' : 'bg-fuchsia-50 text-fuchsia-600'),
+                                    isSMA && (item.type === 'quiz' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20')
                                 )}>
                                     {item.type === 'quiz' ? <FileCheck size={28} /> : <ClipboardList size={28} />}
                                 </div>
                                 <div>
-                                    <h3 className={cn("font-bold text-lg group-hover:text-purple-600 transition-colors", isUni ? "text-slate-100" : "text-slate-800")}>{item.title}</h3>
+                                    <h3 className={cn("font-bold text-lg group-hover:text-purple-600 transition-colors", isUni || isSMA ? "text-slate-100" : "text-slate-800")}>{item.title}</h3>
                                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
                                         <span className={cn(
                                             "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide",
                                             isKids ? "bg-yellow-100 text-yellow-700" : 
                                             isSMP ? "bg-violet-100 text-violet-700" :
+                                            isSMA ? "bg-slate-800 text-slate-400 border border-slate-700" :
                                             "bg-slate-100 text-slate-500"
                                         )}>
                                             {item.type === 'quiz' ? (isKids ? 'Tantangan Kuis' : 'Kuis') : (isKids ? 'Laporan Misi' : 'Esai')}
                                         </span>
                                         {item.deadline && (
-                                            <span className="text-red-500 font-medium flex items-center gap-1 text-xs bg-red-50 px-2 py-0.5 rounded-full">
+                                            <span className={cn("font-medium flex items-center gap-1 text-xs px-2 py-0.5 rounded-full",
+                                                isSMA ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" : "text-red-500 bg-red-50"
+                                            )}>
                                             <Clock size={12} /> 
                                             {new Date(item.deadline.seconds * 1000).toLocaleDateString('id-ID')}
                                             </span>
@@ -220,7 +242,11 @@ export function AssignmentsView({ assignments, isKids, isSMP, isUni, theme, rout
                                     </div>
                                 </div>
                             </div>
-                            <Button size="sm" className={cn("hidden md:flex rounded-xl font-bold", isKids && "shadow-[0_4px_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-1", isSMP && "bg-violet-600 hover:bg-violet-700")}>
+                            <Button size="sm" className={cn("hidden md:flex rounded-xl font-bold", 
+                                isKids && "shadow-[0_4px_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-1", 
+                                isSMP && "bg-violet-600 hover:bg-violet-700",
+                                isSMA && "bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-500/20"
+                            )}>
                                  {isKids ? "Terima Misi" : "Kerjakan"}
                             </Button>
                         </div>
@@ -233,44 +259,57 @@ export function AssignmentsView({ assignments, isKids, isSMP, isUni, theme, rout
 }
 
 // --- PEOPLE VIEW ---
-export function PeopleView({ classMembers, isKids, isSMP, isUni }: any) {
+export function PeopleView({ classMembers, isKids, isSMP, isUni, isSMA }: any) {
   return (
     <motion.div key="people" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
-        <h2 className={cn("text-xl font-bold", isKids && "font-display text-primary")}>
+        <h2 className={cn("text-xl font-bold", isKids && "font-display text-primary", isSMA && "text-white")}>
                {isKids ? "👥 Pasukan Kita" : "Anggota Kelas"}
         </h2>
         <div className={cn("rounded-3xl border overflow-hidden shadow-sm", 
             isUni ? "bg-slate-800 border-slate-700" : 
             isSMP ? "bg-white/60 backdrop-blur-md border-white/60" :
+            isSMA ? "bg-white/5 backdrop-blur-xl border-white/10" :
             "bg-white border-slate-200"
         )}>
             <div className="overflow-x-auto">
                <table className="w-full text-left">
-                  <thead className={cn("border-b", isUni ? "bg-slate-900 border-slate-700" : "bg-slate-50/50 border-slate-100")}>
+                  <thead className={cn("border-b", isUni ? "bg-slate-900 border-slate-700" : isSMA ? "bg-white/5 border-white/5" : "bg-slate-50/50 border-slate-100")}>
                       <tr>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">Nama</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">Level</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase text-right">XP</th>
+                          <th className={cn("px-6 py-4 text-xs font-bold uppercase", isSMA ? "text-slate-400" : "text-slate-400")}>Nama</th>
+                          <th className={cn("px-6 py-4 text-xs font-bold uppercase", isSMA ? "text-slate-400" : "text-slate-400")}>Level</th>
+                          <th className={cn("px-6 py-4 text-xs font-bold uppercase text-right", isSMA ? "text-slate-400" : "text-slate-400")}>XP</th>
                       </tr>
                   </thead>
-                  <tbody className={cn("divide-y", isUni ? "divide-slate-700" : "divide-slate-50/50")}>
+                  <tbody className={cn("divide-y", isUni ? "divide-slate-700" : isSMA ? "divide-white/5" : "divide-slate-50/50")}>
                       {classMembers.map((member: any) => (
-                          <tr key={member.uid} className={cn("transition-colors", isUni ? "hover:bg-slate-700" : "hover:bg-slate-50")}>
+                          <tr key={member.uid} className={cn("transition-colors", isUni ? "hover:bg-slate-700" : isSMA ? "hover:bg-white/5" : "hover:bg-slate-50")}>
                               <td className="px-6 py-4">
                                   <div className="flex items-center gap-3">
-                                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs", isKids ? "bg-primary/10 text-primary border border-primary/20" : isSMP ? "bg-violet-100 text-violet-600" : "bg-slate-200 text-slate-600")}>
+                                      <div className={cn(
+                                          "w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs", 
+                                          isKids ? "bg-primary/10 text-primary border border-primary/20" : 
+                                          isSMP ? "bg-violet-100 text-violet-600" : 
+                                          isSMA ? "bg-teal-500/20 text-teal-400 border border-teal-500/30" :
+                                          "bg-slate-200 text-slate-600"
+                                      )}>
                                           {member.displayName.charAt(0)}
                                       </div>
-                                      <span className={cn("font-bold", isUni ? "text-slate-200" : "text-slate-700")}>{member.displayName}</span>
+                                      <span className={cn("font-bold", isUni || isSMA ? "text-slate-200" : "text-slate-700")}>{member.displayName}</span>
                                   </div>
                               </td>
                               <td className="px-6 py-4">
-                                  <span className={cn("px-2.5 py-1 rounded-lg text-xs font-bold", isKids ? "bg-yellow-100 text-yellow-700" : isSMP ? "bg-fuchsia-100 text-fuchsia-700" : "bg-slate-100 text-slate-600")}>
+                                  <span className={cn(
+                                      "px-2.5 py-1 rounded-lg text-xs font-bold", 
+                                      isKids ? "bg-yellow-100 text-yellow-700" : 
+                                      isSMP ? "bg-fuchsia-100 text-fuchsia-700" : 
+                                      isSMA ? "bg-slate-800 text-slate-400 border border-slate-700" :
+                                      "bg-slate-100 text-slate-600"
+                                  )}>
                                       Lvl {member.level}
                                   </span>
                               </td>
                               <td className="px-6 py-4 text-right">
-                                  <span className={cn("font-bold", isKids ? "text-primary" : "text-slate-600")}>{member.xp} XP</span>
+                                  <span className={cn("font-bold", isKids ? "text-primary" : isSMA ? "text-teal-400" : "text-slate-600")}>{member.xp} XP</span>
                               </td>
                           </tr>
                       ))}
@@ -283,64 +322,73 @@ export function PeopleView({ classMembers, isKids, isSMP, isUni }: any) {
 }
 
 // --- SHARED SUB COMPONENTS ---
-function StatCard({ icon, label, value, color, theme, onClick, isKids, isSMP, isUni }: any) {
+function StatCard({ icon, label, value, color, theme, onClick, isKids, isSMP, isUni, isSMA }: any) {
   const colors: any = { 
-      blue: isKids ? "bg-blue-100 text-blue-600" : isSMP ? "bg-violet-50 text-violet-600" : "bg-blue-50 text-blue-600", 
-      purple: isKids ? "bg-purple-100 text-purple-600" : isSMP ? "bg-fuchsia-50 text-fuchsia-600" : "bg-purple-50 text-purple-600", 
-      yellow: isKids ? "bg-yellow-100 text-yellow-600" : "bg-yellow-50 text-yellow-600", 
-      green: isKids ? "bg-green-100 text-green-600" : "bg-green-50 text-green-600" 
+      blue: isKids ? "bg-blue-100 text-blue-600" : isSMP ? "bg-violet-50 text-violet-600" : isSMA ? "bg-white/5 text-teal-400" : "bg-blue-50 text-blue-600", 
+      purple: isKids ? "bg-purple-100 text-purple-600" : isSMP ? "bg-fuchsia-50 text-fuchsia-600" : isSMA ? "bg-white/5 text-teal-400" : "bg-purple-50 text-purple-600", 
+      yellow: isKids ? "bg-yellow-100 text-yellow-600" : isSMA ? "bg-white/5 text-teal-400" : "bg-yellow-50 text-yellow-600", 
+      green: isKids ? "bg-green-100 text-green-600" : isSMA ? "bg-white/5 text-teal-400" : "bg-green-50 text-green-600" 
   }
   return (
      <div onClick={onClick} className={cn(
          "p-4 rounded-3xl border flex flex-col items-center text-center transition-all h-full justify-between",
          isKids ? "bg-white border-2 border-b-4 border-slate-100 shadow-sm active:border-b-2 active:translate-y-[2px]" : 
          isSMP ? "bg-white/60 backdrop-blur-md border-white/60 shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-violet-200" :
+         isSMA ? "bg-white/5 backdrop-blur-xl border border-white/10 shadow-sm hover:bg-white/10 hover:border-teal-500/30 transition-all duration-300" :
          "bg-white border-slate-100 shadow-sm",
          onClick && "cursor-pointer hover:shadow-md hover:scale-[1.02]"
      )}>
         <div className={cn("p-3 rounded-2xl mb-2", colors[color])}>{icon}</div>
         <div>
-           <div className={cn("text-xl md:text-2xl font-bold text-slate-800", isKids && "font-display text-primary")}>{value}</div>
-           <div className="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-wide">{label}</div>
+           <div className={cn("text-xl md:text-2xl font-bold", isKids ? "text-primary font-display" : isSMA ? "text-white" : "text-slate-800")}>{value}</div>
+           <div className={cn("text-[10px] md:text-xs font-bold uppercase tracking-wide", isSMA ? "text-slate-400" : "text-slate-400")}>{label}</div>
         </div>
      </div>
   )
 }
 
-function MaterialCard({ item, theme, isKids, isSMP, isUni }: any) {
+function MaterialCard({ item, theme, isKids, isSMP, isUni, isSMA }: any) {
   return (
      <div className={cn(
          "p-5 rounded-3xl border transition-all cursor-pointer group flex items-center gap-4 relative overflow-hidden",
          isKids ? "bg-white border-2 border-b-4 border-slate-100 hover:border-blue-400 hover:shadow-lg" : 
          isSMP ? "bg-white/70 backdrop-blur-md border-white/60 hover:shadow-lg hover:border-violet-300" :
+         isSMA ? "bg-white/5 backdrop-blur-xl border-white/10 hover:bg-white/10 hover:border-teal-500/50 hover:shadow-[0_0_20px_rgba(20,184,166,0.1)]" :
          isUni ? "bg-slate-800 border-slate-700" :
          "bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200"
      )} onClick={() => window.open(item.content, "_blank")}>
         
         {isKids && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-blue-50 to-transparent rounded-bl-full -mr-8 -mt-8 pointer-events-none" />}
         {isSMP && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-violet-100/50 to-transparent rounded-bl-full pointer-events-none" />}
+        {isSMA && <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-teal-500/10 to-transparent rounded-bl-full pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />}
 
         <div className={cn(
             "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-110", 
             item.type === 'video' 
-               ? (isSMP ? 'bg-red-50 text-red-600' : 'bg-red-50 text-red-600') 
-               : (isSMP ? 'bg-violet-50 text-violet-600' : 'bg-blue-50 text-blue-600'),
+               ? (isSMP ? 'bg-red-50 text-red-600' : isSMA ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-red-50 text-red-600') 
+               : (isSMP ? 'bg-violet-50 text-violet-600' : isSMA ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : 'bg-blue-50 text-blue-600'),
             isKids && "border-2 border-white shadow-md"
         )}>
            {item.type === 'video' ? <Video size={26} /> : <FileText size={26} />}
         </div>
         <div className="flex-1 min-w-0 relative z-10">
-           <h4 className={cn("font-bold text-lg truncate transition-colors group-hover:text-primary", isUni ? "text-slate-100" : "text-slate-800")}>{item.title}</h4>
+           <h4 className={cn("font-bold text-lg truncate transition-colors group-hover:text-primary", isUni || isSMA ? "text-slate-100" : "text-slate-800")}>{item.title}</h4>
            <div className="flex items-center gap-2 mt-1">
-                <span className={cn("text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded", isKids ? "bg-slate-100 text-slate-500" : "bg-slate-100 text-slate-500")}>
+                <span className={cn(
+                    "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded", 
+                    isKids ? "bg-slate-100 text-slate-500" : 
+                    isSMA ? "bg-slate-800 text-slate-400 border border-slate-700" :
+                    "bg-slate-100 text-slate-500"
+                )}>
                    {item.type === 'video' ? 'Video' : 'Bacaan'}
                 </span>
-                <span className="text-xs text-slate-400">• {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : 'Baru'}</span>
+                <span className={cn("text-xs", isSMA ? "text-slate-500" : "text-slate-400")}>• {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : 'Baru'}</span>
            </div>
         </div>
         <div className={cn("p-2 rounded-full transition-colors", 
             isKids ? "bg-blue-50 text-blue-500 group-hover:bg-blue-500 group-hover:text-white" : 
             isSMP ? "bg-violet-50 text-violet-500 group-hover:bg-violet-600 group-hover:text-white" :
+            isSMA ? "bg-white/5 text-slate-400 group-hover:bg-teal-500 group-hover:text-white" :
             "bg-slate-50 text-slate-300 group-hover:text-blue-500"
         )}>
             <LinkIcon size={20} />
@@ -349,16 +397,21 @@ function MaterialCard({ item, theme, isKids, isSMP, isUni }: any) {
   )
 }
 
-function EmptyState({ icon, text, isKids, isSMP }: any) {
+function EmptyState({ icon, text, isKids, isSMP, isSMA }: any) {
   return (
      <div className={cn(
          "text-center py-12 rounded-3xl border-2 border-dashed flex flex-col items-center justify-center",
          isKids ? "bg-white border-slate-200" : 
          isSMP ? "bg-white/40 border-violet-200" :
+         isSMA ? "bg-white/5 border-white/10" :
          "bg-slate-50 border-slate-200"
      )}>
-        <div className={cn("p-4 rounded-full mb-4", isKids ? "bg-slate-100 text-slate-400" : "bg-white shadow-sm text-slate-300")}>{icon}</div>
-        <p className="text-sm font-medium text-slate-500 max-w-xs mx-auto">{text}</p>
+        <div className={cn("p-4 rounded-full mb-4", 
+            isKids ? "bg-slate-100 text-slate-400" : 
+            isSMA ? "bg-white/5 text-slate-500" :
+            "bg-white shadow-sm text-slate-300"
+        )}>{icon}</div>
+        <p className={cn("text-sm font-medium max-w-xs mx-auto", isSMA ? "text-slate-400" : "text-slate-500")}>{text}</p>
      </div>
   )
 }

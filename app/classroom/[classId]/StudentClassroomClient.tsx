@@ -42,6 +42,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
   const isKids = theme === "sd";
   const isUni = theme === "uni";
   const isSMP = theme === "smp";
+  const isSMA = theme === "sma";
 
   // Auth Check & Fetch Logic
   useEffect(() => {
@@ -119,13 +120,13 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
   const classTotalXP = classMembers.reduce((total, member: any) => total + (member.xp || 0), 0);
 
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white">
       {isKids ? (
           <motion.div animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity }}>
               <span className="text-6xl">🏰</span>
           </motion.div>
       ) : (
-          <Loader2 className="animate-spin w-10 h-10 text-primary mb-4"/> 
+          <Loader2 className="animate-spin w-10 h-10 text-teal-500 mb-4"/> 
       )}
       <p className={cn("font-medium animate-pulse mt-4", isKids && "font-display text-xl text-primary")}>
           {isKids ? "Membuka Gerbang Kelas..." : "Memuat Ruang Kelas..."}
@@ -133,7 +134,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
     </div>
   );
 
-  const bgSoft = isKids ? "bg-yellow-50" : isUni ? "bg-slate-900" : isSMP ? "bg-slate-50/30" : "bg-slate-50";
+  const bgSoft = isKids ? "bg-yellow-50" : isUni ? "bg-slate-900" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-transparent text-slate-100" : "bg-slate-50";
 
   // Data Adapter for Adventure Map
   const mapModules = [...materials, ...assignments].map(item => ({
@@ -145,7 +146,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
   }));
 
   return (
-    <div className={cn("min-h-screen font-sans transition-colors duration-500 pb-24 md:pb-0 md:flex", bgSoft)}>
+    <div className={cn("min-h-screen font-sans transition-colors duration-500 pb-24 md:pb-0 md:flex relative overflow-hidden", bgSoft)}>
       
       {/* --- SMP THEME: AMBIENT BACKGROUND BLOBS --- */}
       {isSMP && (
@@ -153,6 +154,16 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
             <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-400/20 rounded-full blur-[100px] animate-pulse" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-cyan-400/20 rounded-full blur-[100px] animate-pulse delay-700" />
             <div className="absolute top-[40%] left-[30%] w-[300px] h-[300px] bg-fuchsia-400/20 rounded-full blur-[80px] animate-pulse delay-1000" />
+        </div>
+      )}
+
+      {/* --- SMA THEME: AURORA MESH --- */}
+      {isSMA && (
+        <div className="fixed inset-0 z-0 pointer-events-none">
+           <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950" />
+           <div className="absolute top-[-20%] right-[-10%] w-[700px] h-[700px] bg-teal-600/20 rounded-full blur-[120px] animate-pulse" />
+           <div className="absolute bottom-[10%] left-[-10%] w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[150px]" />
+           <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
         </div>
       )}
 
@@ -173,6 +184,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
          isKids={isKids}
          isUni={isUni}
          isSMP={isSMP}
+         // Note: Pass isSMA ke MobileHeader nanti di step selanjutnya
       />
 
       {/* 3. MOBILE NAV */}
@@ -183,6 +195,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
          isUni={isUni}
          isSMP={isSMP}
          theme={theme}
+         // Note: Pass isSMA ke MobileNav nanti
       />
 
       {/* 4. MAIN CONTENT AREA */}
@@ -197,28 +210,28 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
                       assignments={assignments} 
                       classMembers={classMembers} 
                       setActiveTab={setActiveTab} 
-                      isKids={isKids} isSMP={isSMP} isUni={isUni} theme={theme}
+                      isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme}
                    />
                 )}
 
                 {activeTab === "adventure" && (
-                   <AdventureView mapModules={mapModules} isKids={isKids} isSMP={isSMP} isUni={isUni} />
+                   <AdventureView mapModules={mapModules} isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} />
                 )}
 
                 {activeTab === "materials" && (
-                   <MaterialsView materials={materials} isKids={isKids} isSMP={isSMP} isUni={isUni} theme={theme} />
+                   <MaterialsView materials={materials} isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme} />
                 )}
 
                 {activeTab === "assignments" && (
                    <AssignmentsView 
                       assignments={assignments} 
-                      isKids={isKids} isSMP={isSMP} isUni={isUni} theme={theme} 
+                      isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme} 
                       router={router} classId={classId}
                    />
                 )}
 
                 {activeTab === "people" && (
-                   <PeopleView classMembers={classMembers} isKids={isKids} isSMP={isSMP} isUni={isUni} />
+                   <PeopleView classMembers={classMembers} isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} />
                 )}
 
             </AnimatePresence>

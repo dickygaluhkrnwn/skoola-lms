@@ -21,6 +21,7 @@ export function MobileNav() {
   const isUni = theme === "uni";
   const isKids = theme === "sd";
   const isSMP = theme === "smp";
+  const isSMA = theme === "sma";
 
   return (
     <nav className={cn(
@@ -30,6 +31,9 @@ export function MobileNav() {
       
       // SMP THEME: Floating Glass
       isSMP ? "bg-white/80 backdrop-blur-xl border-t border-white/50 shadow-[0_-8px_32px_0_rgba(139,92,246,0.2)] rounded-t-2xl mx-2 mb-2 pb-3" :
+
+      // SMA THEME: Dark Glass Sleek
+      isSMA ? "bg-slate-950/80 backdrop-blur-xl border-t border-white/10 text-slate-400 shadow-[0_-4px_20px_rgba(0,0,0,0.2)]" :
 
       // UNI THEME
       isUni ? "bg-slate-900 border-t border-slate-800 text-slate-400" : 
@@ -75,6 +79,7 @@ export function MobileNav() {
           "flex flex-col items-center gap-1 transition-colors p-2 rounded-lg group",
           theme === "sd" ? "text-red-300 hover:text-red-500 active:scale-95" : 
           theme === "smp" ? "text-slate-400 hover:text-red-500" : 
+          theme === "sma" ? "text-slate-500 hover:text-rose-500" :
           "text-slate-400 hover:text-red-500"
         )}
       >
@@ -91,6 +96,7 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
   const isKids = theme === "sd";
   const isUni = theme === "uni";
   const isSMP = theme === "smp";
+  const isSMA = theme === "sma";
 
   return (
     <button 
@@ -110,9 +116,13 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
         // SMP Theme (Glowing)
         isSMP && active && "text-violet-600 scale-110",
         
+        // SMA Theme (Neon Minimal)
+        isSMA && active && "text-teal-400 scale-105 drop-shadow-[0_0_8px_rgba(45,212,191,0.5)]",
+        isSMA && !active && "text-slate-500 hover:text-slate-300",
+
         // Default / Pro Theme
-        !isKids && !isUni && !isSMP && active && "text-primary bg-primary/10",
-        !isKids && !isUni && !isSMP && !active && "text-slate-400 hover:text-slate-600"
+        !isKids && !isUni && !isSMP && !isSMA && active && "text-primary bg-primary/10",
+        !isKids && !isUni && !isSMP && !isSMA && !active && "text-slate-400 hover:text-slate-600"
       )}
     >
       <div className={cn(
@@ -122,13 +132,16 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
       )}>
         {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { 
            size: isKids && active ? 20 : 24, 
-           className: active && !isKids && !isSMP && !isUni ? "fill-current opacity-20" : "" 
+           className: active && !isKids && !isSMP && !isUni && !isSMA ? "fill-current opacity-20" : "" 
         }) : icon}
       </div>
       <span className={cn("text-[10px] font-bold", isKids && active && "hidden")}>{label}</span>
       
       {/* Active Dot for SMP */}
       {isSMP && active && <div className="absolute -bottom-1 w-1 h-1 bg-violet-600 rounded-full shadow-[0_0_5px_currentColor] animate-pulse" />}
+      
+      {/* Active Indicator for SMA */}
+      {isSMA && active && <div className="absolute -bottom-1 w-1 h-1 bg-teal-400 rounded-full shadow-[0_0_5px_currentColor]" />}
     </button>
   );
 }
