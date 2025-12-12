@@ -19,8 +19,10 @@ export function JoinClassModal({ isOpen, onClose, onJoin, isLoading, theme }: Jo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!code.trim()) return;
+    
     await onJoin(code);
-    setCode(""); 
+    setCode(""); // Reset kode setelah submit (berhasil atau gagal handled di parent)
   };
 
   const isKids = theme === "sd";

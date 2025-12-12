@@ -20,6 +20,7 @@ import { JoinClassModal } from "../../components/learn/join-class-modal";
 import { useTheme } from "../../lib/theme-context";
 import { cn } from "../../lib/utils";
 import { Button } from "@/components/ui/button";
+import { AssignmentType, Classroom } from "@/lib/types/course.types";
 
 // Animation Variants
 const containerVariants: Variants = {
@@ -54,7 +55,7 @@ export default function LearnClient() {
   // State
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [myClasses, setMyClasses] = useState<any[]>([]);
+  const [myClasses, setMyClasses] = useState<Classroom[]>([]);
   const [upcomingAssignments, setUpcomingAssignments] = useState<any[]>([]);
   
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
@@ -98,10 +99,10 @@ export default function LearnClient() {
     try {
       const classesPromises = classIds.map(async (cid) => {
         const cDoc = await getDoc(doc(db, "classrooms", cid));
-        return cDoc.exists() ? { id: cDoc.id, ...cDoc.data() } as any : null;
+        return cDoc.exists() ? { id: cDoc.id, ...cDoc.data() } as Classroom : null;
       });
       const classesRes = await Promise.all(classesPromises);
-      const validClasses = classesRes.filter(c => c !== null);
+      const validClasses = classesRes.filter((c): c is Classroom => c !== null);
       setMyClasses(validClasses);
 
       if (validClasses.length > 0) {
@@ -109,7 +110,9 @@ export default function LearnClient() {
         const allAssignmentsPromises = validClasses.map(async (cls) => {
            const assignRef = collection(db, "classrooms", cls.id, "assignments");
            // Filter assignment yang belum deadline (future)
-           const q = query(assignRef, orderBy("deadline", "asc"), limit(3)); 
+           // Note: Firestore query complex with 'deadline' might need index. 
+           // For simplicity & robustness, fetch recent and filter in client.
+           const q = query(assignRef, orderBy("deadline", "asc"), limit(5)); 
            const snap = await getDocs(q);
            return snap.docs.map(d => ({
               id: d.id,
@@ -120,12 +123,23 @@ export default function LearnClient() {
         });
         
         const allAssignments = (await Promise.all(allAssignmentsPromises)).flat();
-        // Sort ulang client side karena data dari multiple collections
-        const sortedAssignments = allAssignments.sort((a: any, b: any) => {
-           const dateA = a.deadline ? a.deadline.seconds : 0;
-           const dateB = b.deadline ? b.deadline.seconds : 0;
-           return dateA - dateB;
-        }).slice(0, 5);
+        
+        // Filter & Sort client side
+        const now = Date.now();
+        const sortedAssignments = allAssignments
+            .filter((a: any) => {
+                // Pastikan deadline ada dan belum lewat (opsional: tampilkan yg lewat juga boleh tapi di bawah)
+                // Disini kita ambil yg deadline > now atau null (no deadline)
+                if (!a.deadline) return true;
+                const d = a.deadline.seconds ? a.deadline.seconds * 1000 : a.deadline;
+                return d > now; 
+            })
+            .sort((a: any, b: any) => {
+               const dateA = a.deadline ? (a.deadline.seconds ? a.deadline.seconds * 1000 : a.deadline) : Infinity;
+               const dateB = b.deadline ? (b.deadline.seconds ? b.deadline.seconds * 1000 : b.deadline) : Infinity;
+               return dateA - dateB;
+            })
+            .slice(0, 5);
 
         setUpcomingAssignments(sortedAssignments);
       }
@@ -173,6 +187,11 @@ export default function LearnClient() {
 
       alert("Berhasil bergabung!");
       setIsJoinModalOpen(false);
+      // Refresh data is handled by onSnapshot in useEffect mostly, but forcing reload or refetch is safer for critical update
+      // For now rely on snapshot or manual state update if we were fully reactive. 
+      // Since we fetch classes manually in useEffect, let's trigger a reload or re-fetch.
+      window.location.reload(); 
+
     } catch (error) {
       console.error(error);
       alert("Gagal bergabung. Coba lagi nanti.");
@@ -321,9 +340,9 @@ export default function LearnClient() {
 
           {/* 2. BENTO GRID LAYOUT */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-             
-             {/* LEFT COLUMN: CLASSES (Span 8) */}
-             <div className="md:col-span-8 space-y-6">
+              
+              {/* LEFT COLUMN: CLASSES (Span 8) */}
+              <div className="md:col-span-8 space-y-6">
                 
                 {/* Stats Row */}
                 <motion.div variants={containerVariants} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -371,10 +390,10 @@ export default function LearnClient() {
                       </div>
                    )}
                 </motion.div>
-             </div>
+              </div>
 
-             {/* RIGHT COLUMN: WIDGETS (Span 4) */}
-             <div className="md:col-span-4 space-y-6">
+              {/* RIGHT COLUMN: WIDGETS (Span 4) */}
+              <div className="md:col-span-4 space-y-6">
                 
                 {/* Assignments Widget */}
                 <motion.div 
@@ -408,7 +427,10 @@ export default function LearnClient() {
                                      isUni ? "text-indigo-400" : isSMA ? "text-teal-400" : "text-gray-500"
                                   )}>
                                      <Clock size={10} /> 
-                                     {task.deadline ? new Date(task.deadline.seconds * 1000).toLocaleDateString() : 'No Deadline'}
+                                     {task.deadline && typeof task.deadline === 'object' && 'seconds' in task.deadline 
+                                        ? new Date(task.deadline.seconds * 1000).toLocaleDateString()
+                                        : task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No Deadline'
+                                     }
                                   </div>
                                </div>
                             </div>
@@ -559,8 +581,8 @@ function ClassCard({ cls, isSMA, isUni, isKids, onClick }: any) {
 function EmptyClassState({ isSMA, isUni, isKids, onJoin }: any) {
    return (
       <div className={cn(
-         "text-center p-12 border-2 border-dashed rounded-3xl transition-all",
-         (isUni || isSMA) ? "border-slate-800 bg-slate-900/50" : "border-gray-200 bg-gray-50"
+          "text-center p-12 border-2 border-dashed rounded-3xl transition-all",
+          (isUni || isSMA) ? "border-slate-800 bg-slate-900/50" : "border-gray-200 bg-gray-50"
       )}>
          <div className={cn("w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center", 
             (isUni || isSMA) ? "bg-slate-800 text-slate-500" : "bg-white text-slate-500 shadow-sm"

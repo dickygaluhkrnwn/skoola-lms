@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, Search, CheckCircle2, 
-  XCircle, Clock, FileText, ChevronRight, Save, Loader2, User, ChevronLeft 
+  XCircle, Clock, FileText, ChevronRight, Save, Loader2, User, ChevronLeft,
+  Gamepad2
 } from "lucide-react";
 // Import firebase dari path yang benar (relatif terhadap file ini)
 import { db } from "../../../../../../../lib/firebase"; 
@@ -14,6 +15,7 @@ import {
 import { Button } from "../../../../../../../components/ui/button";
 import { cn } from "../../../../../../../lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { AssignmentType } from "../../../../../../../lib/types/course.types";
 
 // --- TIPE DATA ---
 interface Student {
@@ -29,14 +31,16 @@ interface Submission {
   status: "submitted" | "graded" | "late";
   score?: number;
   feedback?: string;
-  answers?: any; // Struktur jawaban fleksibel
+  // Struktur jawaban fleksibel
+  answers?: any; // Bisa string (essay), array object (quiz), atau game stats
   attachmentUrl?: string; // Jika tipe upload file
 }
 
 interface AssignmentData {
   title: string;
-  type: "quiz" | "essay" | "upload";
+  type: AssignmentType;
   totalPoints?: number;
+  questionsCount?: number;
 }
 
 interface AssignmentGradingClientProps {
@@ -190,14 +194,30 @@ export default function AssignmentGradingClient({ classId, assignmentId }: Assig
     if(!confirm(`Simulasikan ${student.displayName} mengumpulkan tugas?`)) return;
     
     const subRef = doc(db, "classrooms", classId, "assignments", assignmentId, "submissions", student.uid);
-    await setDoc(subRef, {
+    
+    // Payload simulasi berdasarkan tipe
+    let dummyPayload: any = {
       studentId: student.uid,
       studentName: student.displayName,
       submittedAt: serverTimestamp(),
       status: "submitted",
-      answers: "Ini adalah jawaban simulasi esai dari murid. Jawaban ini cukup panjang untuk menguji tampilan layout grading.",
-      attachmentUrl: "https://example.com/dummy-file.pdf"
-    }, { merge: true });
+    };
+
+    if (assignment?.type === 'quiz') {
+        dummyPayload.answers = [
+            { questionId: "1", answer: "A", isCorrect: true },
+            { questionId: "2", answer: "C", isCorrect: false },
+        ];
+        dummyPayload.score = 50; // Auto graded score usually
+    } else if (assignment?.type === 'game') {
+        dummyPayload.answers = { score: 1200, time: "45s", completedLevels: 3 };
+        dummyPayload.score = 100;
+    } else {
+        dummyPayload.answers = "Ini adalah jawaban simulasi esai dari murid. Jawaban ini cukup panjang untuk menguji tampilan layout grading.";
+        dummyPayload.attachmentUrl = "https://example.com/dummy-file.pdf";
+    }
+
+    await setDoc(subRef, dummyPayload, { merge: true });
     
     window.location.reload(); 
   };
@@ -225,7 +245,7 @@ export default function AssignmentGradingClient({ classId, assignmentId }: Assig
           <div>
             <div className="flex items-center gap-2 mb-1">
                <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">
-                 {assignment?.type === 'quiz' ? 'Kuis' : assignment?.type === 'essay' ? 'Esai' : 'Upload File'}
+                 {assignment?.type === 'quiz' ? 'Kuis' : assignment?.type === 'game' ? 'Game' : 'Esai/Proyek'}
                </span>
                <span className="text-slate-400 text-xs">• Total Poin: {assignment?.totalPoints || 100}</span>
             </div>
@@ -345,7 +365,7 @@ export default function AssignmentGradingClient({ classId, assignmentId }: Assig
                              : "-"}
                        </td>
                        <td className="px-6 py-4 text-center">
-                          {isGraded ? (
+                          {isGraded || (isSubmitted && sub.score !== undefined) ? (
                              <span className="text-lg font-bold text-slate-800">{sub.score}</span>
                           ) : (
                              <span className="text-slate-300">-</span>
@@ -362,7 +382,7 @@ export default function AssignmentGradingClient({ classId, assignmentId }: Assig
                           <Button 
                             size="sm" 
                             onClick={() => handleOpenGrading(student)}
-                            variant={isGraded ? "outline" : "primary"} // FIX: Changed 'default' to 'primary'
+                            variant={isGraded ? "outline" : "primary"} 
                             className={cn(
                               "text-xs h-8 gap-1 shadow-sm", 
                               isGraded 
@@ -407,8 +427,8 @@ export default function AssignmentGradingClient({ classId, assignmentId }: Assig
                       </div>
                       <div className="text-right">
                          <span className={cn(
-                            "px-3 py-1 rounded-full text-xs font-bold",
-                            submissions[selectedStudent.uid]?.status === 'graded' ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"
+                           "px-3 py-1 rounded-full text-xs font-bold",
+                           submissions[selectedStudent.uid]?.status === 'graded' ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"
                          )}>
                             {submissions[selectedStudent.uid]?.status === 'graded' ? "Sudah Dinilai" : "Menunggu Penilaian"}
                          </span>
@@ -417,27 +437,75 @@ export default function AssignmentGradingClient({ classId, assignmentId }: Assig
 
                    {submissions[selectedStudent.uid] ? (
                       <div className="space-y-4">
-                         {/* Attachment Viewer */}
-                         {submissions[selectedStudent.uid].attachmentUrl && (
-                            <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm group hover:border-blue-300 transition-colors cursor-pointer" onClick={() => window.open(submissions[selectedStudent.uid].attachmentUrl, '_blank')}>
-                               <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
-                                     <FileText size={20} />
-                                  </div>
-                                  <div>
-                                     <p className="font-bold text-slate-700 text-sm">Lampiran File</p>
-                                     <p className="text-xs text-slate-400">Klik untuk membuka</p>
-                                  </div>
-                               </div>
-                            </div>
+                         
+                         {/* -- TYPE: QUIZ -- */}
+                         {assignment?.type === 'quiz' && Array.isArray(submissions[selectedStudent.uid].answers) && (
+                             <div className="space-y-3">
+                                {submissions[selectedStudent.uid].answers.map((ans: any, idx: number) => (
+                                    <div key={idx} className={cn("p-4 rounded-xl border flex items-start gap-3", ans.isCorrect ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200")}>
+                                        <div className={cn("w-6 h-6 rounded-full flex items-center justify-center shrink-0", ans.isCorrect ? "bg-green-200 text-green-700" : "bg-red-200 text-red-700")}>
+                                            {ans.isCorrect ? <CheckCircle2 size={14}/> : <XCircle size={14}/>}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-700 mb-1">Soal #{idx+1}</p>
+                                            <p className="text-xs text-slate-500">Jawaban: <span className="font-mono font-bold">{ans.answer}</span></p>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="p-4 bg-slate-100 rounded-xl text-center">
+                                    <p className="text-sm text-slate-500">Nilai Otomatis Quiz: <span className="font-bold text-slate-900">{submissions[selectedStudent.uid].score}</span></p>
+                                </div>
+                             </div>
+                         )}
+
+                         {/* -- TYPE: GAME -- */}
+                         {assignment?.type === 'game' && (
+                             <div className="bg-purple-50 p-6 rounded-2xl border border-purple-100 text-center">
+                                <div className="w-16 h-16 bg-purple-200 rounded-full flex items-center justify-center mx-auto text-purple-700 mb-4">
+                                    <Gamepad2 size={32} />
+                                </div>
+                                <h3 className="font-bold text-purple-900 text-lg">Hasil Permainan</h3>
+                                <div className="grid grid-cols-2 gap-4 mt-4">
+                                    <div className="bg-white p-3 rounded-xl">
+                                        <p className="text-xs text-slate-400 uppercase">Skor Game</p>
+                                        <p className="font-bold text-xl text-slate-800">{submissions[selectedStudent.uid].answers?.score || 0}</p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-xl">
+                                        <p className="text-xs text-slate-400 uppercase">Waktu</p>
+                                        <p className="font-bold text-xl text-slate-800">{submissions[selectedStudent.uid].answers?.time || "-"}</p>
+                                    </div>
+                                </div>
+                             </div>
+                         )}
+
+                         {/* -- TYPE: ESSAY / PROJECT (Attachment) -- */}
+                         {(assignment?.type === 'essay' || assignment?.type === 'project') && (
+                             <>
+                                {submissions[selectedStudent.uid].attachmentUrl && (
+                                    <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm group hover:border-blue-300 transition-colors cursor-pointer" onClick={() => window.open(submissions[selectedStudent.uid].attachmentUrl, '_blank')}>
+                                       <div className="flex items-center gap-3">
+                                          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
+                                             <FileText size={20} />
+                                          </div>
+                                          <div>
+                                             <p className="font-bold text-slate-700 text-sm">Lampiran File</p>
+                                             <p className="text-xs text-slate-400">Klik untuk membuka</p>
+                                          </div>
+                                       </div>
+                                    </div>
+                                )}
+                                
+                                {/* Text Answer */}
+                                {typeof submissions[selectedStudent.uid].answers === 'string' && (
+                                    <div className="prose prose-sm max-w-none text-slate-700 bg-white p-6 rounded-xl border border-slate-200 shadow-sm min-h-[200px]">
+                                       <p className="whitespace-pre-wrap font-serif leading-relaxed">
+                                          {submissions[selectedStudent.uid].answers}
+                                       </p>
+                                    </div>
+                                )}
+                             </>
                          )}
                          
-                         {/* Text Answer */}
-                         <div className="prose prose-sm max-w-none text-slate-700 bg-white p-6 rounded-xl border border-slate-200 shadow-sm min-h-[200px]">
-                            <p className="whitespace-pre-wrap font-serif leading-relaxed">
-                               {submissions[selectedStudent.uid].answers || "Tidak ada teks jawaban."}
-                            </p>
-                         </div>
                       </div>
                    ) : (
                       <div className="h-full flex flex-col items-center justify-center text-slate-400 italic">
@@ -501,7 +569,7 @@ export default function AssignmentGradingClient({ classId, assignmentId }: Assig
                          </Button>
                          <Button 
                            disabled={!nextStudent} 
-                           variant="outline"
+                           variant="outline" 
                            onClick={() => handleOpenGrading(nextStudent!)} // Pindah tanpa simpan
                            className="flex-1 h-10 text-xs border-slate-200 hover:bg-slate-50"
                          >

@@ -13,7 +13,7 @@ interface StudentData {
   email: string;
   photoURL?: string;
   lastActiveModule?: string;
-  // lastStudyTimestamp?: any; 
+  // Field opsional lain jika ada di masa depan
 }
 
 interface AttendanceViewProps {
@@ -34,7 +34,7 @@ export default function AttendanceView({ students }: AttendanceViewProps) {
   const getStatus = (student: StudentData) => {
      if (isSunday) return "holiday";
      // Logic sederhana: jika ada lastActiveModule, dianggap hadir
-     // Nanti bisa diperketat dengan cek tanggal timestamp
+     // Idealnya nanti dicek timestamp aktivitas terakhir vs hari ini
      return student.lastActiveModule ? "present" : "absent";
   };
 

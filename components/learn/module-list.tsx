@@ -2,14 +2,24 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { Lock, Play, BookOpen, CheckCircle, ShieldAlert, Terminal, Cpu } from "lucide-react";
+import { Lock, Play, BookOpen, CheckCircle, ShieldAlert, Terminal, Cpu, FileText, Gamepad2, MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { CourseModule } from "@/lib/types/course.types";
 import { useTheme } from "@/lib/theme-context";
 
+// Kita gunakan interface yang lebih fleksibel untuk modul
+interface ModuleItem {
+  id: string;
+  title: string;
+  description?: string;
+  type?: 'video' | 'quiz' | 'game' | 'article' | 'map' | string;
+  isLocked?: boolean;
+  thumbnailUrl?: string;
+  // Field lain yang mungkin ada
+}
+
 interface ModuleListProps {
-  modules: CourseModule[];
+  modules: ModuleItem[];
 }
 
 export function ModuleList({ modules }: ModuleListProps) {
@@ -21,6 +31,17 @@ export function ModuleList({ modules }: ModuleListProps) {
   const isSMP = theme === "smp";
   const isSMA = theme === "sma";
   const isUni = theme === "uni";
+
+  // Helper Icon
+  const getIcon = (type?: string) => {
+      switch(type) {
+          case 'video': return <Play size={20} className="ml-0.5" />;
+          case 'quiz': return <FileText size={20} />;
+          case 'game': return <Gamepad2 size={20} />;
+          case 'map': return <MapPin size={20} />;
+          default: return <BookOpen size={20} />;
+      }
+  };
 
   return (
     <div className="space-y-4 pb-12">
@@ -98,8 +119,9 @@ export function ModuleList({ modules }: ModuleListProps) {
                      isUni ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600")
               )}>
                 {/* Tech Icons for SMA */}
-                {isSMA ? (isLocked ? <ShieldAlert size={20} /> : <Terminal size={20} />) : 
-                 ((modul as any).icon || (modul.thumbnailUrl) || <BookOpen size={20} />)
+                {isSMA 
+                    ? (isLocked ? <ShieldAlert size={20} /> : <Terminal size={20} />) 
+                    : getIcon(modul.type)
                 }
               </div>
 
@@ -148,9 +170,9 @@ export function ModuleList({ modules }: ModuleListProps) {
                      isKids 
                         ? "bg-sky-100 text-sky-600 group-hover:bg-sky-500 group-hover:text-white" 
                         : isSMP 
-                            ? "bg-white text-violet-500 shadow-sm group-hover:scale-110 group-hover:text-fuchsia-600 border border-violet-100"
+                           ? "bg-white text-violet-500 shadow-sm group-hover:scale-110 group-hover:text-fuchsia-600 border border-violet-100"
                         : isSMA
-                            ? "bg-transparent text-teal-500 border border-teal-500/30 group-hover:bg-teal-500 group-hover:text-slate-900 group-hover:shadow-[0_0_10px_rgba(45,212,191,0.5)]"
+                           ? "bg-transparent text-teal-500 border border-teal-500/30 group-hover:bg-teal-500 group-hover:text-slate-900 group-hover:shadow-[0_0_10px_rgba(45,212,191,0.5)]"
                         : isUni 
                            ? "bg-slate-700 text-slate-300 group-hover:bg-blue-600 group-hover:text-white"
                            : "bg-slate-100 text-slate-400 group-hover:bg-blue-600 group-hover:text-white"

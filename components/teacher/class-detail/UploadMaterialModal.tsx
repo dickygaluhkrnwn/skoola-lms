@@ -3,11 +3,14 @@
 import React, { useState, useEffect } from "react";
 import { 
   Video, FileText, Loader2, X, ClipboardList, 
-  FileCheck, Calendar, Clock, UploadCloud 
+  FileCheck, Calendar, Clock, UploadCloud, 
+  MapPin, Link as LinkIcon, Image as ImageIcon, 
+  AlignLeft, Gamepad2, File
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../../../lib/utils";
+import { MaterialType, AssignmentType, GameType } from "../../../lib/types/course.types";
 
 // --- INTERFACES ---
 interface UploadMaterialModalProps {
@@ -29,18 +32,26 @@ export default function UploadMaterialModal({
   
   const [activeTab, setActiveTab] = useState<"material" | "assignment">(initialTab);
   
-  // State Form
+  // State Form Umum
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   
-  // State Khusus Materi
-  const [materialType, setMaterialType] = useState<"video" | "text">("video");
-  const [content, setContent] = useState("");
+  // --- STATE KHUSUS MATERI ---
+  const [materialType, setMaterialType] = useState<MaterialType>("video");
+  const [content, setContent] = useState(""); // URL atau Text Content
+  const [file, setFile] = useState<File | null>(null); // Untuk Upload File (PDF/Image)
+  
+  // State untuk Map Material
+  const [mapData, setMapData] = useState({ lat: -6.200000, lng: 106.816666, placeName: "Jakarta" });
 
-  // State Khusus Tugas
-  const [assignmentType, setAssignmentType] = useState<"quiz" | "essay" | "upload">("essay");
+  // --- STATE KHUSUS TUGAS ---
+  const [assignmentType, setAssignmentType] = useState<AssignmentType>("essay");
   const [deadlineDate, setDeadlineDate] = useState("");
   const [deadlineTime, setDeadlineTime] = useState("");
+  const [points, setPoints] = useState(100);
+
+  // State untuk Game Assignment
+  const [gameType, setGameType] = useState<GameType>("word-scramble");
 
   // Reset form saat modal dibuka/tutup
   useEffect(() => {
@@ -49,46 +60,67 @@ export default function UploadMaterialModal({
       setTitle("");
       setDescription("");
       setContent("");
+      setFile(null);
+      setMapData({ lat: -6.200000, lng: 106.816666, placeName: "Jakarta" });
       setDeadlineDate("");
       setDeadlineTime("");
+      setPoints(100);
+      setGameType("word-scramble");
     }
   }, [isOpen, initialTab]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Siapkan payload data berdasarkan tab aktif
+    // Siapkan payload data dasar
     const baseData = {
       title,
       description,
       category: activeTab, // 'material' atau 'assignment'
     };
 
-    let finalData;
+    let finalData: any;
 
     if (activeTab === "material") {
+      // Logika Payload Materi
       finalData = {
         ...baseData,
         type: materialType,
-        content, // Link Video atau Isi Artikel
+        content: content, // URL Video, Link, atau Rich Text
+        file: file, // File Object jika ada (akan diproses di parent component)
       };
+
+      // Hanya tambahkan locationData jika tipe 'map'
+      if (materialType === 'map') {
+          finalData.locationData = { ...mapData, zoom: 15 };
+      }
     } else {
-      // Gabungkan Date & Time untuk Deadline
+      // Logika Payload Tugas
       let deadlineTimestamp = null;
       if (deadlineDate && deadlineTime) {
-        deadlineTimestamp = new Date(`${deadlineDate}T${deadlineTime}`);
+        deadlineTimestamp = new Date(`${deadlineDate}T${deadlineTime}`).getTime();
       }
 
       finalData = {
         ...baseData,
         type: assignmentType,
         deadline: deadlineTimestamp,
-        // Untuk tipe 'quiz', nanti bisa ditambah builder soal. 
-        // Sementara kita anggap deskripsi sebagai instruksi tugas.
+        points: Number(points),
       };
+
+      // Hanya tambahkan gameConfig jika tipe 'game'
+      if (assignmentType === 'game') {
+          finalData.gameConfig = { gameType, data: null };
+      }
     }
 
     await onUpload(finalData);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+    }
   };
 
   if (!isOpen) return null;
@@ -109,7 +141,7 @@ export default function UploadMaterialModal({
         initial={{ scale: 0.95, opacity: 0 }} 
         animate={{ scale: 1, opacity: 1 }} 
         exit={{ scale: 0.95, opacity: 0 }}
-        className="bg-white rounded-2xl w-full max-w-lg relative z-10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="bg-white rounded-2xl w-full max-w-2xl relative z-10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
       >
         {/* Header Tabs */}
         <div className="flex border-b border-slate-100">
@@ -129,7 +161,7 @@ export default function UploadMaterialModal({
               activeTab === "assignment" ? "bg-white text-purple-600 border-b-2 border-purple-600" : "bg-slate-50 text-slate-500 hover:bg-slate-100"
             )}
           >
-            <ClipboardList size={16} /> Tugas & Ujian
+            <ClipboardList size={16} /> Tugas & Game
           </button>
         </div>
 
@@ -138,125 +170,193 @@ export default function UploadMaterialModal({
           <form id="create-content-form" onSubmit={handleSubmit} className="space-y-5">
             
             {/* Common Fields */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Judul</label>
-              <input 
-                required 
-                placeholder={activeTab === "material" ? "Contoh: Video Pantun" : "Contoh: Kuis Harian 1"} 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Deskripsi / Instruksi</label>
-              <textarea 
-                placeholder="Berikan penjelasan singkat..." 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm min-h-[80px]"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-              />
-            </div>
-
-            {/* --- FORM MATERI --- */}
-            {activeTab === "material" && (
-              <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="grid grid-cols-2 gap-3">
-                    <TypeSelector 
-                      active={materialType === "video"} 
-                      onClick={() => setMaterialType("video")} 
-                      icon={<Video size={20} />} 
-                      label="Video YouTube" 
-                      color="blue"
-                    />
-                    <TypeSelector 
-                      active={materialType === "text"} 
-                      onClick={() => setMaterialType("text")} 
-                      icon={<FileText size={20} />} 
-                      label="Artikel / Teks" 
-                      color="blue"
+            <div className="grid grid-cols-1 gap-4">
+                <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Judul</label>
+                    <input 
+                        required 
+                        placeholder={activeTab === "material" ? "Contoh: Peta Sebaran Fauna" : "Contoh: Tantangan Kosakata"} 
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
                     />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">
-                    {materialType === "video" ? "Link YouTube" : "Link Dokumen / Isi Artikel"}
-                  </label>
-                  <input 
-                    required 
-                    type={materialType === "video" ? "url" : "text"}
-                    placeholder={materialType === "video" ? "https://youtube.com/..." : "Tempel link Google Docs atau tulis isi materi..."} 
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                    value={content}
-                    onChange={e => setContent(e.target.value)}
-                  />
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Deskripsi / Instruksi</label>
+                    <textarea 
+                        placeholder="Berikan penjelasan singkat..." 
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm min-h-[80px]"
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                    />
+                </div>
+            </div>
+
+            {/* --- FORM MATERI --- */}
+            {activeTab === "material" && (
+              <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300 border-t border-slate-100 pt-5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block">Tipe Materi</label>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    <TypeSelector active={materialType === "video"} onClick={() => setMaterialType("video")} icon={<Video size={18} />} label="Video" color="blue" />
+                    <TypeSelector active={materialType === "rich-text"} onClick={() => setMaterialType("rich-text")} icon={<AlignLeft size={18} />} label="Artikel" color="blue" />
+                    <TypeSelector active={materialType === "pdf"} onClick={() => setMaterialType("pdf")} icon={<FileText size={18} />} label="PDF" color="blue" />
+                    <TypeSelector active={materialType === "image"} onClick={() => setMaterialType("image")} icon={<ImageIcon size={18} />} label="Gambar" color="blue" />
+                    <TypeSelector active={materialType === "link"} onClick={() => setMaterialType("link")} icon={<LinkIcon size={18} />} label="Link" color="blue" />
+                    <TypeSelector active={materialType === "map"} onClick={() => setMaterialType("map")} icon={<MapPin size={18} />} label="Peta" color="blue" />
+                </div>
+
+                {/* Input Fields based on Material Type */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    
+                    {/* VIDEO & LINK */}
+                    {(materialType === "video" || materialType === "link") && (
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">
+                                {materialType === "video" ? "Link YouTube" : "Link URL (Website/Dokumen)"}
+                            </label>
+                            <input 
+                                required type="url"
+                                placeholder="https://..." 
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm"
+                                value={content} onChange={e => setContent(e.target.value)}
+                            />
+                        </div>
+                    )}
+
+                    {/* TEXT CONTENT */}
+                    {materialType === "rich-text" && (
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">Isi Artikel</label>
+                            <textarea 
+                                required 
+                                placeholder="Tulis materi pembelajaran di sini..." 
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm min-h-[150px]"
+                                value={content} onChange={e => setContent(e.target.value)}
+                            />
+                        </div>
+                    )}
+
+                    {/* FILE UPLOAD (PDF / IMAGE) */}
+                    {(materialType === "pdf" || materialType === "image") && (
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">Upload File {materialType === 'pdf' ? '(PDF)' : '(JPG/PNG)'}</label>
+                            <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-center bg-white hover:bg-slate-50 transition-colors">
+                                <input 
+                                    type="file" 
+                                    accept={materialType === "pdf" ? ".pdf" : "image/*"}
+                                    onChange={handleFileChange}
+                                    className="hidden" 
+                                    id="file-upload"
+                                />
+                                <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
+                                    <UploadCloud className="w-8 h-8 text-blue-500 mb-2" />
+                                    <span className="text-sm font-medium text-slate-600">
+                                        {file ? file.name : "Klik untuk pilih file"}
+                                    </span>
+                                    <span className="text-xs text-slate-400 mt-1">Maksimal 10MB</span>
+                                </label>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MAP DATA */}
+                    {materialType === "map" && (
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 mb-1.5 block">Nama Lokasi</label>
+                                <input 
+                                    required placeholder="Contoh: Monumen Nasional" 
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm"
+                                    value={mapData.placeName} onChange={e => setMapData({...mapData, placeName: e.target.value})}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 mb-1.5 block">Latitude</label>
+                                    <input 
+                                        type="number" step="any" required 
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm"
+                                        value={mapData.lat} onChange={e => setMapData({...mapData, lat: parseFloat(e.target.value)})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 mb-1.5 block">Longitude</label>
+                                    <input 
+                                        type="number" step="any" required 
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm"
+                                        value={mapData.lng} onChange={e => setMapData({...mapData, lng: parseFloat(e.target.value)})}
+                                    />
+                                </div>
+                            </div>
+                            <p className="text-xs text-slate-400 italic">* Koordinat bisa diambil dari Google Maps</p>
+                        </div>
+                    )}
                 </div>
               </div>
             )}
 
             {/* --- FORM TUGAS --- */}
             {activeTab === "assignment" && (
-              <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                 <div className="grid grid-cols-3 gap-3">
-                    <TypeSelector 
-                      active={assignmentType === "quiz"} 
-                      onClick={() => setAssignmentType("quiz")} 
-                      icon={<FileCheck size={20} />} 
-                      label="Kuis PG" 
-                      color="purple"
-                    />
-                    <TypeSelector 
-                      active={assignmentType === "essay"} 
-                      onClick={() => setAssignmentType("essay")} 
-                      icon={<FileText size={20} />} 
-                      label="Esai" 
-                      color="purple"
-                    />
-                    <TypeSelector 
-                      active={assignmentType === "upload"} 
-                      onClick={() => setAssignmentType("upload")} 
-                      icon={<UploadCloud size={20} />} 
-                      label="Upload File" 
-                      color="purple"
-                    />
-                 </div>
+              <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300 border-t border-slate-100 pt-5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block">Tipe Tugas</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    <TypeSelector active={assignmentType === "quiz"} onClick={() => setAssignmentType("quiz")} icon={<FileCheck size={18} />} label="Kuis" color="purple" />
+                    <TypeSelector active={assignmentType === "essay"} onClick={() => setAssignmentType("essay")} icon={<AlignLeft size={18} />} label="Esai" color="purple" />
+                    <TypeSelector active={assignmentType === "project"} onClick={() => setAssignmentType("project")} icon={<UploadCloud size={18} />} label="Proyek" color="purple" />
+                    <TypeSelector active={assignmentType === "game"} onClick={() => setAssignmentType("game")} icon={<Gamepad2 size={18} />} label="Game" color="purple" />
+                  </div>
 
-                 <div className="grid grid-cols-2 gap-4">
-                    <div>
-                       <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Tenggat Tanggal</label>
-                       <div className="relative">
-                         <Calendar size={16} className="absolute left-3 top-3 text-slate-400" />
-                         <input 
-                           type="date"
-                           className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                           value={deadlineDate}
-                           onChange={e => setDeadlineDate(e.target.value)}
-                         />
-                       </div>
+                  {/* Pengaturan Game */}
+                  {assignmentType === "game" && (
+                     <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                        <label className="text-xs font-bold text-purple-700 mb-1.5 block">Pilih Jenis Game</label>
+                        <select 
+                            className="w-full px-4 py-2 rounded-lg border border-purple-200 text-sm bg-white"
+                            value={gameType}
+                            onChange={(e) => setGameType(e.target.value as GameType)}
+                        >
+                            <option value="word-scramble">Acak Kata (Word Scramble)</option>
+                            <option value="memory-match">Memory Match (Cocok Gambar)</option>
+                            <option value="flashcard-challenge">Tantangan Flashcard</option>
+                        </select>
+                     </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-1">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Poin Maks</label>
+                        <input 
+                            type="number" min="0" max="100"
+                            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                            value={points} onChange={e => setPoints(Number(e.target.value))}
+                        />
                     </div>
-                    <div>
-                       <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Tenggat Jam</label>
-                       <div className="relative">
-                         <Clock size={16} className="absolute left-3 top-3 text-slate-400" />
-                         <input 
-                           type="time"
-                           className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                           value={deadlineTime}
-                           onChange={e => setDeadlineTime(e.target.value)}
-                         />
-                       </div>
+                    <div className="col-span-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">Tenggat Waktu</label>
+                        <div className="flex gap-2">
+                            <input 
+                                type="date" required
+                                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                                value={deadlineDate} onChange={e => setDeadlineDate(e.target.value)}
+                            />
+                            <input 
+                                type="time" required
+                                className="w-24 px-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                                value={deadlineTime} onChange={e => setDeadlineTime(e.target.value)}
+                            />
+                        </div>
                     </div>
-                 </div>
-                 
-                 {assignmentType === "quiz" && (
+                  </div>
+                  
+                  {assignmentType === "quiz" && (
                     <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 text-xs text-orange-700 flex gap-2">
                        <div className="shrink-0 pt-0.5">💡</div>
                        <p>
-                         Setelah menyimpan tugas ini, Anda akan diarahkan ke halaman <strong>Pembuat Soal Kuis</strong> untuk menambahkan pertanyaan.
+                         Setelah menyimpan, Anda akan diarahkan ke <strong>Pembuat Soal</strong> untuk menambahkan pertanyaan.
                        </p>
                     </div>
-                 )}
+                  )}
               </div>
             )}
 
@@ -297,12 +397,12 @@ function TypeSelector({ active, onClick, icon, label, color }: { active: boolean
     <div 
       onClick={onClick}
       className={cn(
-        "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all hover:scale-[1.02]",
-        active ? activeClass : "border-slate-200 text-slate-500 hover:border-slate-300"
+        "cursor-pointer p-2 rounded-xl border-2 flex flex-col items-center gap-1.5 transition-all hover:scale-[1.02] hover:shadow-sm h-full justify-center",
+        active ? activeClass : "border-slate-100 bg-white text-slate-400 hover:border-slate-300 hover:text-slate-600"
       )}
     >
       {icon}
-      <span className="text-xs font-bold text-center leading-tight">{label}</span>
+      <span className="text-[10px] font-bold text-center leading-tight">{label}</span>
     </div>
   );
 }

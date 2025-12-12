@@ -1,96 +1,111 @@
-// Tipe soal quiz yang didukung
-// UPDATE: Menambahkan 'arrange' agar tidak error saat seeding BIPA 2
-export type QuestionType = 'multiple-choice' | 'fill-blank' | 'drag-match' | 'listening' | 'arrange';
+export type ClassLevel = 'SD' | 'SMP' | 'SMA' | 'University';
 
-// Struktur Data untuk Soal Quiz
-export interface QuizQuestion {
-  id: string;
-  type: QuestionType;
-  question: string;
-  mediaUrl?: string; // URL audio/gambar jika ada
-  
-  // Opsi jawaban (untuk multiple choice)
-  options?: string[];
-  correctAnswer: string | string[]; // Bisa string tunggal atau array jawaban benar
-  
-  // Penjelasan saat user salah jawab (feedback)
-  explanation?: string;
-  
-  // Poin yang didapat jika benar
-  points: number;
-}
-
-// --- Tambahan untuk BIPA 1 (Materi Bacaan/Flashcard) ---
-export interface FlashcardContent {
-  id: string;
-  type: 'flashcard';
-  front: string;
-  back: string;
-  image?: string;
-  audio?: string;
-  explanation?: string;
-}
-
-// Union Type untuk konten interaktif
-export type LessonContent = QuizQuestion | FlashcardContent;
-
-// Struktur untuk Lesson (Materi Belajar)
-export interface Lesson {
-  id: string;
-  title: string;
-  description?: string;
-  order: number; // Urutan lesson dalam module
-  type: 'video' | 'article' | 'quiz' | 'interactive'; // 'interactive' ditambahkan untuk BIPA
-  
-  // Konten (tergantung tipe)
-  content?: string; // Markdown/HTML content
-  videoUrl?: string;
-  
-  quizData?: QuizQuestion[]; // Legacy: Jika tipe = quiz
-  interactiveContent?: LessonContent[]; // New: Jika tipe = interactive
-  
-  // Estimasi waktu pengerjaan (menit)
-  duration: number;
-  xpReward: number;
-}
-
-// Struktur untuk Module (Unit Belajar Besar)
-export interface CourseModule {
-  id: string;
-  title: string;
-  description: string;
-  level: number; // 1 = Pemula, 2 = Menengah, dst.
-  order: number;
-  thumbnailUrl?: string;
-  
-  // Warna tema modul (untuk UI yang cantik)
-  themeColor?: string;
-  
-  // Daftar pelajaran dalam modul ini
-  lessons: Lesson[];
-  
-  // Status akses (apakah terkunci?)
-  isLocked?: boolean;
-}
-
-// Struktur Data Kelas (Classroom) - SKOOLA 2.0
 export interface Classroom {
   id: string;
   name: string;
-  code: string;
   description: string;
-  
   teacherId: string;
-  teacherName: string;
-  
+  teacherName: string; // Denormalized for easier display
+  level: ClassLevel;
   studentCount: number;
-  students?: string[]; // Array of User UIDs
+  students: string[]; // Array of student user IDs
+  createdAt: number;
   
-  createdAt: string;
+  // New Fields for Categorization (Sesuai kode lama + baru)
+  category?: string; 
+  gradeLevel?: ClassLevel | 'umum';
+  code?: string; // Tambahan agar tidak error di ClassDetailClient
+
+  bannerUrl?: string; // Optional banner image for the class
+  themeColor?: string; // Optional custom theme color
+}
+
+// --- MATERIALS ---
+
+export type MaterialType = 'pdf' | 'video' | 'link' | 'rich-text' | 'map' | 'image';
+
+export interface Material {
+  id: string;
+  classId: string;
+  title: string;
+  description?: string;
+  type: MaterialType;
+  url?: string; // For PDF, Video, Link, Image
+  content?: string; // For Rich Text HTML
+  locationData?: {
+    lat: number;
+    lng: number;
+    zoom: number;
+    placeName: string;
+  }; // Specific for Map type
+  createdAt: number;
+  attachments?: { name: string; url: string; type: string }[];
+}
+
+// --- ASSIGNMENTS & QUIZZES ---
+
+export type AssignmentType = 'quiz' | 'essay' | 'project' | 'game';
+
+export type QuestionType = 'multiple-choice' | 'short-answer' | 'true-false' | 'arrange' | 'drag-match';
+
+export interface QuizQuestion {
+  id: string;
+  type: QuestionType;
+  text: string;
+  mediaUrl?: string; // Image or Audio for the question context
   
-  // New Fields for Categorization
-  category: string; // e.g. "Matematika", "Sains", "Bahasa"
-  gradeLevel: 'sd' | 'smp' | 'sma' | 'uni' | 'umum'; // Jenjang target
+  options?: string[]; // For multiple choice, arrange, drag-match
+  correctAnswer: string | number | string[]; // Flexible: index (number), text (string), or order (array)
   
-  themeColor?: string; // Optional: Override warna kelas
+  explanation?: string; // Feedback shown after grading
+  points: number;
+}
+
+export type GameType = 'word-scramble' | 'memory-match' | 'flashcard-challenge';
+
+export interface Assignment {
+  id: string;
+  classId: string;
+  title: string;
+  description: string;
+  type: AssignmentType;
+  dueDate: number;
+  points: number;
+  
+  // Content specific to types
+  questions?: QuizQuestion[]; // For 'quiz' type
+  
+  gameConfig?: {
+    gameType: GameType;
+    data: any; // Flexible data depending on game type (e.g., list of words for scramble)
+  }; // For 'game' type
+  
+  createdAt: number;
+  submissionsCount: number; // Denormalized counter
+}
+
+// --- SUBMISSIONS ---
+
+export type SubmissionStatus = 'submitted' | 'graded' | 'late';
+
+export interface Submission {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  studentName: string;
+  submittedAt: number;
+  status: SubmissionStatus;
+  
+  // Content submitted by student
+  content?: string; // Text for essay/short answer
+  attachmentUrl?: string; // File URL for project
+  
+  // Updated to support flexible quiz answers
+  quizAnswers?: { 
+    questionId: string; 
+    answer: string | number | string[]; 
+  }[]; 
+  
+  grade?: number;
+  feedback?: string;
 }

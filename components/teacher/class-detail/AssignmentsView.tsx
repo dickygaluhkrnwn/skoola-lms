@@ -3,20 +3,26 @@
 import React, { useState } from "react";
 import { 
   Plus, Calendar, Clock, FileText, CheckCircle2, 
-  MoreVertical, FileCheck, ClipboardList, PenTool 
+  MoreVertical, FileCheck, ClipboardList, PenTool,
+  Gamepad2, UploadCloud, Trophy
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Timestamp } from "firebase/firestore";
 import { cn } from "../../../lib/utils";
 import { motion } from "framer-motion";
+import { AssignmentType, GameType } from "../../../lib/types/course.types";
 
 // --- INTERFACES ---
 export interface AssignmentData {
   id: string;
   title: string;
   description: string;
-  type: "quiz" | "essay" | "upload";
+  type: AssignmentType; // Menggunakan tipe dari course.types.ts
   deadline: Timestamp | null;
+  points: number;
+  gameConfig?: {
+    gameType: GameType;
+  };
   createdAt: Timestamp;
   status: "active" | "closed";
   submissionCount?: number; 
@@ -42,6 +48,25 @@ export default function AssignmentsView({
 
   const filteredAssignments = assignments.filter(a => a.status === filter);
 
+  // Helper untuk mendapatkan Label dan Icon berdasarkan Tipe Tugas
+  const getTypeInfo = (item: AssignmentData) => {
+    switch (item.type) {
+        case 'quiz':
+            return { label: 'Kuis PG', icon: <FileCheck size={24} />, color: "bg-orange-50 text-orange-600 border-orange-100" };
+        case 'essay':
+            return { label: 'Esai', icon: <FileText size={24} />, color: "bg-blue-50 text-blue-600 border-blue-100" };
+        case 'project':
+            return { label: 'Proyek', icon: <UploadCloud size={24} />, color: "bg-indigo-50 text-indigo-600 border-indigo-100" };
+        case 'game':
+            // Detailkan jenis gamenya
+            const gameLabel = item.gameConfig?.gameType === 'word-scramble' ? 'Acak Kata' : 
+                              item.gameConfig?.gameType === 'memory-match' ? 'Memory Match' : 'Game';
+            return { label: `Game: ${gameLabel}`, icon: <Gamepad2 size={24} />, color: "bg-pink-50 text-pink-600 border-pink-100" };
+        default:
+            return { label: 'Tugas', icon: <ClipboardList size={24} />, color: "bg-slate-50 text-slate-600 border-slate-100" };
+    }
+  };
+
   return (
     <div className="max-w-5xl space-y-6">
        
@@ -49,10 +74,10 @@ export default function AssignmentsView({
        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div>
              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-               <ClipboardList className="text-purple-600" /> Daftar Tugas & Ujian
+                <ClipboardList className="text-purple-600" /> Daftar Tugas & Ujian
              </h2>
              <p className="text-sm text-slate-500 mt-1">
-                Kelola penugasan, kuis, dan latihan untuk murid.
+                Kelola penugasan, kuis, proyek, dan permainan edukatif.
              </p>
           </div>
           <Button 
@@ -106,33 +131,40 @@ export default function AssignmentsView({
           </div>
        ) : (
           <div className="grid gap-4">
-             {filteredAssignments.map((item) => (
+             {filteredAssignments.map((item) => {
+                const info = getTypeInfo(item);
+                return (
                 <motion.div 
                    key={item.id}
                    initial={{ opacity: 0, y: 10 }}
                    animate={{ opacity: 1, y: 0 }}
                    className="bg-white p-5 rounded-xl border border-slate-200 hover:border-purple-300 hover:shadow-md transition-all group relative"
                 >
-                   <div className="flex justify-between items-start">
-                      <div className="flex gap-4">
+                   <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                      <div className="flex gap-4 flex-1">
                          {/* Icon Box */}
                          <div className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center shadow-sm shrink-0",
-                            item.type === "quiz" ? "bg-orange-50 text-orange-600" :
-                            item.type === "essay" ? "bg-blue-50 text-blue-600" : "bg-green-50 text-green-600"
+                            "w-12 h-12 rounded-xl flex items-center justify-center shadow-sm shrink-0 border",
+                            info.color
                          )}>
-                            {item.type === "quiz" ? <FileCheck size={24} /> : 
-                             item.type === "essay" ? <FileText size={24} /> : <ClipboardList size={24} />}
+                            {info.icon}
                          </div>
                          
                          {/* Content Info */}
-                         <div>
-                            <h3 className="font-bold text-slate-800 text-lg group-hover:text-purple-700 transition-colors">
-                               {item.title}
-                            </h3>
-                            <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                               <span className="bg-slate-100 px-2 py-0.5 rounded uppercase font-bold tracking-wider text-[10px]">
-                                  {item.type === "quiz" ? "Kuis PG" : item.type === "essay" ? "Esai" : "Upload File"}
+                         <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-bold text-slate-800 text-lg group-hover:text-purple-700 transition-colors truncate">
+                                    {item.title}
+                                </h3>
+                                {/* Poin Badge */}
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded border border-yellow-200 flex items-center gap-0.5">
+                                    <Trophy size={10} /> {item.points} Poin
+                                </span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1.5">
+                               <span className="bg-slate-100 px-2 py-0.5 rounded uppercase font-bold tracking-wider text-[10px] border border-slate-200">
+                                  {info.label}
                                </span>
                                <span className="flex items-center gap-1">
                                   <Calendar size={12} /> 
@@ -145,43 +177,43 @@ export default function AssignmentsView({
                       </div>
 
                       {/* Right Side Stats */}
-                      <div className="text-right hidden md:block">
+                      <div className="text-left md:text-right shrink-0">
                          <p className="text-xs font-bold uppercase text-slate-400 mb-1">Sudah Mengumpulkan</p>
-                         <div className="flex items-center justify-end gap-1 text-purple-600 font-bold text-lg">
+                         <div className="flex items-center md:justify-end gap-1 text-purple-600 font-bold text-lg">
                             <CheckCircle2 size={18} /> {item.submissionCount || 0} Murid
                          </div>
                       </div>
                    </div>
 
                    {/* Footer Actions */}
-                   <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
-                      <div className="flex gap-2">
+                   <div className="mt-4 pt-4 border-t border-slate-50 flex flex-wrap gap-2 justify-between items-center">
+                      <div className="flex gap-2 w-full md:w-auto">
                          <Button 
                            variant="ghost" 
                            size="sm" 
                            onClick={() => onViewDetail(item.id)}
-                           className="text-slate-500 hover:text-purple-700 text-xs border-transparent hover:bg-slate-50 gap-1"
+                           className="flex-1 md:flex-none text-slate-500 hover:text-purple-700 text-xs border-transparent hover:bg-slate-50 gap-1"
                          >
-                            <PenTool size={14} /> Edit Soal
+                            <PenTool size={14} /> Edit {item.type === 'game' ? 'Game' : 'Soal'}
                          </Button>
                          <Button 
                            variant="ghost" 
                            size="sm" 
                            onClick={() => onGradeAssignment(item.id)}
-                           className="text-slate-500 hover:text-purple-700 text-xs font-bold border-transparent hover:bg-slate-50 gap-1"
+                           className="flex-1 md:flex-none text-slate-500 hover:text-purple-700 text-xs font-bold border-transparent hover:bg-slate-50 gap-1"
                          >
                             <CheckCircle2 size={14} /> Nilai Tugas ({item.submissionCount || 0})
                          </Button>
                       </div>
                       <button 
                          onClick={() => onDeleteAssignment(item.id)}
-                         className="text-slate-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors text-xs flex items-center gap-1"
+                         className="text-slate-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors text-xs flex items-center gap-1 w-full md:w-auto justify-center"
                       >
                          Hapus
                       </button>
                    </div>
                 </motion.div>
-             ))}
+             )})}
           </div>
        )}
     </div>

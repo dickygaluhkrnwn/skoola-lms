@@ -7,26 +7,27 @@ import {
   GraduationCap, Palette, MessageSquare, Hash
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { auth, db } from "@/lib/firebase"; 
+import { auth, db } from "../../lib/firebase"; 
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs, addDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
-import { Button } from "@/components/ui/button";
-import { UserProfile } from "@/lib/types/user.types";
-import { Classroom } from "@/lib/types/course.types"; 
+import { Button } from "../../components/ui/button";
+import { UserProfile } from "../../lib/types/user.types";
+import { Classroom, ClassLevel } from "../../lib/types/course.types"; 
 
-// Opsi Kategori Mata Pelajaran & Jenjang (Sama seperti sebelumnya)
+// Opsi Kategori Mata Pelajaran
 const SUBJECT_CATEGORIES = [
   "Matematika", "IPA (Sains)", "IPS (Sosial)", "Bahasa Indonesia", 
   "Bahasa Inggris", "Seni Budaya", "TIK / Coding", "Pendidikan Agama", 
   "Olah Raga", "Umum / Lainnya"
 ];
 
-const GRADE_LEVELS = [
-  { id: 'sd', label: 'SD (Sekolah Dasar)' },
-  { id: 'smp', label: 'SMP (Sekolah Menengah)' },
-  { id: 'sma', label: 'SMA / SMK' },
-  { id: 'uni', label: 'Universitas / Kuliah' },
-  { id: 'umum', label: 'Umum' },
+// Opsi Jenjang (Sesuaikan value ID dengan tipe ClassLevel di course.types.ts)
+const GRADE_LEVELS: { id: ClassLevel | 'umum', label: string }[] = [
+  { id: 'SD', label: 'SD (Sekolah Dasar)' },
+  { id: 'SMP', label: 'SMP (Sekolah Menengah)' },
+  { id: 'SMA', label: 'SMA / SMK' },
+  { id: 'University', label: 'Universitas / Kuliah' },
+  { id: 'umum', label: 'Umum' }, // Opsi tambahan jika perlu
 ];
 
 export default function TeacherClient() {
@@ -46,7 +47,9 @@ export default function TeacherClient() {
   const [newClassName, setNewClassName] = useState("");
   const [newClassDesc, setNewClassDesc] = useState("");
   const [newCategory, setNewCategory] = useState(SUBJECT_CATEGORIES[0]);
-  const [newLevel, setNewLevel] = useState("sd");
+  
+  // State level harus sesuai tipe ClassLevel, default 'SD'
+  const [newLevel, setNewLevel] = useState<ClassLevel | 'umum'>("SD");
   
   // Form Buat Forum
   const [newForumName, setNewForumName] = useState("");
@@ -114,25 +117,27 @@ export default function TeacherClient() {
 
     try {
       const code = generateClassCode();
-      const newClass: Omit<Classroom, 'id'> = {
+      
+      // Pastikan objek sesuai dengan interface Classroom
+      // Note: Omit 'id' karena id didapat dari Firestore setelah addDoc
+      const newClassData = {
         name: newClassName,
         description: newClassDesc,
         code: code,
         teacherId: user.uid,
         teacherName: userProfile?.displayName || "Guru",
         studentCount: 0,
-        createdAt: new Date().toISOString(),
+        createdAt: Date.now(), // Gunakan number timestamp sesuai interface baru
         category: newCategory,
-        gradeLevel: newLevel as any,
+        gradeLevel: newLevel,
+        level: newLevel === 'umum' ? 'SD' : newLevel, // Fallback level wajib jika umum
         students: []
       };
 
-      const docRef = await addDoc(collection(db, "classrooms"), newClass);
+      const docRef = await addDoc(collection(db, "classrooms"), newClassData);
       
-      // Auto-create Forum Channel for this Class (Opsional, tapi bagus untuk integrasi)
-      // await addDoc(collection(db, "channels"), { ... }); 
-
-      setClassrooms([...classrooms, { id: docRef.id, ...newClass } as Classroom]);
+      // Update state lokal
+      setClassrooms([...classrooms, { id: docRef.id, ...newClassData } as Classroom]);
       
       setIsClassModalOpen(false);
       setNewClassName("");
@@ -151,16 +156,13 @@ export default function TeacherClient() {
     e.preventDefault();
     setIsCreating(true);
     try {
-        // Kita simpan ke koleksi 'channels' atau bisa langsung dipanggil di SocialClient
-        // Untuk MVP kita simpan di root 'groups' atau struktur khusus
-        // Di sini kita simulasi saja atau simpan ke 'groups' dengan tipe khusus
-        await addDoc(collection(db, "groups"), { // Menggunakan 'groups' sebagai wadah generik channel
+        await addDoc(collection(db, "groups"), { 
             name: newForumName,
-            type: newForumType, // 'school' atau 'major'
+            type: newForumType, 
             createdBy: auth.currentUser?.uid,
             createdAt: serverTimestamp(),
-            members: [], // Public channel usually logic-based, but field required
-            isOfficial: true // Penanda ini channel resmi buatan guru
+            members: [], 
+            isOfficial: true 
         });
         
         setIsForumModalOpen(false);
@@ -173,9 +175,11 @@ export default function TeacherClient() {
     }
   };
 
-  const copyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    alert("Kode kelas disalin!");
+  const copyCode = (code?: string) => {
+    if (code) {
+        navigator.clipboard.writeText(code);
+        alert("Kode kelas disalin!");
+    }
   };
 
   if (loading) {
@@ -376,7 +380,7 @@ export default function TeacherClient() {
                         <label className="text-sm font-bold text-slate-700 block mb-1">Jenjang</label>
                         <select 
                             className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none appearance-none bg-white"
-                            value={newLevel} onChange={e => setNewLevel(e.target.value)}
+                            value={newLevel} onChange={e => setNewLevel(e.target.value as ClassLevel)}
                         >
                             {GRADE_LEVELS.map(lvl => <option key={lvl.id} value={lvl.id}>{lvl.label}</option>)}
                         </select>

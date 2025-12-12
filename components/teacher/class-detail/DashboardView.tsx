@@ -7,19 +7,19 @@ import {
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Timestamp } from "firebase/firestore";
+// Import tipe data Classroom dari pusat
+import { Classroom } from "../../../lib/types/course.types";
 
 // --- INTERFACES ---
 interface DashboardViewProps {
-  classData: {
-    name: string;
-    description: string;
-    code: string;
-  } | null;
+  // Gunakan Classroom agar sinkron dengan ClassDetailClient
+  classData: Classroom | null;
   students: any[]; 
   materials: any[];
   averageXP: number;
   onCopyCode: () => void;
-  onChangeTab: (tab: "attendance") => void; 
+  // Ubah ke string agar lebih fleksibel menerima 'attendance', 'students', dll
+  onChangeTab: (tab: string) => void; 
 }
 
 export default function DashboardView({
@@ -40,7 +40,7 @@ export default function DashboardView({
         
         <div className="relative z-10">
           <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wide mb-3 inline-block">
-            Kode: {classData?.code}
+            Kode: {classData?.code || "-"}
           </span>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">{classData?.name}</h1>
           <p className="text-slate-500 max-w-xl">{classData?.description || "Tidak ada deskripsi."}</p>
@@ -119,12 +119,14 @@ export default function DashboardView({
             {materials.slice(0, 3).map((m: any) => (
               <div key={m.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors">
                 <div className="w-8 h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center shrink-0">
+                  {/* Handle icon type check roughly since 'm' is any */}
                   {m.type === 'video' ? <Video size={14} /> : <FileText size={14} />}
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <p className="text-sm font-bold text-slate-700 truncate">{m.title}</p>
                   <p className="text-xs text-slate-400 flex items-center gap-1">
-                    {m.type === 'video' ? 'Video' : 'Artikel'}
+                    {/* Fallback label */}
+                    {m.type === 'video' ? 'Video' : 'Materi'}
                     <span>•</span>
                     {m.createdAt ? new Date(m.createdAt.seconds * 1000).toLocaleDateString() : 'Baru saja'}
                   </p>

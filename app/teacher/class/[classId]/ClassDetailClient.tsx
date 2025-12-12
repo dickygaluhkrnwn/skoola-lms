@@ -6,15 +6,16 @@ import {
   ArrowLeft, Users, BookOpen, LayoutDashboard, 
   CalendarCheck, Loader2, ClipboardList, GraduationCap, Palette
 } from "lucide-react";
-import { db } from "../../../../lib/firebase";
+// Import Storage untuk upload file
+import { db, storage } from "../../../../lib/firebase"; 
 import { 
   doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, deleteDoc, serverTimestamp, Timestamp, getCountFromServer 
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // New Imports
 import { cn } from "../../../../lib/utils";
 
 // --- IMPORT TIPE DATA SENTRAL ---
-import { Classroom } from "../../../../lib/types/course.types";
-import { UserProfile } from "../../../../lib/types/user.types";
+import { Classroom, MaterialType } from "../../../../lib/types/course.types"; // Added MaterialType
 
 // --- IMPORT KOMPONEN PECAHAN ---
 import DashboardView from "../../../../components/teacher/class-detail/DashboardView";
@@ -24,7 +25,7 @@ import MaterialsView from "../../../../components/teacher/class-detail/Materials
 import AssignmentsView, { AssignmentData } from "../../../../components/teacher/class-detail/AssignmentsView";
 import UploadMaterialModal from "../../../../components/teacher/class-detail/UploadMaterialModal";
 
-// --- TIPE DATA LOKAL (YANG BELUM ADA DI CENTRAL) ---
+// --- TIPE DATA LOKAL ---
 interface StudentData {
   uid: string;
   displayName: string;
@@ -37,11 +38,14 @@ interface StudentData {
   lastStudyTimestamp?: any;
 }
 
+// Update Interface agar support semua tipe materi baru
 interface MaterialData {
   id: string;
   title: string;
-  type: "video" | "text";
-  content: string;
+  type: MaterialType; 
+  content?: string; // Untuk Rich Text
+  url?: string;     // Untuk Video, Link, PDF, Image
+  locationData?: any; // Untuk Map
   createdAt: Timestamp;
 }
 
@@ -85,7 +89,6 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
         
         if (docSnap.exists()) {
           const data = docSnap.data();
-          // Menggunakan tipe Classroom yang sudah diupdate (support category & gradeLevel)
           setClassData({ id: docSnap.id, ...data } as Classroom);
           
           // C. Fetch Detail Murid
@@ -148,17 +151,46 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
 
   // --- 2. ACTIONS / HANDLERS ---
   
-  // Create Content (Materi atau Tugas)
+  // Create Content (Materi atau Tugas) - DENGAN DUKUNGAN STORAGE & LOGIKA BARU
   const handleCreateContent = async (data: any) => {
     setIsUploading(true);
     try {
       // Tentukan koleksi tujuan berdasarkan kategori
       const collectionName = data.category === "assignment" ? "assignments" : "materials";
       
-      // Hapus field 'category' sebelum simpan ke DB agar bersih
-      const { category, ...payload } = data;
+      // Destructuring data untuk memisahkan file dan category
+      const { category, file, ...basePayload } = data;
+      const payload = { ...basePayload };
 
-      // 1. SIMPAN KE FIRESTORE & TANGKAP REF DOKUMEN
+      // 1. HANDLE FILE UPLOAD (Jika ada file PDF/Image)
+      if (file) {
+         try {
+            // Buat path unik: classrooms/{classId}/uploads/{timestamp}_{filename}
+            const uniqueName = `${Date.now()}_${file.name}`;
+            const storageRef = ref(storage, `classrooms/${classId}/uploads/${uniqueName}`);
+            
+            // Upload ke Firebase Storage
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadUrl = await getDownloadURL(snapshot.ref);
+            
+            // Masukkan URL ke payload
+            payload.url = downloadUrl;
+         } catch (uploadError) {
+             console.error("Upload failed", uploadError);
+             alert("Gagal mengupload file. Silakan coba lagi.");
+             setIsUploading(false);
+             return;
+         }
+      }
+
+      // 2. NORMALISASI DATA (Agar konsisten dengan Types)
+      // Jika tipe Video atau Link, 'content' dari form kita pindahkan ke field 'url'
+      if (payload.type === 'video' || payload.type === 'link') {
+          payload.url = payload.content; 
+          delete payload.content; // Bersihkan field content karena sudah jadi url
+      }
+
+      // 3. SIMPAN KE FIRESTORE
       const docRef = await addDoc(collection(db, "classrooms", classId, collectionName), {
         ...payload,
         createdAt: serverTimestamp(),
@@ -166,17 +198,18 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
       
       setIsUploadModalOpen(false);
       
-      // 2. LOGIKA REDIRECT
+      // 4. LOGIKA REDIRECT
       if (category === "assignment") {
         // Redirect ke halaman Assignment Builder untuk input soal
         router.push(`/teacher/class/${classId}/assignment/${docRef.id}`);
       } else {
-        alert("Materi berhasil ditambahkan!");
+        // Notifikasi sederhana (bisa diganti Toast nanti)
+        // alert("Materi berhasil ditambahkan!"); 
       }
 
     } catch (error) {
       console.error("Gagal buat konten:", error);
-      alert("Terjadi kesalahan.");
+      alert("Terjadi kesalahan saat menyimpan data.");
     } finally {
       setIsUploading(false);
     }
@@ -186,6 +219,7 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
   const handleDeleteMaterial = async (materialId: string) => {
     if (confirm("Hapus materi ini?")) {
       await deleteDoc(doc(db, "classrooms", classId, "materials", materialId));
+      // Note: Idealnya kita juga hapus file di Storage jika ada, tapi untuk tahap ini Firestore dulu cukup.
     }
   };
 
@@ -287,7 +321,7 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
       {/* 2. MAIN CONTENT AREA */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         
-        {/* --- CLASS HEADER (NEW: Persisten di semua tab) --- */}
+        {/* --- CLASS HEADER --- */}
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
           <div>
             <div className="flex items-center gap-3 mb-1">

@@ -97,6 +97,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
     
     fetchClassAndMembers();
 
+    // Realtime listener for Materials (Fetch all fields needed for rendering icons/types)
     const materialsRef = collection(db, "classrooms", classId, "materials");
     const qMat = query(materialsRef, orderBy("createdAt", "desc"));
     const unsubMat = onSnapshot(qMat, (snapshot) => {
@@ -104,6 +105,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
       setMaterials(mats);
     });
 
+    // Realtime listener for Assignments (Fetch types like 'game', 'quiz', etc.)
     const assignmentsRef = collection(db, "classrooms", classId, "assignments");
     const qAss = query(assignmentsRef, orderBy("createdAt", "desc"));
     const unsubAss = onSnapshot(qAss, (snapshot) => {
@@ -141,13 +143,23 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
     : isSMA ? "bg-transparent text-slate-100" 
     : "bg-slate-50";
 
-  // Data Adapter for Adventure Map
+  // Data Adapter for Adventure Map (Simplified for now)
   const mapModules = [...materials, ...assignments].map(item => ({
-     id: item.id,
-     title: item.title,
-     description: item.description,
-     isLocked: false, 
-     thumbnailUrl: item.type === 'video' ? '📺' : item.type === 'quiz' ? '📝' : item.type === 'essay' ? '✍️' : '📄' 
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      isLocked: false, 
+      type: item.type, // Added type
+      url: item.url, // Added url
+      locationData: item.locationData, // Added locationData
+      gameConfig: item.gameConfig, // Added gameConfig
+      content: item.content, // Added content
+      // Thumbnail logic based on type
+      thumbnailUrl: item.type === 'video' ? '📺' : 
+                    item.type === 'quiz' ? '📝' : 
+                    item.type === 'game' ? '🎮' : 
+                    item.type === 'map' ? '🗺️' : 
+                    '📄' 
   }));
 
   return (
@@ -215,37 +227,42 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
       <main className={cn("flex-1 p-4 md:p-8 pt-20 md:pt-8 overflow-y-auto min-h-screen z-10", isUni && "text-slate-200")}>
          <div className="max-w-6xl mx-auto space-y-8">
             <AnimatePresence mode="wait">
-                
-                {activeTab === "dashboard" && (
-                   <DashboardView 
-                      classData={classData} 
-                      classTotalXP={classTotalXP} 
-                      assignments={assignments} 
-                      classMembers={classMembers} 
-                      setActiveTab={setActiveTab} 
-                      isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme}
-                   />
-                )}
+               
+               {activeTab === "dashboard" && (
+                  <DashboardView 
+                     classData={classData} 
+                     classTotalXP={classTotalXP} 
+                     assignments={assignments} 
+                     classMembers={classMembers} 
+                     setActiveTab={setActiveTab} 
+                     isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme}
+                  />
+               )}
 
-                {activeTab === "adventure" && (
-                   <AdventureView mapModules={mapModules} isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} />
-                )}
+               {activeTab === "adventure" && (
+                  <AdventureView 
+                    mapModules={mapModules} 
+                    isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} 
+                    isClassroomContext={true}
+                    classId={classId}
+                  />
+               )}
 
-                {activeTab === "materials" && (
-                   <MaterialsView materials={materials} isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme} />
-                )}
+               {activeTab === "materials" && (
+                  <MaterialsView materials={materials} isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme} />
+               )}
 
-                {activeTab === "assignments" && (
-                   <AssignmentsView 
-                      assignments={assignments} 
-                      isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme} 
-                      router={router} classId={classId}
-                   />
-                )}
+               {activeTab === "assignments" && (
+                  <AssignmentsView 
+                     assignments={assignments} 
+                     isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme} 
+                     router={router} classId={classId}
+                  />
+               )}
 
-                {activeTab === "people" && (
-                   <PeopleView classMembers={classMembers} isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} />
-                )}
+               {activeTab === "people" && (
+                  <PeopleView classMembers={classMembers} isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} />
+               )}
 
             </AnimatePresence>
          </div>

@@ -36,13 +36,13 @@ export function ClassroomMobileHeader({ classData, isKids, isUni, isSMP }: Class
     )}>
        <div className="flex items-center gap-3 overflow-hidden">
           <Button 
-             onClick={() => router.push("/learn")} 
-             variant="ghost" 
-             size="icon" 
-             className={cn(
-                "rounded-full shrink-0 transition-colors", 
-                (isUni || isSMA) ? "text-slate-400 hover:text-white hover:bg-white/10" : "hover:bg-black/5"
-             )}
+              onClick={() => router.push("/learn")} 
+              variant="ghost" 
+              size="icon" 
+              className={cn(
+                 "rounded-full shrink-0 transition-colors", 
+                 (isUni || isSMA) ? "text-slate-400 hover:text-white hover:bg-white/10" : "hover:bg-black/5"
+              )}
           >
              <ArrowLeft size={20} className={cn(isKids ? "text-primary" : (isUni || isSMA) ? "text-current" : "text-slate-600")} />
           </Button>

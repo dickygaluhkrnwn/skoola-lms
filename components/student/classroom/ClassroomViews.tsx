@@ -5,12 +5,37 @@ import { motion } from "framer-motion";
 import { 
   Users, BookOpen, Video, FileText, Link as LinkIcon, 
   ClipboardList, FileCheck, Clock, Trophy, Map, Scroll, 
-  AlertCircle, CheckCircle, GraduationCap, Palette
+  AlertCircle, CheckCircle, GraduationCap, Palette,
+  Gamepad2, UploadCloud, MapPin, Image as ImageIcon, AlignLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AdventureMap } from "@/components/learn/adventure-map";
 import { useRouter } from "next/navigation";
+import { MaterialType, AssignmentType } from "@/lib/types/course.types";
+
+// --- HELPER DATE FORMATTER (Supaya tidak Invalid Date) ---
+const formatDeadline = (deadline: any) => {
+    if (!deadline) return null;
+    
+    let dateObj;
+    // Cek jika Firestore Timestamp (punya seconds)
+    if (deadline && typeof deadline === 'object' && 'seconds' in deadline) {
+        dateObj = new Date(deadline.seconds * 1000);
+    } 
+    // Cek jika angka (milliseconds) atau string ISO
+    else {
+        dateObj = new Date(deadline);
+    }
+
+    if (isNaN(dateObj.getTime())) return "Tanggal Invalid";
+
+    return dateObj.toLocaleDateString('id-ID', { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric'
+    });
+};
 
 // --- DASHBOARD VIEW ---
 export function DashboardView({ classData, classTotalXP, assignments, classMembers, setActiveTab, isKids, isSMP, isUni, isSMA, theme }: any) {
@@ -218,13 +243,20 @@ export function AssignmentsView({ assignments, isKids, isSMP, isUni, isSMA, them
                             <div className="flex gap-4">
                                 <div className={cn(
                                     "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm", 
-                                    item.type === 'quiz' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600',
+                                    item.type === 'quiz' ? 'bg-orange-100 text-orange-600' : 
+                                    item.type === 'game' ? 'bg-pink-100 text-pink-600' :
+                                    item.type === 'project' ? 'bg-indigo-100 text-indigo-600' :
+                                    'bg-purple-100 text-purple-600',
+                                    
                                     isKids && "border-2 border-white shadow-md",
                                     isSMP && (item.type === 'quiz' ? 'bg-orange-50 text-orange-600' : 'bg-fuchsia-50 text-fuchsia-600'),
                                     isSMA && (item.type === 'quiz' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'),
                                     isUni && (item.type === 'quiz' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30')
                                 )}>
-                                    {item.type === 'quiz' ? <FileCheck size={28} /> : <ClipboardList size={28} />}
+                                    {item.type === 'quiz' ? <FileCheck size={28} /> : 
+                                     item.type === 'game' ? <Gamepad2 size={28} /> :
+                                     item.type === 'project' ? <UploadCloud size={28} /> :
+                                     <ClipboardList size={28} />}
                                 </div>
                                 <div>
                                     <h3 className={cn("font-bold text-lg group-hover:text-purple-600 transition-colors", (isUni || isSMA) ? "text-slate-100 group-hover:text-white" : "text-slate-800")}>{item.title}</h3>
@@ -236,14 +268,17 @@ export function AssignmentsView({ assignments, isKids, isSMP, isUni, isSMA, them
                                             (isUni || isSMA) ? "bg-slate-800 text-slate-400 border border-slate-700" :
                                             "bg-slate-100 text-slate-500"
                                         )}>
-                                            {item.type === 'quiz' ? (isKids ? 'Tantangan Kuis' : 'Kuis') : (isKids ? 'Laporan Misi' : 'Esai')}
+                                            {item.type === 'quiz' ? (isKids ? 'Tantangan Kuis' : 'Kuis') : 
+                                             item.type === 'game' ? (isKids ? 'Permainan Seru' : 'Game Edukasi') :
+                                             item.type === 'project' ? 'Proyek' :
+                                             (isKids ? 'Laporan Misi' : 'Esai')}
                                         </span>
                                         {item.deadline && (
                                             <span className={cn("font-medium flex items-center gap-1 text-xs px-2 py-0.5 rounded-full",
                                                 (isUni || isSMA) ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" : "text-red-500 bg-red-50"
                                             )}>
-                                            <Clock size={12} /> 
-                                            {new Date(item.deadline.seconds * 1000).toLocaleDateString('id-ID')}
+                                                <Clock size={12} /> 
+                                                {formatDeadline(item.deadline)}
                                             </span>
                                         )}
                                     </div>
@@ -358,6 +393,31 @@ function StatCard({ icon, label, value, color, theme, onClick, isKids, isSMP, is
 }
 
 function MaterialCard({ item, theme, isKids, isSMP, isUni, isSMA }: any) {
+  // Helper: Open material logic
+  const handleOpen = () => {
+      if (item.type === 'map' && item.locationData) {
+          window.open(`https://www.google.com/maps/search/?api=1&query=${item.locationData.lat},${item.locationData.lng}`, '_blank');
+      } else if (item.url) {
+          window.open(item.url, '_blank');
+      } else if (item.type === 'rich-text') {
+          // TODO: Open modal for reading (Simpified for now: just alert)
+          alert("Fitur baca artikel dalam aplikasi akan segera hadir! (Cek kembali update MateriView)");
+      } else {
+          alert("Konten tidak dapat dibuka.");
+      }
+  };
+
+  // Helper: Icon
+  const getIcon = () => {
+      switch(item.type) {
+          case 'pdf': return <FileText size={26} />;
+          case 'map': return <MapPin size={26} />;
+          case 'image': return <ImageIcon size={26} />;
+          case 'rich-text': return <AlignLeft size={26} />;
+          default: return <Video size={26} />;
+      }
+  };
+
   return (
      <div className={cn(
          "p-5 rounded-3xl border transition-all cursor-pointer group flex items-center gap-4 relative overflow-hidden",
@@ -369,7 +429,7 @@ function MaterialCard({ item, theme, isKids, isSMP, isUni, isSMA }: any) {
          // Glow Effect for Uni/SMA
          isUni && "hover:border-indigo-500/50 hover:shadow-[0_0_20px_rgba(99,102,241,0.1)]",
          isSMA && "hover:border-teal-500/50 hover:shadow-[0_0_20px_rgba(20,184,166,0.1)]"
-     )} onClick={() => window.open(item.content, "_blank")}>
+     )} onClick={handleOpen}>
         
         {isKids && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-blue-50 to-transparent rounded-bl-full -mr-8 -mt-8 pointer-events-none" />}
         {isSMP && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-violet-100/50 to-transparent rounded-bl-full pointer-events-none" />}
@@ -382,7 +442,7 @@ function MaterialCard({ item, theme, isKids, isSMP, isUni, isSMA }: any) {
                : (isSMP ? 'bg-violet-50 text-violet-600' : isSMA ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : isUni ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-blue-50 text-blue-600'),
             isKids && "border-2 border-white shadow-md"
         )}>
-           {item.type === 'video' ? <Video size={26} /> : <FileText size={26} />}
+           {getIcon()}
         </div>
         <div className="flex-1 min-w-0 relative z-10">
            <h4 className={cn("font-bold text-lg truncate transition-colors group-hover:text-primary", (isUni || isSMA) ? "text-slate-100" : "text-slate-800")}>{item.title}</h4>
@@ -393,7 +453,7 @@ function MaterialCard({ item, theme, isKids, isSMP, isUni, isSMA }: any) {
                     (isUni || isSMA) ? "bg-slate-800 text-slate-400 border border-slate-700" :
                     "bg-slate-100 text-slate-500"
                 )}>
-                   {item.type === 'video' ? 'Video' : 'Bacaan'}
+                   {item.type}
                 </span>
                 <span className={cn("text-xs", (isUni || isSMA) ? "text-slate-500" : "text-slate-400")}>• {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : 'Baru'}</span>
            </div>

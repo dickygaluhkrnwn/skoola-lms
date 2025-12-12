@@ -12,7 +12,7 @@ interface StudentData {
   xp?: number;
   level?: number;
   completedModules?: string[];
-  talentArchetype?: "logic" | "creative" | "social" | "practical"; // Tambahan dari Survey Minat Bakat
+  talentArchetype?: "logic" | "creative" | "social" | "practical"; // Tetap pertahankan sebagai opsional
 }
 
 interface StudentListViewProps {

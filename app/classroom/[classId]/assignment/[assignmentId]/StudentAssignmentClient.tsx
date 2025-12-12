@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, Clock, FileText, CheckCircle2, UploadCloud, 
-  Send, Loader2, AlertCircle, Music, Image as ImageIcon, X, File
+  Send, Loader2, AlertCircle, Music, Image as ImageIcon, X, File,
+  Gamepad2, Lightbulb, Play, RotateCcw, Trophy // Added Trophy
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase"; 
 import { 
@@ -18,26 +19,20 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { onAuthStateChanged } from "firebase/auth";
 import { useTheme } from "@/lib/theme-context";
+import { AssignmentType, GameType, QuizQuestion } from "@/lib/types/course.types";
 
 // --- TIPE DATA ---
 interface AssignmentData {
   id: string;
   title: string;
   description: string;
-  type: "quiz" | "essay" | "upload";
+  type: AssignmentType;
   deadline: any;
   totalPoints?: number;
-  questionCount?: number;
-}
-
-interface Question {
-  id: string;
-  text: string;
-  type: "multiple-choice" | "essay";
-  options?: string[]; // Untuk PG
-  points: number;
-  mediaUrl?: string;
-  mediaType?: "image" | "audio";
+  gameConfig?: {
+    gameType: GameType;
+    data: any;
+  };
 }
 
 interface Submission {
@@ -45,7 +40,7 @@ interface Submission {
   submittedAt: any;
   score?: number;
   feedback?: string;
-  answers?: any; // Bisa string (essay), object (quiz map), atau string URL (upload)
+  answers?: any; 
   attachmentUrl?: string;
 }
 
@@ -61,15 +56,22 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [submission, setSubmission] = useState<Submission | null>(null);
   
-  // State Pengerjaan
-  const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({}); // Map questionId -> optionIndex
+  // --- STATE PENGERJAAN ---
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, number | string>>({}); // Flexible: number (index) or string (text)
   const [essayAnswer, setEssayAnswer] = useState("");
   const [fileUrl, setFileUrl] = useState(""); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // --- STATE GAME ---
+  const [gameState, setGameState] = useState<'intro' | 'playing' | 'finished'>('intro');
+  const [gameScore, setGameScore] = useState(0);
+  const [gameData, setGameData] = useState<any>(null); // Local game state (shuffled words, pairs, etc)
+  const [gameTimer, setGameTimer] = useState(0); // Seconds
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,20 +108,47 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
       const assignData = { id: assignSnap.id, ...assignSnap.data() } as AssignmentData;
       setAssignment(assignData);
 
-      // B. Fetch Submission (Cek apakah sudah mengerjakan)
+      // B. Fetch Submission
       const subRef = doc(db, "classrooms", classId, "assignments", assignmentId, "submissions", uid);
       const subSnap = await getDoc(subRef);
       if (subSnap.exists()) {
         setSubmission(subSnap.data() as Submission);
       }
 
-      // C. Fetch Questions (Jika tipe Quiz)
+      // C. Load Content Based on Type
       if (assignData.type === "quiz") {
         const qRef = collection(db, "classrooms", classId, "assignments", assignmentId, "questions");
         const qQuery = query(qRef, orderBy("order", "asc"));
         const qSnap = await getDocs(qQuery);
-        const qList = qSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Question[];
+        const qList = qSnap.docs.map(d => ({ id: d.id, ...d.data() })) as QuizQuestion[];
         setQuestions(qList);
+      } 
+      else if (assignData.type === "game" && assignData.gameConfig) {
+          // Initialize Game Data
+          if (assignData.gameConfig.gameType === 'word-scramble') {
+              const scrambled = (assignData.gameConfig.data || []).map((item: any) => ({
+                  ...item,
+                  shuffled: item.word.split('').sort(() => Math.random() - 0.5).join(''),
+                  userAnswer: ""
+              }));
+              setGameData(scrambled);
+          } else if (assignData.gameConfig.gameType === 'memory-match') {
+              // Logic memory match: duplicate pairs & shuffle
+              const originalPairs = assignData.gameConfig.data || [];
+              let cards: any[] = [];
+              originalPairs.forEach((pair: any) => {
+                  cards.push({ id: pair.id + '_1', pairId: pair.id, content: pair.front, image: pair.frontImage, isFlipped: false, isMatched: false });
+                  cards.push({ id: pair.id + '_2', pairId: pair.id, content: pair.back, image: pair.backImage, isFlipped: false, isMatched: false });
+              });
+              cards.sort(() => Math.random() - 0.5);
+              setGameData({ cards, flipped: [] });
+          } else if (assignData.gameConfig.gameType === 'flashcard-challenge') {
+              setGameData({
+                  cards: assignData.gameConfig.data || [],
+                  currentIdx: 0,
+                  isFlipped: false
+              });
+          }
       }
 
     } catch (error) {
@@ -129,58 +158,125 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
     }
   };
 
-  // 2. HANDLER JAWABAN QUIZ
-  const handleOptionSelect = (questionId: string, optionIndex: number) => {
-    if (submission) return; // Read-only jika sudah submit
-    setQuizAnswers(prev => ({
-      ...prev,
-      [questionId]: optionIndex
-    }));
-  };
-
-  // 3. HANDLER FILE UPLOAD (REAL)
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      const storage = getStorage();
-      const fileExt = file.name.split('.').pop();
-      // Path: assignments/student_uploads/{assignmentId}/{userId}.{ext}
-      const fileName = `assignments/student_uploads/${assignmentId}/${userId}_${Date.now()}.${fileExt}`;
-      const storageRef = ref(storage, fileName);
-      
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-      
-      setFileUrl(downloadURL);
-      alert("File berhasil diupload!");
-    } catch (error) {
-      console.error("Upload error:", error);
-      alert("Gagal mengupload file. Pastikan koneksi lancar.");
-    } finally {
-      setIsUploading(false);
+  // Helper: Format Deadline safely
+  const formatDeadline = (deadline: any) => {
+    if (!deadline) return "Tanpa Batas";
+    
+    let dateObj;
+    // Check if Firestore Timestamp (has seconds property)
+    if (deadline && typeof deadline === 'object' && 'seconds' in deadline) {
+        dateObj = new Date(deadline.seconds * 1000);
+    } 
+    // Check if it's already a number (milliseconds) or string
+    else {
+        dateObj = new Date(deadline);
     }
+
+    if (isNaN(dateObj.getTime())) return "Tanggal Tidak Valid";
+
+    return dateObj.toLocaleDateString('id-ID', { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
   };
 
-  // 4. SUBMIT TUGAS
-  const handleSubmit = async () => {
+  // --- GAME LOGIC ---
+  useEffect(() => {
+      if (gameState === 'playing') {
+          timerRef.current = setInterval(() => {
+              setGameTimer(t => t + 1);
+          }, 1000);
+      } else {
+          if (timerRef.current) clearInterval(timerRef.current);
+      }
+      return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [gameState]);
+
+  // Handler: Word Scramble
+  const handleScrambleAnswer = (idx: number, val: string) => {
+      const newData = [...gameData];
+      newData[idx].userAnswer = val.toUpperCase();
+      setGameData(newData);
+  };
+
+  const checkScramble = () => {
+      let correctCount = 0;
+      gameData.forEach((item: any) => {
+          if (item.userAnswer === item.word.toUpperCase()) correctCount++;
+      });
+      const score = Math.round((correctCount / gameData.length) * 100);
+      finishGame(score);
+  };
+
+  // Handler: Memory Match
+  const handleCardClick = (idx: number) => {
+      if (gameData.flipped.length >= 2 || gameData.cards[idx].isFlipped || gameData.cards[idx].isMatched) return;
+
+      const newCards = [...gameData.cards];
+      newCards[idx].isFlipped = true;
+      
+      const newFlipped = [...gameData.flipped, idx];
+      
+      if (newFlipped.length === 2) {
+          setGameData({ ...gameData, cards: newCards, flipped: newFlipped });
+          // Check match
+          const card1 = newCards[newFlipped[0]];
+          const card2 = newCards[newFlipped[1]];
+          
+          if (card1.pairId === card2.pairId) {
+              // Match!
+              setTimeout(() => {
+                  const matchedCards = [...newCards];
+                  matchedCards[newFlipped[0]].isMatched = true;
+                  matchedCards[newFlipped[1]].isMatched = true;
+                  setGameData({ ...gameData, cards: matchedCards, flipped: [] });
+                  
+                  // Check win
+                  if (matchedCards.every(c => c.isMatched)) {
+                      finishGame(100);
+                  }
+              }, 500);
+          } else {
+              // No Match
+              setTimeout(() => {
+                  const resetCards = [...newCards];
+                  resetCards[newFlipped[0]].isFlipped = false;
+                  resetCards[newFlipped[1]].isFlipped = false;
+                  setGameData({ ...gameData, cards: resetCards, flipped: [] });
+              }, 1000);
+          }
+      } else {
+          setGameData({ ...gameData, cards: newCards, flipped: newFlipped });
+      }
+  };
+
+  const finishGame = (score: number) => {
+      setGameScore(score);
+      setGameState('finished');
+  };
+
+  // --- SUBMIT HANDLER (GENERAL) ---
+  const handleSubmit = async (gameResult?: any) => {
     if (!userId || !assignment) return;
     
-    // Validasi sebelum submit
-    if (assignment.type === "quiz" && Object.keys(quizAnswers).length < questions.length) {
-       if(!confirm("Anda belum menjawab semua soal. Yakin ingin mengumpulkan?")) return;
+    // Validasi Manual (Non-Game)
+    if (!gameResult) {
+        if (assignment.type === "quiz" && Object.keys(quizAnswers).length < questions.length) {
+           if(!confirm("Anda belum menjawab semua soal. Yakin ingin mengumpulkan?")) return;
+        }
+        // Updated check: use 'project' instead of 'upload'
+        if (assignment.type === "project" && !fileUrl) {
+           alert("Harap upload file tugas terlebih dahulu!");
+           return;
+        }
+        if (assignment.type === "essay" && !essayAnswer.trim()) {
+           if(!confirm("Jawaban esai masih kosong. Yakin ingin mengumpulkan?")) return;
+        }
+        if (!confirm("Apakah Anda yakin ingin mengumpulkan tugas ini?")) return;
     }
-    if (assignment.type === "upload" && !fileUrl) {
-       alert("Harap upload file tugas terlebih dahulu!");
-       return;
-    }
-    if (assignment.type === "essay" && !essayAnswer.trim()) {
-       if(!confirm("Jawaban esai masih kosong. Yakin ingin mengumpulkan?")) return;
-    }
-
-    if (!confirm("Apakah Anda yakin ingin mengumpulkan tugas ini? Jawaban tidak dapat diubah setelah dikumpulkan.")) return;
 
     setIsSubmitting(true);
     try {
@@ -191,12 +287,32 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
         status: "submitted",
       };
 
-      // Format jawaban sesuai tipe tugas
+      // Format jawaban sesuai tipe
       if (assignment.type === "quiz") {
-        payload.answers = quizAnswers;
+        payload.answers = Object.entries(quizAnswers).map(([qid, ans]) => ({
+            questionId: qid,
+            answer: ans,
+            // Logic checking benar/salah bisa di sini atau di server (cloud function). 
+            // Untuk MVP kita simpan raw answer dulu.
+            isCorrect: questions.find(q => q.id === qid)?.correctAnswer === ans
+        }));
+        // Auto Score Quiz
+        const correctCount = payload.answers.filter((a: any) => a.isCorrect).length;
+        payload.score = Math.round((correctCount / questions.length) * 100);
+        payload.status = "graded"; // Auto graded
+
+      } else if (assignment.type === "game") {
+        payload.answers = {
+            score: gameResult.score,
+            time: `${gameResult.time}s`,
+            gameType: assignment.gameConfig?.gameType
+        };
+        payload.score = gameResult.score; // Use game score directly
+        payload.status = "graded";
+
       } else if (assignment.type === "essay") {
         payload.answers = essayAnswer;
-      } else if (assignment.type === "upload") {
+      } else if (assignment.type === "project") { 
         payload.answers = "File uploaded";
         payload.attachmentUrl = fileUrl; 
       }
@@ -204,7 +320,6 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
       const subRef = doc(db, "classrooms", classId, "assignments", assignmentId, "submissions", userId);
       await setDoc(subRef, payload);
 
-      // Update State Lokal (dengan Date lokal agar UI update instan)
       setSubmission({
         ...payload,
         submittedAt: { seconds: Date.now() / 1000 } 
@@ -220,9 +335,35 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
     }
   };
 
+  // Upload File Handler
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const storage = getStorage();
+      const fileExt = file.name.split('.').pop();
+      const fileName = `assignments/student_uploads/${assignmentId}/${userId}_${Date.now()}.${fileExt}`;
+      const storageRef = ref(storage, fileName);
+      
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      setFileUrl(downloadURL);
+      alert("File berhasil diupload!");
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Gagal mengupload file.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // --- RENDER ---
   if (loading) return (
     <div className={cn("min-h-screen flex items-center justify-center", isUni ? "bg-slate-950 text-white" : "bg-slate-50 text-blue-600")}>
-      <Loader2 className={cn("animate-spin w-8 h-8 mr-2", isUni ? "text-indigo-500" : "")}/> 
+      <Loader2 className="animate-spin w-8 h-8 mr-2"/> 
       <span>Memuat Tugas...</span>
     </div>
   );
@@ -232,157 +373,102 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
   const isSubmitted = !!submission;
   const isGraded = submission?.status === "graded";
 
-  // Background Styles
-  const bgStyle = isKids ? "bg-yellow-50" : isUni ? "bg-slate-950 text-slate-200" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-slate-950 text-slate-100" : "bg-slate-50";
-
   return (
-    <div className={cn("min-h-screen font-sans p-4 md:p-8 pb-24 transition-colors duration-500 relative", bgStyle)}>
+    <div className={cn("min-h-screen font-sans p-4 md:p-8 pb-24 transition-colors duration-500 relative", 
+        isUni ? "bg-slate-950 text-slate-200" : isKids ? "bg-yellow-50" : "bg-slate-50"
+    )}>
       
-      {/* BACKGROUND EFFECTS FOR UNI/SMA */}
-      {(isUni || isSMA) && (
-         <div className="fixed inset-0 z-0 pointer-events-none">
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950 opacity-80" />
-            <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse delay-700" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[100px] animate-pulse delay-1000" />
-         </div>
-      )}
-
       {/* HEADER NAV */}
       <div className="max-w-4xl mx-auto mb-6 relative z-10">
-        <button 
-          onClick={() => router.back()} 
-          className={cn("flex items-center gap-2 transition-colors font-medium mb-4", (isUni || isSMA) ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-blue-600")}
-        >
-          <ArrowLeft size={18} /> Kembali ke Kelas
+        <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-500 hover:text-blue-600 font-medium mb-4">
+          <ArrowLeft size={18} /> Kembali
         </button>
 
         <div className={cn("p-6 rounded-2xl border shadow-sm relative overflow-hidden transition-all", 
-            isUni ? "bg-slate-900/50 backdrop-blur-xl border-white/10" : 
-            isSMA ? "bg-white/5 backdrop-blur-xl border-white/10" :
-            "bg-white border-slate-200"
+            isUni ? "bg-slate-900/50 backdrop-blur-xl border-white/10" : "bg-white border-slate-200"
         )}>
-           {/* Status Badge */}
            <div className="absolute top-6 right-6">
               {isGraded ? (
                  <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 border border-purple-200">
-                    <CheckCircle2 size={14} /> Dinilai: {submission?.score}/100
+                    <CheckCircle2 size={14} /> Nilai: {submission?.score}/100
                  </span>
               ) : isSubmitted ? (
                  <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 border border-green-200">
-                    <CheckCircle2 size={14} /> Sudah Dikumpulkan
+                    <CheckCircle2 size={14} /> Selesai
                  </span>
               ) : (
-                 <span className={cn("px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 border", 
-                    (isUni || isSMA) ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-600 border-slate-200"
-                 )}>
+                 <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 border border-slate-200">
                     <Clock size={14} /> Belum Dikerjakan
                  </span>
               )}
            </div>
-
-           <div className="pr-32">
-              <h1 className={cn("text-2xl font-bold mb-2", (isUni || isSMA) ? "text-white" : "text-slate-900")}>{assignment.title}</h1>
-              <div className={cn("flex items-center gap-4 text-sm mb-4", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>
-                 <span className={cn("flex items-center gap-1 px-2 py-1 rounded border", (isUni || isSMA) ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-100")}>
-                    <FileText size={14} /> {assignment.type === 'quiz' ? 'Kuis PG' : assignment.type === 'essay' ? 'Esai' : 'Upload File'}
-                 </span>
-                 {assignment.deadline && (
-                    <span className={cn("flex items-center gap-1 font-medium px-2 py-1 rounded border", 
-                       (isUni || isSMA) ? "text-rose-400 bg-rose-950/30 border-rose-900/50" : "text-red-500 bg-red-50 border-red-100"
-                    )}>
-                       <Clock size={14} /> Deadline: {new Date(assignment.deadline.seconds * 1000).toLocaleDateString()}
-                    </span>
-                 )}
-              </div>
-              <div className={cn("prose prose-sm max-w-none p-4 rounded-xl border", 
-                 isUni ? "text-slate-300 bg-slate-950/50 border-white/5" : 
-                 isSMA ? "text-slate-300 bg-white/5 border-white/5" :
-                 "text-slate-600 bg-slate-50 border-slate-100"
-              )}>
-                 <p>{assignment.description || "Tidak ada instruksi khusus."}</p>
-              </div>
+           
+           <h1 className={cn("text-2xl font-bold mb-2", isUni && "text-white")}>{assignment.title}</h1>
+           <div className={cn("prose prose-sm max-w-none opacity-80", isUni && "text-slate-300")}>
+              <p>{assignment.description}</p>
+           </div>
+           
+           {/* Deadline Info (Using new format function) */}
+           <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+               <Clock size={14} /> 
+               <span>Batas Waktu: <strong>{formatDeadline(assignment.deadline)}</strong></span>
            </div>
         </div>
       </div>
 
-      {/* FEEDBACK GURU (JIKA ADA) */}
-      {isGraded && submission?.feedback && (
-         <div className={cn("max-w-4xl mx-auto mb-6 border p-6 rounded-2xl shadow-sm relative z-10", 
-             (isUni || isSMA) ? "bg-purple-900/20 border-purple-800/50" : "bg-purple-50 border-purple-200"
-         )}>
-            <h3 className={cn("font-bold flex items-center gap-2 mb-2", (isUni || isSMA) ? "text-purple-300" : "text-purple-800")}>
-               <AlertCircle size={18} /> Umpan Balik Guru
-            </h3>
-            <p className={cn("text-sm", (isUni || isSMA) ? "text-purple-200" : "text-purple-700")}>{submission.feedback}</p>
-         </div>
-      )}
-
-      {/* MAIN CONTENT: WORKSPACE */}
+      {/* WORKSPACE AREA */}
       <div className="max-w-4xl mx-auto space-y-6 relative z-10">
          
-         {/* TIPE 1: KUIS PILIHAN GANDA */}
-         {assignment.type === "quiz" && (
+         {/* -- VIEW MODE: SUDAH SUBMIT -- */}
+         {isSubmitted && !isGraded && (
+             <div className="bg-green-50 border border-green-200 p-8 rounded-2xl text-center">
+                 <CheckCircle2 size={48} className="mx-auto text-green-600 mb-4" />
+                 <h2 className="text-xl font-bold text-green-800">Tugas Berhasil Dikumpulkan!</h2>
+                 <p className="text-green-700 mt-2">Guru akan segera memeriksa jawabanmu.</p>
+             </div>
+         )}
+
+         {/* -- VIEW MODE: QUIZ -- */}
+         {!isSubmitted && assignment.type === "quiz" && (
             <div className="space-y-4">
                {questions.map((q, idx) => (
-                  <div key={q.id} className={cn("p-6 rounded-2xl border shadow-sm transition-all", 
-                      isUni ? "bg-slate-900/60 border-white/10" : 
-                      isSMA ? "bg-white/5 border-white/10" :
-                      "bg-white border-slate-200"
-                  )}>
+                  <div key={q.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                       <div className="flex gap-4">
-                         <span className={cn("flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm h-fit", 
-                             (isUni || isSMA) ? "bg-indigo-500/20 text-indigo-300" : "bg-blue-100 text-blue-600"
-                         )}>
+                         <span className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0">
                             {idx + 1}
                          </span>
                          <div className="flex-1">
-                            {/* Media Soal */}
+                            {/* Media */}
                             {q.mediaUrl && (
-                               <div className={cn("mb-4 rounded-xl overflow-hidden border", (isUni || isSMA) ? "border-white/10 bg-black/20" : "border-slate-100 bg-slate-50")}>
-                                  {q.mediaType === 'image' ? (
-                                     <img src={q.mediaUrl} alt="Soal" className="w-full max-h-64 object-contain mx-auto" />
-                                  ) : (
-                                     <div className="p-4 flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center">
-                                           <Music size={20} />
-                                        </div>
-                                        <audio controls src={q.mediaUrl} className="w-full max-w-sm" />
-                                     </div>
-                                  )}
-                               </div>
+                                <div className="mb-4 p-2 bg-slate-50 rounded-xl border border-slate-100 w-fit">
+                                    {q.mediaUrl.includes('.mp3') || q.mediaUrl.includes('audio') ? (
+                                        <audio controls src={q.mediaUrl} />
+                                    ) : (
+                                        <img src={q.mediaUrl} alt="Soal" className="max-h-60 rounded-lg object-contain" />
+                                    )}
+                                </div>
                             )}
-
-                            <p className={cn("font-medium text-lg mb-4", (isUni || isSMA) ? "text-slate-200" : "text-slate-800")}>{q.text}</p>
                             
-                            {/* Opsi Jawaban */}
-                            <div className="space-y-3">
-                               {q.options?.map((opt, optIdx) => {
-                                  const savedAnswer = submission?.answers?.[q.id];
-                                  const currentAnswer = quizAnswers[q.id];
-                                  const isSelected = isSubmitted ? savedAnswer === optIdx : currentAnswer === optIdx;
-                                  
-                                  return (
-                                     <div 
-                                        key={optIdx}
-                                        onClick={() => !isSubmitted && handleOptionSelect(q.id, optIdx)}
-                                        className={cn(
-                                           "p-4 rounded-xl border-2 transition-all flex items-center gap-3",
-                                           !isSubmitted && "cursor-pointer",
-                                           isSelected 
-                                              ? ((isUni || isSMA) ? "border-indigo-500 bg-indigo-500/20 text-indigo-300" : "border-blue-500 bg-blue-50 text-blue-700") 
-                                              : ((isUni || isSMA) ? "border-white/10 bg-white/5 text-slate-300 hover:border-white/20" : "border-slate-100 bg-slate-50 hover:border-blue-200")
-                                        )}
-                                     >
-                                        <div className={cn(
-                                           "w-5 h-5 rounded-full border-2 flex items-center justify-center",
-                                           isSelected ? ((isUni || isSMA) ? "border-indigo-500" : "border-blue-500") : ((isUni || isSMA) ? "border-slate-600" : "border-slate-300")
-                                        )}>
-                                           {isSelected && <div className={cn("w-2.5 h-2.5 rounded-full", (isUni || isSMA) ? "bg-indigo-500" : "bg-blue-500")} />}
-                                        </div>
-                                        <span className="font-medium">{opt}</span>
+                            <p className="font-medium text-lg mb-4">{q.text}</p>
+                            
+                            <div className="space-y-2">
+                               {q.options?.map((opt, optIdx) => (
+                                  <div 
+                                    key={optIdx}
+                                    onClick={() => setQuizAnswers({...quizAnswers, [q.id]: optIdx})}
+                                    className={cn(
+                                        "p-3 rounded-xl border-2 cursor-pointer flex items-center gap-3 transition-all",
+                                        quizAnswers[q.id] === optIdx 
+                                            ? "border-blue-500 bg-blue-50 text-blue-700" 
+                                            : "border-slate-100 hover:border-blue-200"
+                                    )}
+                                  >
+                                     <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", quizAnswers[q.id] === optIdx ? "border-blue-500" : "border-slate-300")}>
+                                         {quizAnswers[q.id] === optIdx && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"/>}
                                      </div>
-                                  )
-                               })}
+                                     <span>{opt}</span>
+                                  </div>
+                               ))}
                             </div>
                          </div>
                       </div>
@@ -391,103 +477,174 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
             </div>
          )}
 
-         {/* TIPE 2: ESAI / URAIAN */}
-         {assignment.type === "essay" && (
-            <div className={cn("p-6 rounded-2xl border shadow-sm", (isUni || isSMA) ? "bg-slate-900/60 border-white/10" : "bg-white border-slate-200")}>
-               <h3 className={cn("font-bold mb-3", (isUni || isSMA) ? "text-slate-200" : "text-slate-800")}>Jawaban Anda</h3>
-               <textarea 
-                  disabled={isSubmitted}
-                  className={cn(
-                      "w-full min-h-[300px] p-4 rounded-xl border-2 outline-none transition-all leading-relaxed resize-y",
-                      (isUni || isSMA) 
-                        ? "bg-black/20 border-white/10 text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 placeholder:text-slate-600 disabled:opacity-50" 
-                        : "border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-slate-700 disabled:bg-slate-50 disabled:text-slate-500"
-                  )}
-                  placeholder="Tulis jawaban Anda di sini..."
-                  value={isSubmitted ? (submission?.answers as string) : essayAnswer}
-                  onChange={(e) => setEssayAnswer(e.target.value)}
-               />
-            </div>
+         {/* -- VIEW MODE: GAME -- */}
+         {!isSubmitted && assignment.type === "game" && (
+             <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-800 relative min-h-[500px]">
+                 {/* GAME INTRO */}
+                 {gameState === 'intro' && (
+                     <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-8 text-center bg-slate-900/90 z-20">
+                         <Gamepad2 size={64} className="text-purple-400 mb-6 animate-bounce" />
+                         <h2 className="text-3xl font-bold mb-2">Siap Bermain?</h2>
+                         <p className="text-slate-400 mb-8 max-w-md">
+                             {assignment.gameConfig?.gameType === 'word-scramble' ? "Susun huruf-huruf acak menjadi kata yang benar!" : "Temukan pasangan kartu yang cocok secepat mungkin!"}
+                         </p>
+                         <Button onClick={() => setGameState('playing')} className="bg-purple-600 hover:bg-purple-500 text-lg px-8 py-6 rounded-2xl shadow-lg shadow-purple-900/50 transition-transform active:scale-95">
+                             <Play size={24} className="mr-2" /> Mulai Game
+                         </Button>
+                     </div>
+                 )}
+
+                 {/* GAME PLAYING */}
+                 {gameState === 'playing' && (
+                     <div className="p-6 h-full flex flex-col">
+                         {/* Game HUD */}
+                         <div className="flex justify-between items-center mb-6 bg-white/10 p-3 rounded-xl backdrop-blur-md">
+                             <div className="flex items-center gap-2 text-white font-bold">
+                                 <Clock size={18} className="text-yellow-400"/> {gameTimer}s
+                             </div>
+                             <div className="text-xs text-slate-400 uppercase font-bold tracking-widest">{assignment.gameConfig?.gameType}</div>
+                         </div>
+
+                         {/* WORD SCRAMBLE GAME */}
+                         {assignment.gameConfig?.gameType === 'word-scramble' && (
+                             <div className="flex-1 flex flex-col gap-6">
+                                 {gameData?.map((item: any, idx: number) => (
+                                     <div key={idx} className="bg-white/5 p-4 rounded-xl border border-white/10">
+                                         <p className="text-center text-xs text-slate-400 mb-2">HINT: {item.hint}</p>
+                                         <div className="text-center text-3xl font-bold text-yellow-400 tracking-[0.5em] mb-4 font-mono">
+                                             {item.shuffled}
+                                         </div>
+                                         <input 
+                                             className="w-full bg-black/30 border border-white/20 rounded-lg p-3 text-center text-white font-bold tracking-widest uppercase focus:border-purple-500 outline-none"
+                                             placeholder="JAWABAN..."
+                                             onChange={(e) => handleScrambleAnswer(idx, e.target.value)}
+                                         />
+                                     </div>
+                                 ))}
+                                 <Button onClick={checkScramble} className="w-full mt-auto bg-green-600 hover:bg-green-500 text-white">
+                                     Selesai & Cek Jawaban
+                                 </Button>
+                             </div>
+                         )}
+
+                         {/* MEMORY MATCH GAME */}
+                         {assignment.gameConfig?.gameType === 'memory-match' && (
+                             <div className="grid grid-cols-4 gap-3">
+                                 {gameData?.cards.map((card: any, idx: number) => (
+                                     <div 
+                                        key={idx} 
+                                        onClick={() => handleCardClick(idx)}
+                                        className={cn(
+                                            "aspect-square rounded-xl cursor-pointer transition-all duration-300 transform perspective-1000 relative",
+                                            card.isFlipped || card.isMatched ? "rotate-y-180" : "bg-slate-700 hover:bg-slate-600 border-2 border-slate-600"
+                                        )}
+                                     >
+                                         {(card.isFlipped || card.isMatched) && (
+                                             <div className={cn("absolute inset-0 rounded-xl flex items-center justify-center p-2 text-center text-xs font-bold break-words bg-white text-slate-900 border-2", card.isMatched ? "border-green-500 bg-green-50" : "border-white")}>
+                                                 {card.image ? <img src={card.image} className="w-full h-full object-cover rounded-lg"/> : card.content}
+                                             </div>
+                                         )}
+                                         {!(card.isFlipped || card.isMatched) && (
+                                             <div className="absolute inset-0 flex items-center justify-center text-slate-500 opacity-20 text-2xl font-bold">?</div>
+                                         )}
+                                     </div>
+                                 ))}
+                             </div>
+                         )}
+                     </div>
+                 )}
+
+                 {/* GAME FINISHED */}
+                 {gameState === 'finished' && (
+                     <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-8 text-center bg-slate-900/95 z-30">
+                         <div className="w-24 h-24 bg-yellow-400 rounded-full flex items-center justify-center text-yellow-900 mb-6 shadow-[0_0_40px_rgba(250,204,21,0.4)] animate-bounce">
+                             <Trophy size={48} />
+                         </div>
+                         <h2 className="text-4xl font-bold mb-2 text-yellow-400">{gameScore} Poin!</h2>
+                         <p className="text-slate-300 mb-8">Waktu bermain: {gameTimer} detik</p>
+                         <Button onClick={() => handleSubmit({ score: gameScore, time: gameTimer })} className="bg-green-600 hover:bg-green-500 text-lg px-8 py-4 rounded-xl w-full max-w-sm">
+                             Kumpulkan Skor
+                         </Button>
+                         <button onClick={() => { setGameState('intro'); setGameScore(0); setGameTimer(0); }} className="mt-4 text-slate-500 hover:text-white flex items-center gap-2">
+                             <RotateCcw size={16}/> Main Ulang (Latihan)
+                         </button>
+                     </div>
+                 )}
+             </div>
          )}
 
-         {/* TIPE 3: UPLOAD FILE */}
-         {assignment.type === "upload" && (
-            <div className={cn("p-8 rounded-2xl border shadow-sm text-center", (isUni || isSMA) ? "bg-slate-900/60 border-white/10" : "bg-white border-slate-200")}>
-               <div className="max-w-md mx-auto">
-                  <div className={cn("w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6", 
-                      (isUni || isSMA) ? "bg-indigo-500/20 text-indigo-400" : "bg-blue-50 text-blue-500"
-                  )}>
-                     <UploadCloud size={40} />
-                  </div>
-                  <h3 className={cn("font-bold mb-2", (isUni || isSMA) ? "text-slate-200" : "text-slate-800")}>Upload Tugas Anda</h3>
-                  <p className={cn("text-sm mb-6", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>
-                     Format yang didukung: PDF, DOCX, JPG, PNG. Maksimal 10MB.
-                  </p>
-                  
-                  {/* Area Upload */}
-                  {!isSubmitted ? (
-                     <div className="space-y-4">
-                        <div className={cn("p-6 border-2 border-dashed rounded-xl transition-colors cursor-pointer", 
-                            (isUni || isSMA) ? "border-slate-700 hover:bg-white/5" : "border-slate-300 hover:bg-slate-50"
-                        )} onClick={() => fileInputRef.current?.click()}>
-                           {isUploading ? (
-                              <div className="flex flex-col items-center gap-2 text-blue-600">
-                                 <Loader2 className="animate-spin" />
-                                 <span className="text-sm font-bold">Mengupload...</span>
-                              </div>
-                           ) : fileUrl ? (
-                              <div className="flex flex-col items-center gap-2 text-green-600">
-                                 <CheckCircle2 size={32} />
-                                 <span className="text-sm font-bold">File Siap Dikirim</span>
-                                 <span className="text-xs text-slate-400 break-all">{fileUrl}</span>
-                                 <Button variant="ghost" size="sm" onClick={(e) => {e.stopPropagation(); setFileUrl("");}} className="mt-2 text-red-500 hover:text-red-600">
-                                    Ganti File
-                                 </Button>
-                              </div>
-                           ) : (
-                              <div className={cn((isUni || isSMA) ? "text-slate-500" : "text-slate-400")}>
-                                 <p className="text-sm font-bold">Klik untuk pilih file</p>
-                              </div>
-                           )}
-                        </div>
-                        <input 
-                           type="file" 
-                           ref={fileInputRef} 
-                           className="hidden" 
-                           onChange={handleFileChange}
-                           accept=".pdf,.doc,.docx,.jpg,.png,.jpeg"
-                        />
+         {/* -- VIEW MODE: PROJECT / ESSAY -- */}
+         {!isSubmitted && (assignment.type === "essay" || assignment.type === "project") && ( // Updated condition
+             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                 <div>
+                     <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                         {assignment.type === 'essay' ? <FileText size={20} className="text-blue-500"/> : <UploadCloud size={20} className="text-purple-500"/>}
+                         Jawaban Anda
+                     </h3>
+                     
+                     {/* TEXT AREA */}
+                     <textarea 
+                        className="w-full min-h-[200px] p-4 rounded-xl border border-slate-200 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all resize-y text-slate-700 leading-relaxed bg-slate-50 focus:bg-white"
+                        placeholder={assignment.type === 'essay' ? "Ketikan jawaban esai Anda di sini..." : "Tambahkan catatan untuk guru (opsional)..."}
+                        value={essayAnswer}
+                        onChange={(e) => setEssayAnswer(e.target.value)}
+                     />
+                 </div>
+
+                 {/* FILE UPLOAD */}
+                 {(assignment.type === 'project') && ( // Updated condition
+                     <div>
+                         <label className="text-sm font-bold text-slate-700 block mb-2">Lampirkan File</label>
+                         <div 
+                            className={cn("border-2 border-dashed rounded-xl p-6 cursor-pointer transition-all", 
+                                fileUrl ? "border-green-300 bg-green-50" : "border-slate-300 hover:bg-slate-50 hover:border-blue-300"
+                            )}
+                            onClick={() => fileInputRef.current?.click()}
+                         >
+                             {isUploading ? (
+                                 <div className="flex flex-col items-center text-blue-600 gap-2">
+                                     <Loader2 className="animate-spin" /> Mengupload...
+                                 </div>
+                             ) : fileUrl ? (
+                                 <div className="flex items-center gap-3 text-green-700">
+                                     <div className="w-10 h-10 bg-green-200 rounded-full flex items-center justify-center">
+                                         <CheckCircle2 size={20} />
+                                     </div>
+                                     <div className="flex-1 overflow-hidden">
+                                         <p className="font-bold text-sm truncate">File Terupload</p>
+                                         <p className="text-xs opacity-70 truncate">{fileUrl}</p>
+                                     </div>
+                                     <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); setFileUrl(""); }}>
+                                         Hapus
+                                     </Button>
+                                 </div>
+                             ) : (
+                                 <div className="text-center text-slate-400">
+                                     <UploadCloud size={32} className="mx-auto mb-2" />
+                                     <p className="text-sm font-medium">Klik untuk upload file proyek</p>
+                                     <p className="text-xs opacity-70">PDF, JPG, PNG, DOCX (Max 10MB)</p>
+                                 </div>
+                             )}
+                         </div>
+                         <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
                      </div>
-                  ) : (
-                     <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex flex-col items-center justify-center gap-2 text-green-700 font-bold">
-                        <div className="flex items-center gap-2">
-                           <CheckCircle2 size={20} />
-                           File Berhasil Diupload
-                        </div>
-                        {submission?.attachmentUrl && (
-                           <a href={submission.attachmentUrl} target="_blank" rel="noreferrer" className="text-xs underline hover:text-green-900 font-normal">
-                              Lihat File Saya
-                           </a>
-                        )}
-                     </div>
-                  )}
-               </div>
-            </div>
+                 )}
+             </div>
          )}
 
       </div>
 
-      {/* FOOTER ACTION BAR */}
-      {!isSubmitted && (
-         <div className={cn("fixed bottom-0 left-0 right-0 p-4 border-t shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-20 backdrop-blur-md", 
-             (isUni || isSMA) ? "bg-slate-950/80 border-white/10" : "bg-white border-slate-200"
-         )}>
+      {/* FOOTER ACTION BAR (Non-Game Only) */}
+      {!isSubmitted && assignment.type !== 'game' && (
+          <div className={cn("fixed bottom-0 left-0 right-0 p-4 border-t shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-20 backdrop-blur-md", 
+              (isUni || isSMA) ? "bg-slate-950/80 border-white/10" : "bg-white border-slate-200"
+          )}>
             <div className="max-w-4xl mx-auto flex justify-between items-center">
                <p className={cn("text-sm hidden md:block", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>
                   Pastikan semua jawaban sudah terisi sebelum mengumpulkan.
                </p>
                <Button 
-                  onClick={handleSubmit} 
+                  onClick={() => handleSubmit()} 
                   disabled={isSubmitting || isUploading}
                   className={cn(
                       "w-full md:w-auto px-8 py-6 rounded-xl text-lg font-bold transition-transform active:scale-95",
@@ -498,7 +655,7 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
                   Kumpulkan Tugas
                </Button>
             </div>
-         </div>
+          </div>
       )}
 
     </div>
