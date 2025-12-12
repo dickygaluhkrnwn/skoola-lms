@@ -1,131 +1,101 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { 
-  Users, Map, Trash2, Loader2, LogOut, ShieldAlert, Database, Play, CheckCircle
+  ShieldAlert, Database, Trash2, Activity, Users, 
+  School, BookOpen, FileText, Server, LogOut 
 } from "lucide-react";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "../../lib/firebase"; 
 import { 
-  collection, getDocs, deleteDoc, doc, query, orderBy, writeBatch 
+  collection, getDocs, deleteDoc, doc, writeBatch, getCountFromServer 
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { Button } from "../../components/ui/button";
 
-// --- IMPORT DATA BIPA 1 ---
-import { 
-  MODULE_SAPAAN, 
-  MODULE_PERKENALAN, 
-  MODULE_ANGKA 
-} from "@/lib/data/seed_bipa1"; // Part 1
-
-import { 
-  MODULE_KELUARGA,
-  MODULE_BENDA,
-  MODULE_WAKTU 
-} from "@/lib/data/seed_bipa1_part2"; // Part 2
-
-// --- IMPORT DATA BIPA 2 ---
-import {
-  BIPA2_FULL_SET,
-  MODULE_RUTINITAS,
-  MODULE_HOBI,
-  MODULE_LINGKUNGAN
-} from "@/lib/data/seed_bipa2"; // Part 1
-
-import {
-  BIPA2_PART2_SET,
-  MODULE_BELANJA,
-  MODULE_KESEHATAN,
-  MODULE_TRANSPORTASI
-} from "@/lib/data/seed_bipa2_part2"; // Part 2
-
-// --- IMPORT DATA BIPA 3 ---
-import {
-  BIPA3_FULL_SET,
-  MODULE_PENGALAMAN,
-  MODULE_CUACA,
-  MODULE_CITACITA
-} from "@/lib/data/seed_bipa3"; // Part 1
-
-import {
-  BIPA3_PART2_SET,
-  MODULE_PENDAPAT,
-  MODULE_SURAT,
-  MODULE_BUDAYA
-} from "@/lib/data/seed_bipa3_part2"; // Part 2 (NEW)
-
-import { CourseModule } from "@/lib/types/course.types";
-
-export default function SuperAdminPage() {
+export default function AdminConsolePage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"modules" | "users" | "seeder">("modules");
   const [loading, setLoading] = useState(true);
-  
-  const [modules, setModules] = useState<CourseModule[]>([]); 
-  const [users, setUsers] = useState<any[]>([]);
-  const [seedLoading, setSeedLoading] = useState(false);
+  const [stats, setStats] = useState({
+    users: 0,
+    classes: 0,
+    materials: 0,
+    assignments: 0
+  });
+  const [logs, setLogs] = useState<string[]>([]);
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"dashboard" | "users">("dashboard");
+
+  const addLog = (msg: string) => setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
 
   useEffect(() => {
-    fetchModules();
-    fetchUsers();
+    fetchStats();
   }, []);
 
-  const fetchModules = async () => {
+  const fetchStats = async () => {
     try {
-      const modQ = query(collection(db, "global_modules"), orderBy("order", "asc"));
-      const modSnap = await getDocs(modQ);
-      const mods = modSnap.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      })) as unknown as CourseModule[]; 
-      setModules(mods);
+      setLoading(true);
+      addLog("Fetching system stats...");
+
+      // 1. Count Users
+      const usersSnap = await getCountFromServer(collection(db, "users"));
+      
+      // 2. Count Classes
+      const classesSnap = await getCountFromServer(collection(db, "classrooms"));
+
+      // 3. Estimate Materials & Assignments (Iterate classes is heavy, simple count for now or sample)
+      // Note: For real scalable app, use distributed counters. Here we just count docs in subcollections of a few classes or just skip deep counts for speed.
+      // For this demo, let's just count top-level collections if we had them, or skip deep counts to avoid huge reads.
+      // We will just fetch Users list for the table.
+      
+      const usersQuery = await getDocs(collection(db, "users"));
+      const usersData = usersQuery.docs.map(d => ({ id: d.id, ...d.data() }));
+      setUsersList(usersData);
+
+      setStats({
+        users: usersSnap.data().count,
+        classes: classesSnap.data().count,
+        materials: 0, // Placeholder as calculating deep subcollections is expensive
+        assignments: 0 // Placeholder
+      });
+
+      addLog("Stats updated successfully.");
       setLoading(false);
-    } catch (err) {
-      console.error("Error fetch modules:", err);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+      addLog("ERROR: Failed to fetch stats.");
       setLoading(false);
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      const userSnap = await getDocs(collection(db, "users"));
-      const usersData = userSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUsers(usersData);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleDeleteModule = async (id: string) => {
-    if (confirm("Hapus modul ini? Data yang dihapus tidak bisa kembali.")) {
-      await deleteDoc(doc(db, "global_modules", id));
-      setModules(prev => prev.filter(m => m.id !== id));
-    }
-  };
-
-  const handleSeed = async (dataToSeed: CourseModule[], label: string) => {
-    if (!confirm(`Seed ${label} ke database? Data lama dengan ID yang sama akan ditimpa.`)) return;
+  const handleResetSystem = async () => {
+    const confirm1 = confirm("⚠️ PERINGATAN KERAS: Ini akan menghapus SEMUA data KELAS (Materi, Tugas, Submission). Data Pengguna TIDAK dihapus. Lanjutkan?");
+    if (!confirm1) return;
     
-    setSeedLoading(true);
+    const confirm2 = confirm("Apakah Anda benar-benar yakin? Tindakan ini tidak dapat dibatalkan.");
+    if (!confirm2) return;
+    
+    setLoading(true);
+    addLog("Memulai SYSTEM PURGE...");
+    
     try {
       const batch = writeBatch(db);
+      const classesSnap = await getDocs(collection(db, "classrooms"));
       
-      dataToSeed.forEach((modul) => {
-        const docRef = doc(db, "global_modules", modul.id); 
-        batch.set(docRef, modul);
+      let count = 0;
+      classesSnap.forEach((doc) => {
+        batch.delete(doc.ref);
+        count++;
       });
 
       await batch.commit();
-      alert(`✅ Berhasil Seed ${label}!`);
-      fetchModules(); 
-      setActiveTab("modules"); 
+      addLog(`BERHASIL: Menghapus ${count} kelas.`);
+      fetchStats();
     } catch (error) {
-      console.error("Gagal seeding:", error);
-      alert(`Gagal seeding ${label}. Cek console.`);
+      console.error(error);
+      addLog("ERROR: Gagal melakukan purge.");
     } finally {
-      setSeedLoading(false);
+      setLoading(false);
     }
   };
 
@@ -135,283 +105,169 @@ export default function SuperAdminPage() {
   };
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-      <Loader2 className="animate-spin mr-2"/> Loading Admin Center...
+    <div className="min-h-screen flex flex-col items-center justify-center bg-black text-green-500 font-mono">
+      <Activity className="animate-pulse mb-4" size={48} />
+      <p>INITIALIZING SYSTEM MONITOR...</p>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 font-sans flex">
-      
-      {/* SIDEBAR ADMIN */}
-      <aside className="w-64 bg-black/20 border-r border-gray-800 flex-col fixed inset-y-0 hidden md:flex">
-        <div className="p-6">
-          <div className="flex items-center gap-3 text-red-500 mb-6">
-            <ShieldAlert size={28} />
-            <h1 className="font-bold text-xl tracking-tighter text-white">GOD MODE</h1>
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-mono flex">
+       {/* SIDEBAR */}
+       <aside className="w-64 border-r border-slate-800 bg-black/50 hidden md:flex flex-col">
+          <div className="p-6 border-b border-slate-800">
+             <div className="flex items-center gap-2 text-green-500 mb-1">
+                <Server size={20} />
+                <span className="font-bold tracking-widest">SYS.ADMIN</span>
+             </div>
+             <p className="text-xs text-slate-500">v2.0.4-stable</p>
           </div>
-          <nav className="space-y-2">
-            <SidebarBtn active={activeTab === "modules"} onClick={() => setActiveTab("modules")} icon={<Map size={18} />} label="Manajemen Kurikulum" />
-            <SidebarBtn active={activeTab === "users"} onClick={() => setActiveTab("users")} icon={<Users size={18} />} label="Data Pengguna" />
-            <div className="pt-4 pb-2">
-               <p className="text-[10px] uppercase text-gray-500 font-bold px-4">Tools</p>
-            </div>
-            <SidebarBtn active={activeTab === "seeder"} onClick={() => setActiveTab("seeder")} icon={<Database size={18} />} label="Database Seeder" />
+          
+          <nav className="flex-1 p-4 space-y-2">
+             <button 
+                onClick={() => setActiveTab("dashboard")}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all ${activeTab === 'dashboard' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'}`}
+             >
+                <Activity size={18} /> Monitoring
+             </button>
+             <button 
+                onClick={() => setActiveTab("users")}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'}`}
+             >
+                <Users size={18} /> User Database
+             </button>
           </nav>
-        </div>
-        <div className="mt-auto p-6 border-t border-gray-800">
-          <button onClick={handleLogout} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm font-bold">
-            <LogOut size={16} /> Keluar
-          </button>
-        </div>
-      </aside>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 md:ml-64 p-8">
-        
-        {/* VIEW: MANAJEMEN MODUL */}
-        {activeTab === "modules" && (
-          <div>
-            <header className="mb-8 flex justify-between items-center">
-              <div>
-                <h2 className="text-3xl font-bold text-white mb-2">Kurikulum Global</h2>
-                <p className="text-gray-400">Daftar modul pembelajaran yang aktif di aplikasi.</p>
-              </div>
-            </header>
-
-            <div className="space-y-4">
-              {modules.length === 0 ? (
-                <div className="text-center py-16 bg-gray-900 rounded-2xl border border-gray-800 border-dashed">
-                  <p className="text-gray-500 mb-4">Database kosong. Gunakan menu Seeder untuk isi data.</p>
-                  <Button variant="secondary" onClick={() => setActiveTab("seeder")}>
-                    Pergi ke Seeder
-                  </Button>
-                </div>
-              ) : (
-                modules.map((mod) => (
-                  <motion.div 
-                    key={mod.id}
-                    layout
-                    initial={{ opacity: 0 }} 
-                    animate={{ opacity: 1 }}
-                    className="bg-gray-900 p-5 rounded-xl border border-gray-800 flex justify-between items-center group hover:border-gray-700 transition-all"
-                  >
-                    <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center text-2xl">
-                        {mod.thumbnailUrl || (mod as any).icon || "📚"}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-white text-lg">{mod.title}</h4>
-                        <p className="text-sm text-gray-400">{mod.description}</p>
-                        <div className="flex gap-2 mt-2">
-                          <Badge color="blue">Level {mod.level}</Badge>
-                          <Badge color="purple">
-                            {mod.lessons ? `${mod.lessons.length} Lesson` : `0 Soal`}
-                          </Badge>
-                          {mod.isLocked && <Badge color="red">Locked</Badge>}
-                        </div>
-                      </div>
-                    </div>
-                    <button onClick={() => handleDeleteModule(mod.id)} className="p-2 text-gray-600 hover:text-red-500 hover:bg-red-950/30 rounded-lg transition-colors">
-                      <Trash2 size={20} />
-                    </button>
-                  </motion.div>
-                ))
-              )}
-            </div>
+          <div className="p-4 border-t border-slate-800">
+             <button onClick={handleLogout} className="flex items-center gap-2 text-red-400 hover:text-red-300 text-sm font-bold w-full px-4 py-2 hover:bg-red-500/10 rounded transition-colors">
+                <LogOut size={16} /> TERMINATE SESSION
+             </button>
           </div>
-        )}
+       </aside>
 
-        {/* VIEW: DATABASE SEEDER */}
-        {activeTab === "seeder" && (
-            <div>
-                <header className="mb-8">
-                    <h2 className="text-3xl font-bold text-white mb-2">Database Seeder</h2>
-                    <p className="text-gray-400">Injeksi konten kurikulum BIPA standar ke dalam database.</p>
+       {/* MAIN CONTENT */}
+       <main className="flex-1 p-8 overflow-y-auto">
+          
+          {activeTab === "dashboard" && (
+             <div className="space-y-6">
+                <header className="flex justify-between items-center mb-8">
+                   <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+                      <ShieldAlert className="text-green-500" /> SYSTEM OVERVIEW
+                   </h1>
+                   <div className="flex items-center gap-2 text-xs text-green-500 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      OPERATIONAL
+                   </div>
                 </header>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    
-                    {/* --- BIPA 1 (A1) --- */}
-                    <div className="col-span-full pb-2 border-b border-gray-800 mb-2">
-                        <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest">BIPA 1 (A1) - Pemula</h3>
-                    </div>
-
-                    <SeedCard icon="👋" title="1.1 Sapaan" desc="Waktu & Salam" loading={seedLoading} onClick={() => handleSeed([MODULE_SAPAAN], "Modul Sapaan")} />
-                    <SeedCard icon="🤝" title="1.2 Intro" desc="Perkenalan Diri" loading={seedLoading} onClick={() => handleSeed([MODULE_PERKENALAN], "Modul Perkenalan")} />
-                    <SeedCard icon="1️⃣" title="1.3 Angka" desc="1-10 & Hitungan" loading={seedLoading} onClick={() => handleSeed([MODULE_ANGKA], "Modul Angka")} />
-                    <SeedCard icon="👨‍👩‍👧‍👦" title="1.4 Keluarga" desc="Ayah, Ibu, Kata Ganti" loading={seedLoading} onClick={() => handleSeed([MODULE_KELUARGA], "Modul Keluarga")} />
-                    <SeedCard icon="🎒" title="1.5 Benda" desc="Sekolah & Preposisi" loading={seedLoading} onClick={() => handleSeed([MODULE_BENDA], "Modul Benda")} />
-                    <SeedCard icon="📅" title="1.6 Waktu" desc="Hari, Besok, Kemarin" loading={seedLoading} onClick={() => handleSeed([MODULE_WAKTU], "Modul Waktu")} />
-
-                    {/* --- BIPA 2 (A2) --- */}
-                    <div className="col-span-full pb-2 border-b border-gray-800 mb-2 mt-6">
-                        <h3 className="text-sm font-bold text-green-400 uppercase tracking-widest">BIPA 2 (A2) - Dasar</h3>
-                    </div>
-
-                    <div className="col-span-full mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Button 
-                            onClick={() => handleSeed(BIPA2_FULL_SET, "SEMUA BIPA 2 (Part 1)")} 
-                            disabled={seedLoading}
-                            className="bg-green-700 hover:bg-green-600 text-white font-bold h-12 rounded-xl shadow-lg"
-                        >
-                            {seedLoading ? <Loader2 className="animate-spin mr-2"/> : <Database className="mr-2 h-4 w-4"/>}
-                            SEED BIPA 2 (Part 1)
-                        </Button>
-                         <Button 
-                            onClick={() => handleSeed(BIPA2_PART2_SET, "SEMUA BIPA 2 (Part 2)")} 
-                            disabled={seedLoading}
-                            className="bg-green-800 hover:bg-green-700 text-white font-bold h-12 rounded-xl shadow-lg"
-                        >
-                            {seedLoading ? <Loader2 className="animate-spin mr-2"/> : <Database className="mr-2 h-4 w-4"/>}
-                            SEED BIPA 2 (Part 2)
-                        </Button>
-                    </div>
-
-                    <SeedCard icon="⏰" title="2.1 Rutinitas" desc="Pagi-Malam, Jam" loading={seedLoading} onClick={() => handleSeed([MODULE_RUTINITAS], "Modul Rutinitas")} />
-                    <SeedCard icon="🎨" title="2.2 Hobi" desc="Hobi & Frekuensi" loading={seedLoading} onClick={() => handleSeed([MODULE_HOBI], "Modul Hobi")} />
-                    <SeedCard icon="🗺️" title="2.3 Lingkungan" desc="Tempat & Arah" loading={seedLoading} onClick={() => handleSeed([MODULE_LINGKUNGAN], "Modul Lingkungan")} />
-                    <SeedCard icon="🛍️" title="2.4 Belanja" desc="Pasar & Uang" loading={seedLoading} onClick={() => handleSeed([MODULE_BELANJA], "Modul Belanja")} />
-                    <SeedCard icon="🏥" title="2.5 Kesehatan" desc="Tubuh & Penyakit" loading={seedLoading} onClick={() => handleSeed([MODULE_KESEHATAN], "Modul Kesehatan")} />
-                    <SeedCard icon="🚎" title="2.6 Transport" desc="Kendaraan & Tiket" loading={seedLoading} onClick={() => handleSeed([MODULE_TRANSPORTASI], "Modul Transportasi")} />
-
-                    {/* --- BIPA 3 (B1) --- */}
-                    <div className="col-span-full pb-2 border-b border-gray-800 mb-2 mt-6">
-                        <h3 className="text-sm font-bold text-yellow-500 uppercase tracking-widest">BIPA 3 (B1) - Madya</h3>
-                    </div>
-
-                    <div className="col-span-full mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Button 
-                            onClick={() => handleSeed(BIPA3_FULL_SET, "SEMUA BIPA 3 (Part 1)")} 
-                            disabled={seedLoading}
-                            className="bg-yellow-700 hover:bg-yellow-600 text-white font-bold h-12 rounded-xl shadow-lg"
-                        >
-                            {seedLoading ? <Loader2 className="animate-spin mr-2"/> : <Database className="mr-2 h-4 w-4"/>}
-                            SEED BIPA 3 (Part 1)
-                        </Button>
-                        <Button 
-                            onClick={() => handleSeed(BIPA3_PART2_SET, "SEMUA BIPA 3 (Part 2)")} 
-                            disabled={seedLoading}
-                            className="bg-yellow-800 hover:bg-yellow-700 text-white font-bold h-12 rounded-xl shadow-lg"
-                        >
-                            {seedLoading ? <Loader2 className="animate-spin mr-2"/> : <Database className="mr-2 h-4 w-4"/>}
-                            SEED BIPA 3 (Part 2)
-                        </Button>
-                    </div>
-
-                    {/* Part 1 Cards */}
-                    <SeedCard icon="🕰️" title="3.1 Pengalaman" desc="Masa Lalu & Liburan" loading={seedLoading} onClick={() => handleSeed([MODULE_PENGALAMAN], "Modul Pengalaman")} />
-                    <SeedCard icon="⛈️" title="3.2 Cuaca" desc="Musim & Bencana" loading={seedLoading} onClick={() => handleSeed([MODULE_CUACA], "Modul Cuaca")} />
-                    <SeedCard icon="🎓" title="3.3 Cita-cita" desc="Harapan & Profesi" loading={seedLoading} onClick={() => handleSeed([MODULE_CITACITA], "Modul Cita-cita")} />
-                    
-                    {/* Part 2 Cards (NEW) */}
-                    <SeedCard icon="🗣️" title="3.4 Pendapat" desc="Setuju/Tidak Setuju" loading={seedLoading} onClick={() => handleSeed([MODULE_PENDAPAT], "Modul Pendapat")} />
-                    <SeedCard icon="✉️" title="3.5 Surat" desc="Email Formal" loading={seedLoading} onClick={() => handleSeed([MODULE_SURAT], "Modul Surat")} />
-                    <SeedCard icon="🎭" title="3.6 Budaya" desc="Tradisi & Batik" loading={seedLoading} onClick={() => handleSeed([MODULE_BUDAYA], "Modul Budaya")} />
-
+                {/* STATS GRID */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                   <StatBox label="TOTAL USERS" value={stats.users} icon={<Users size={24}/>} color="blue" />
+                   <StatBox label="ACTIVE CLASSROOMS" value={stats.classes} icon={<School size={24}/>} color="purple" />
+                   <StatBox label="MATERIALS" value="N/A" icon={<BookOpen size={24}/>} color="yellow" />
+                   <StatBox label="ASSIGNMENTS" value="N/A" icon={<FileText size={24}/>} color="pink" />
                 </div>
-            </div>
-        )}
 
-        {/* VIEW: USERS (READ ONLY) */}
-        {activeTab === "users" && (
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-black/40 text-gray-400 uppercase font-bold text-xs">
-                <tr>
-                  <th className="px-6 py-4">Nama</th>
-                  <th className="px-6 py-4">Role</th>
-                  <th className="px-6 py-4">Level</th>
-                  <th className="px-6 py-4">Email</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-800/50 transition-colors">
-                    <td className="px-6 py-4 font-bold text-white">{u.displayName}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${u.role === 'teacher' ? 'bg-purple-900/50 text-purple-300' : 'bg-green-900/50 text-green-300'}`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-gray-300">Lvl {u.level || 1}</td>
-                    <td className="px-6 py-4 text-gray-500 font-mono">{u.email}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                {/* LOGS & ACTIONS */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                   {/* LOG CONSOLE */}
+                   <div className="lg:col-span-2 bg-black border border-slate-800 rounded-xl p-4 font-mono text-xs h-96 flex flex-col">
+                      <div className="flex justify-between items-center mb-2 border-b border-slate-800 pb-2">
+                         <span className="text-slate-400 font-bold">SYSTEM LOGS</span>
+                         <span className="text-slate-600">tail -f system.log</span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto space-y-1 text-slate-300">
+                         {logs.map((log, i) => (
+                            <div key={i} className="border-l-2 border-slate-800 pl-2 hover:bg-white/5 py-0.5">{log}</div>
+                         ))}
+                         {logs.length === 0 && <div className="text-slate-600 italic">No activity recorded...</div>}
+                      </div>
+                   </div>
 
-      </main>
-      
-      <style jsx global>{`
-        .admin-input {
-          width: 100%;
-          background: #111827;
-          border: 1px solid #374151;
-          color: white;
-          padding: 0.5rem 1rem;
-          border-radius: 0.5rem;
-          outline: none;
-          transition: all 0.2s;
-        }
-        .admin-input:focus {
-          border-color: #6366f1;
-          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-        }
-      `}</style>
+                   {/* DANGER ZONE */}
+                   <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-6">
+                      <h3 className="text-red-400 font-bold mb-2 flex items-center gap-2">
+                         <Database size={18} /> DANGER ZONE
+                      </h3>
+                      <p className="text-red-300/60 text-xs mb-6">
+                         Tindakan di bawah ini bersifat destruktif dan tidak dapat dikembalikan. Gunakan hanya saat maintenance atau debugging.
+                      </p>
+                      
+                      <Button 
+                         onClick={handleResetSystem}
+                         className="w-full bg-red-600 hover:bg-red-500 text-white font-bold border border-red-400 shadow-[0_0_15px_rgba(220,38,38,0.4)]"
+                      >
+                         <Trash2 size={16} className="mr-2" /> PURGE CLASSROOMS
+                      </Button>
+                   </div>
+                </div>
+             </div>
+          )}
+
+          {activeTab === "users" && (
+             <div>
+                <header className="mb-6">
+                   <h1 className="text-2xl font-bold text-white">USER DATABASE</h1>
+                   <p className="text-slate-500 text-sm">Registered entities in the system.</p>
+                </header>
+
+                <div className="bg-black/40 border border-slate-800 rounded-xl overflow-hidden">
+                   <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-900 text-slate-400 uppercase font-bold text-xs">
+                         <tr>
+                            <th className="px-6 py-4">Display Name</th>
+                            <th className="px-6 py-4">Role</th>
+                            <th className="px-6 py-4">Level</th>
+                            <th className="px-6 py-4">Email</th>
+                            <th className="px-6 py-4 text-right">UID</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                         {usersList.map((u) => (
+                            <tr key={u.id} className="hover:bg-white/5 transition-colors">
+                               <td className="px-6 py-4 font-bold text-slate-200">{u.displayName}</td>
+                               <td className="px-6 py-4">
+                                  <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${u.role === 'teacher' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'}`}>
+                                     {u.role || 'STUDENT'}
+                                  </span>
+                               </td>
+                               <td className="px-6 py-4 text-slate-400">Lvl {u.level || u.gamification?.level || 1}</td>
+                               <td className="px-6 py-4 text-slate-500 font-mono">{u.email}</td>
+                               <td className="px-6 py-4 text-right text-slate-600 font-mono text-xs">{u.id.substring(0, 8)}...</td>
+                            </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
+          )}
+
+       </main>
     </div>
   );
 }
 
-// Sub-components
-function SeedCard({ icon, title, desc, onClick, loading }: any) {
-    return (
-        <div className="bg-gray-900 p-6 rounded-2xl border border-gray-800 hover:border-gray-600 transition-all flex flex-col gap-4 group">
-            <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-                    {icon}
-                </div>
-                <div>
-                    <h4 className="font-bold text-white text-lg">{title}</h4>
-                    <p className="text-sm text-gray-400 leading-tight">{desc}</p>
-                </div>
-            </div>
-            <div className="mt-auto pt-2">
-              <Button 
-                  variant="secondary" 
-                  onClick={onClick} 
-                  disabled={loading}
-                  className="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 h-10"
-              >
-                  <Play size={14} className="mr-2 fill-current" /> Seed
-              </Button>
-            </div>
-        </div>
-    )
-}
-
-function SidebarBtn({ active, icon, label, onClick }: any) {
-  return (
-    <button 
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-r-xl font-medium transition-all mb-1 border-l-4 ${active ? "bg-blue-900/20 border-blue-500 text-blue-400" : "border-transparent text-gray-400 hover:bg-gray-800 hover:text-white"}`}
-    >
-      {icon} {label}
-    </button>
-  );
-}
-
-function Badge({ children, color }: any) {
-    const colors: any = {
-        blue: "bg-blue-900/30 text-blue-400 border-blue-900/50",
-        purple: "bg-purple-900/30 text-purple-400 border-purple-900/50",
-        red: "bg-red-900/30 text-red-400 border-red-900/50",
-    }
-    return (
-        <span className={`text-[10px] px-2 py-0.5 rounded border ${colors[color] || colors.blue}`}>
-            {children}
-        </span>
-    )
+function StatBox({ label, value, icon, color }: any) {
+   const colors: any = {
+      blue: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+      purple: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+      yellow: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
+      pink: "text-pink-400 bg-pink-500/10 border-pink-500/20",
+   }
+   
+   return (
+      <div className={`p-6 rounded-xl border ${colors[color]} flex flex-col justify-between h-32 relative overflow-hidden`}>
+         <div className="absolute right-[-10px] top-[-10px] opacity-10 transform scale-150 rotate-12">
+            {React.cloneElement(icon, { size: 64 })}
+         </div>
+         <div className="relative z-10 flex justify-between items-start">
+            {icon}
+            <span className="text-[10px] font-bold opacity-60 uppercase tracking-widest">LIVE DATA</span>
+         </div>
+         <div className="relative z-10">
+            <h3 className="text-3xl font-bold text-white tracking-tighter">{value}</h3>
+            <p className="text-xs font-bold opacity-80 uppercase">{label}</p>
+         </div>
+      </div>
+   )
 }
