@@ -8,7 +8,7 @@ import { doc, getDoc, updateDoc, arrayUnion, increment } from "firebase/firestor
 import { onAuthStateChanged } from "firebase/auth";
 import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
 import { Button } from "../../../components/ui/button";
-import { LessonContent } from "../../../lib/types/course.types";
+import { QuizQuestion } from "../../../lib/types/course.types"; // CORRECTED IMPORT
 import { useTheme } from "../../../lib/theme-context";
 import { cn } from "../../../lib/utils";
 import { motion } from "framer-motion";
@@ -16,7 +16,7 @@ import { motion } from "framer-motion";
 interface LessonData {
   title: string;
   xp: number;
-  content: LessonContent[];
+  content: QuizQuestion[]; // UPDATED TYPE
 }
 
 interface LessonClientProps {
@@ -63,16 +63,17 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
         if (docSnap.exists()) {
           const data = docSnap.data();
-          let combinedContent: LessonContent[] = [];
+          let combinedContent: QuizQuestion[] = [];
 
           if (data.lessons && Array.isArray(data.lessons)) {
             data.lessons.forEach((l: any) => {
+              // Asumsi interactiveContent dan quizData berisi QuizQuestion atau format yang kompatibel
               if (l.interactiveContent) combinedContent.push(...l.interactiveContent);
               else if (l.quizData) combinedContent.push(...l.quizData);
             });
           } 
           else if (data.questions && Array.isArray(data.questions)) {
-            combinedContent = data.questions;
+            combinedContent = data.questions as QuizQuestion[];
           }
           
           if (combinedContent.length > 0) {
@@ -118,8 +119,9 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
       const userRef = doc(db, "users", userId);
       
       await updateDoc(userRef, {
-         xp: increment(earnedXP),
-         "gamification.xp": increment(earnedXP) 
+           // Ensure nested updates handle missing structures gracefully
+           xp: increment(earnedXP),
+           "gamification.xp": increment(earnedXP) 
       });
       
       if (isPassed) {
@@ -186,8 +188,8 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
   // Tampilan Utama (Wrapper untuk Quiz Engine)
   return (
     <div className={cn(
-       "min-h-screen relative overflow-hidden font-sans transition-colors duration-500",
-       isKids ? "bg-yellow-50" : isUni ? "bg-slate-950" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-slate-950" : "bg-slate-50"
+        "min-h-screen relative overflow-hidden font-sans transition-colors duration-500",
+        isKids ? "bg-yellow-50" : isUni ? "bg-slate-950" : isSMP ? "bg-slate-50/30" : isSMA ? "bg-slate-950" : "bg-slate-50"
     )}>
       
       {/* --- UNI THEME: Animated Mesh --- */}
