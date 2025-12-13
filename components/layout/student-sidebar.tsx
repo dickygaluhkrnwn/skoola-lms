@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, User, LayoutDashboard, Calendar, School, Users, Backpack, Map, BookOpen, Smile } from "lucide-react";
+import { LogOut, User, LayoutDashboard, Calendar, School, Users, Backpack, Map, BookOpen, Smile, MessageSquare } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -110,10 +110,10 @@ export function StudentSidebar() {
         
         <SidebarItem 
           theme={theme}
-          icon={isKids ? <Smile size={24} /> : <Users size={20} />} 
-          label={isKids ? "Teman Main" : "Sosial"} 
-          active={pathname === "/social"} 
-          onClick={() => router.push("/social")} 
+          icon={isKids ? <Smile size={24} /> : <MessageSquare size={20} />} 
+          label={isKids ? "Teman Main" : "Forum"} 
+          active={pathname?.startsWith("/forum")} 
+          onClick={() => router.push("/forum")} 
         />
         
         <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-8 mb-2 opacity-70", (isUni || isSMA) ? "text-slate-500" : "text-slate-500")}>

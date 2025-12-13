@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, LayoutDashboard } from "lucide-react";
 import { auth, db } from "../../lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useTheme } from "../../lib/theme-context";
@@ -137,6 +137,45 @@ export default function ProfileClient() {
 
       <main className="max-w-6xl mx-auto p-4 md:p-8 space-y-6 relative z-10">
         
+        {/* === TEACHER DASHBOARD ACCESS BANNER === */}
+        {userProfile?.role === 'teacher' && (
+          <div className={cn(
+            "rounded-xl p-6 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500",
+            isUni ? "bg-indigo-900/40 border border-indigo-500/30 backdrop-blur-md" : 
+            isSMA ? "bg-teal-900/40 border border-teal-500/30 backdrop-blur-md" :
+            "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+          )}>
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "p-3 rounded-lg backdrop-blur-sm", 
+                (isUni || isSMA) ? "bg-white/10" : "bg-white/20"
+              )}>
+                 <LayoutDashboard size={28} className={cn((isUni || isSMA) ? "text-white" : "text-white")} />
+              </div>
+              <div className="text-center md:text-left">
+                <h3 className={cn("font-bold text-lg", (isUni || isSMA) ? "text-white" : "text-white")}>
+                  Mode Guru Aktif
+                </h3>
+                <p className={cn("text-sm max-w-md", (isUni || isSMA) ? "text-slate-300" : "text-blue-100")}>
+                  Anda terdeteksi sebagai Guru. Akses dashboard pengelolaan kelas dan siswa Anda di sini.
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => router.push('/teacher')}
+              className={cn(
+                "px-6 py-2.5 font-bold rounded-lg transition-all shadow-sm w-full md:w-auto",
+                isUni ? "bg-indigo-600 hover:bg-indigo-500 text-white" :
+                isSMA ? "bg-teal-600 hover:bg-teal-500 text-white" :
+                "bg-white text-blue-600 hover:bg-blue-50"
+              )}
+            >
+              Buka Dashboard Guru
+            </button>
+          </div>
+        )}
+        {/* === END TEACHER BANNER === */}
+
         <div className="grid md:grid-cols-12 gap-6">
           
           {/* LEFT COLUMN: PROFILE CARD */}

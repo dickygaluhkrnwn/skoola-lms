@@ -105,7 +105,9 @@ export default function AuthClient() {
           if (docSnap.exists()) {
             const userData = docSnap.data();
             if (userData.schoolLevel) toggleTheme(userData.schoolLevel as Theme);
-            router.push(userData.role === "teacher" ? "/teacher" : "/learn");
+            // MODIFIED LOGIC: Always redirect to /learn regardless of role
+            // Teacher dashboard access is now via Profile page
+            router.push("/learn");
           }
         } catch (error) {
           console.error("Auth check failed:", error);
@@ -246,10 +248,10 @@ export default function AuthClient() {
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-emerald-300">Learning.</span>
                      </>
                   ) : (
-                     <>
+                      <>
                         Belajar Jadi <br/>
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-pink-300">Lebih Seru.</span>
-                     </>
+                      </>
                   )}
                </h1>
                <p className={cn("text-lg max-w-sm leading-relaxed", (isSMA || isUni) ? "text-slate-400" : "text-indigo-100/80")}>
@@ -268,8 +270,8 @@ export default function AuthClient() {
 
         {/* RIGHT: FORM AREA */}
         <div className={cn(
-           "w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center overflow-y-auto transition-colors duration-500",
-           (isSMA || isUni) ? "bg-slate-950/50 backdrop-blur-md" : "bg-white/50 backdrop-blur-md"
+            "w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center overflow-y-auto transition-colors duration-500",
+            (isSMA || isUni) ? "bg-slate-950/50 backdrop-blur-md" : "bg-white/50 backdrop-blur-md"
         )}>
             <div className="max-w-sm w-full mx-auto">
                 <div className="text-center mb-8">
@@ -326,8 +328,8 @@ export default function AuthClient() {
                                   className={cn(
                                      "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 text-center transition-all",
                                      role === "student" 
-                                       ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
-                                       : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
+                                        ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
+                                        : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
                                   )}
                                >
                                   <GraduationCap size={20} />
@@ -338,8 +340,8 @@ export default function AuthClient() {
                                   className={cn(
                                      "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 text-center transition-all",
                                      role === "teacher" 
-                                       ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
-                                       : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
+                                        ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
+                                        : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
                                   )}
                                >
                                   <Presentation size={20} />
