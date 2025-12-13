@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, LayoutDashboard } from "lucide-react";
+import { Loader2, LayoutDashboard, ShieldCheck } from "lucide-react";
 import { auth, db } from "../../lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useTheme } from "../../lib/theme-context";
@@ -174,7 +174,45 @@ export default function ProfileClient() {
             </button>
           </div>
         )}
-        {/* === END TEACHER BANNER === */}
+        
+        {/* === ADMIN SCHOOL DASHBOARD ACCESS BANNER === */}
+        {userProfile?.role === 'admin' && (
+          <div className={cn(
+            "rounded-xl p-6 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500",
+            isUni ? "bg-purple-900/40 border border-purple-500/30 backdrop-blur-md" : 
+            isSMA ? "bg-slate-800/60 border border-slate-600/30 backdrop-blur-md" :
+            "bg-gradient-to-r from-slate-800 to-slate-900 text-white"
+          )}>
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "p-3 rounded-lg backdrop-blur-sm", 
+                (isUni || isSMA) ? "bg-white/10" : "bg-white/20"
+              )}>
+                 <ShieldCheck size={28} className={cn((isUni || isSMA) ? "text-white" : "text-white")} />
+              </div>
+              <div className="text-center md:text-left">
+                <h3 className={cn("font-bold text-lg", (isUni || isSMA) ? "text-white" : "text-white")}>
+                  Mode Operator Sekolah
+                </h3>
+                <p className={cn("text-sm max-w-md", (isUni || isSMA) ? "text-slate-300" : "text-slate-200")}>
+                  Akses panel admin untuk mengelola data sekolah, pengguna, dan forum.
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => router.push('/admin-school')}
+              className={cn(
+                "px-6 py-2.5 font-bold rounded-lg transition-all shadow-sm w-full md:w-auto",
+                isUni ? "bg-purple-600 hover:bg-purple-500 text-white" :
+                isSMA ? "bg-slate-600 hover:bg-slate-500 text-white" :
+                "bg-white text-slate-900 hover:bg-slate-50"
+              )}
+            >
+              Buka Dashboard Admin
+            </button>
+          </div>
+        )}
+        {/* === END DASHBOARD BANNERS === */}
 
         <div className="grid md:grid-cols-12 gap-6">
           

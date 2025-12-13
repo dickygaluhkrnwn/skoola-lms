@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Eye, EyeOff, Loader2, Mail, Lock, User,
-  GraduationCap, Presentation, ArrowRight, Sparkles
+  GraduationCap, Presentation, ArrowRight, Sparkles, ShieldCheck
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import {
@@ -76,7 +76,7 @@ export default function AuthClient() {
   const [error, setError] = useState("");
   
   // Register States
-  const [role, setRole] = useState<"student" | "teacher" | null>(null);
+  const [role, setRole] = useState<"student" | "teacher" | "admin" | null>(null);
   const [schoolLevel, setSchoolLevel] = useState<Theme | null>(null);
   
   // Form Data
@@ -105,8 +105,10 @@ export default function AuthClient() {
           if (docSnap.exists()) {
             const userData = docSnap.data();
             if (userData.schoolLevel) toggleTheme(userData.schoolLevel as Theme);
-            // MODIFIED LOGIC: Always redirect to /learn regardless of role
-            // Teacher dashboard access is now via Profile page
+            
+            // Redirect Logic - UNIFIED
+            // Semua role (Admin, Teacher, Student) diarahkan ke halaman utama /learn
+            // Akses dashboard khusus dilakukan via menu Profil
             router.push("/learn");
           }
         } catch (error) {
@@ -140,18 +142,30 @@ export default function AuthClient() {
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await setDoc(doc(db, "users", userCredential.user.uid), {
+      
+      // Default data structure
+      const userData: any = {
         uid: userCredential.user.uid,
         displayName: name,
         email: email,
         role: role,
         schoolLevel: schoolLevel,
-        xp: 0,
-        level: 1,
-        streak: 1,
         createdAt: Date.now(),
-        enrolledClasses: []
-      });
+      };
+
+      // Tambahkan field spesifik berdasarkan role
+      if (role === 'student') {
+        userData.xp = 0;
+        userData.level = 1;
+        userData.streak = 1;
+        userData.enrolledClasses = [];
+      } else if (role === 'admin') {
+        // Admin mungkin butuh nama sekolah, nanti bisa diupdate di dashboard
+        userData.schoolName = "Nama Sekolah Belum Diatur"; 
+      }
+
+      await setDoc(doc(db, "users", userCredential.user.uid), userData);
+      
     } catch (err: any) {
       setError(err.message || "Gagal mendaftar.");
       setAuthLoading(false);
@@ -172,7 +186,6 @@ export default function AuthClient() {
       
       {/* --- AMBIENT BACKGROUND BLOBS --- */}
       {isUni ? (
-         // UNI BACKGROUND: Mesh Gradient
          <div className="fixed inset-0 z-0 pointer-events-none">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950" />
             <div className="absolute top-[-20%] right-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse" />
@@ -180,7 +193,6 @@ export default function AuthClient() {
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
          </div>
       ) : isSMA ? (
-        // SMA BACKGROUND (Dark Aurora)
         <div className="fixed inset-0 z-0 pointer-events-none">
            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950" />
            <div className="absolute top-[-20%] right-[-10%] w-[800px] h-[800px] bg-teal-600/10 rounded-full blur-[120px] animate-pulse" />
@@ -188,7 +200,6 @@ export default function AuthClient() {
            <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
         </div>
       ) : (
-        // DEFAULT BACKGROUND
         <div className="fixed inset-0 z-0 pointer-events-none">
           <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-violet-400/30 rounded-full blur-[120px] animate-pulse" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-fuchsia-400/30 rounded-full blur-[120px] animate-pulse delay-1000" />
@@ -322,7 +333,7 @@ export default function AuthClient() {
                       {view === "register" && (
                          <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
                             {/* Role Selection */}
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-3 gap-2">
                                <div 
                                   onClick={() => setRole("student")}
                                   className={cn(
@@ -333,7 +344,7 @@ export default function AuthClient() {
                                   )}
                                >
                                   <GraduationCap size={20} />
-                                  <span className="text-xs font-bold">Murid</span>
+                                  <span className="text-[10px] font-bold">Murid</span>
                                </div>
                                <div 
                                   onClick={() => setRole("teacher")}
@@ -345,7 +356,19 @@ export default function AuthClient() {
                                   )}
                                >
                                   <Presentation size={20} />
-                                  <span className="text-xs font-bold">Guru</span>
+                                  <span className="text-[10px] font-bold">Guru</span>
+                               </div>
+                               <div 
+                                  onClick={() => setRole("admin")}
+                                  className={cn(
+                                     "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 text-center transition-all",
+                                     role === "admin" 
+                                        ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
+                                        : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
+                                  )}
+                               >
+                                  <ShieldCheck size={20} />
+                                  <span className="text-[10px] font-bold">Operator</span>
                                </div>
                             </div>
 

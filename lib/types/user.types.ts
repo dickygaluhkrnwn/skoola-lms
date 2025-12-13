@@ -9,17 +9,18 @@ export interface UserProfile {
   createdAt: number; // Timestamp
   lastLogin: number; // Timestamp
   
-  // Data Akademik (Penting untuk hierarki Forum & Sekolah Digital)
-  institutionId?: string; // ID Sekolah/Kampus (Persiapan jika nanti multi-sekolah)
-  department?: string; // Jurusan/Program Studi (e.g. "Teknik Informatika", "IPA")
-  identityNumber?: string; // NIS/NIM/NIP
+  // Data Akademik
+  institutionId?: string; 
+  department?: string; 
+  identityNumber?: string; 
+  schoolLevel?: 'sd' | 'smp' | 'sma' | 'uni'; // Tambahan untuk jenjang sekolah
 
   // Gamification Stats (Khusus Student)
   gamification?: {
     xp: number;
     level: number;
     currentStreak: number;
-    lastStreakDate?: string; // ISO Date string YYYY-MM-DD
+    lastStreakDate?: string; 
     totalBadges: number;
   };
 
@@ -31,6 +32,13 @@ export interface UserProfile {
     twitter?: string;
     linkedin?: string;
   };
+  
+  // Sekolah/Institusi (Opsional, jika nanti ada fitur multi-sekolah)
+  schoolName?: string;
+  
+  // Class Enrollment
+  enrolledClasses?: string[];
+  completedModules?: string[];
 }
 
 // Tipe data ringkas untuk Leaderboard/UI list agar hemat bandwidth
@@ -38,7 +46,7 @@ export interface UserSummary {
   uid: string;
   displayName: string;
   photoURL?: string;
-  role: UserRole; // Ditambahkan agar mudah membedakan Guru/Siswa di list Forum
+  role: UserRole; 
   xp: number;
   level: number;
 }
