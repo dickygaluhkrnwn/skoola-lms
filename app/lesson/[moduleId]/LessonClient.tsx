@@ -8,7 +8,7 @@ import { doc, getDoc, updateDoc, arrayUnion, increment } from "firebase/firestor
 import { onAuthStateChanged } from "firebase/auth";
 import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
 import { Button } from "../../../components/ui/button";
-import { QuizQuestion } from "../../../lib/types/course.types"; // CORRECTED IMPORT
+import { QuizQuestion } from "../../../lib/types/course.types";
 import { useTheme } from "../../../lib/theme-context";
 import { cn } from "../../../lib/utils";
 import { motion } from "framer-motion";
@@ -16,7 +16,7 @@ import { motion } from "framer-motion";
 interface LessonData {
   title: string;
   xp: number;
-  content: QuizQuestion[]; // UPDATED TYPE
+  content: QuizQuestion[];
 }
 
 interface LessonClientProps {
@@ -99,7 +99,7 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
     fetchModule();
   }, [moduleId]);
 
-  // 3. Handle Penyelesaian
+  // 3. Handle Penyelesaian dengan Context-Aware XP
   const handleLessonComplete = async (score: number) => {
     if (!userId) {
       alert("Anda belum login! Progres tidak tersimpan.");
@@ -113,15 +113,34 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
 
     const passingScore = 60;
     const isPassed = score >= passingScore;
-    const earnedXP = isPassed ? lesson.xp : Math.floor(lesson.xp / 4);
+
+    // --- LOGIC ADAPTIF XP BERDASARKAN JENJANG (SCHOOL TYPE) ---
+    // Base XP diambil dari database modul (default 50)
+    let contextXP = lesson.xp;
+
+    if (isUni) {
+      // Universitas: XP Multiplier 2x (Asumsi bobot SKS lebih berat)
+      // Jika Base 50 -> Jadi 100 XP
+      contextXP = Math.floor(contextXP * 2); 
+    } else if (isSMA) {
+       // SMA: XP Multiplier 1.5x
+      contextXP = Math.floor(contextXP * 1.5);
+    } else if (isSMP) {
+       // SMP: XP Multiplier 1.25x
+      contextXP = Math.floor(contextXP * 1.25);
+    }
+    // SD (isKids) tetap menggunakan Base XP (1.0x)
+
+    // Jika Gagal (Score < 60), hanya dapat 1/4 dari XP konteks
+    const earnedXP = isPassed ? contextXP : Math.floor(contextXP / 4);
     
     try {
       const userRef = doc(db, "users", userId);
       
       await updateDoc(userRef, {
-           // Ensure nested updates handle missing structures gracefully
-           xp: increment(earnedXP),
-           "gamification.xp": increment(earnedXP) 
+            // Ensure nested updates handle missing structures gracefully
+            xp: increment(earnedXP),
+            "gamification.xp": increment(earnedXP) 
       });
       
       if (isPassed) {
@@ -226,7 +245,7 @@ export default function LessonClient({ moduleId }: LessonClientProps) {
           <QuizEngine 
             lessonTitle={lesson.title}
             content={lesson.content}
-            xpReward={lesson.xp}
+            xpReward={lesson.xp} // Visual only, perhitungan asli di handleLessonComplete
             onComplete={(score) => handleLessonComplete(score)}
             onExit={handleExit}
           />

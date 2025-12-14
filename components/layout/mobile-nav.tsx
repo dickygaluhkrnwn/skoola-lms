@@ -71,23 +71,23 @@ export function MobileNav() {
     )}>
       <NavItem 
         theme={realSchoolLevel}
-        active={pathname === "/learn"} 
-        onClick={() => router.push("/learn")} 
+        active={pathname === "/dashboard"} 
+        onClick={() => router.push("/dashboard")} 
         icon={isKids ? <Map /> : <LayoutDashboard />} 
-        label={isKids ? "Markas" : isUni ? "Kampus" : "Home"} 
+        label={isKids ? "Markas" : isUni ? "Dashboard" : "Home"} 
       />
       
       <NavItem 
         theme={realSchoolLevel}
-        active={pathname.includes("class")} 
-        onClick={() => router.push("/learn?tab=classes")} 
+        active={pathname === "/learn"} 
+        onClick={() => router.push("/learn")} 
         icon={isKids ? <Backpack /> : <School />} 
         label={isKids ? "Tas Sekolah" : isUni ? "Kuliah" : "Kelas"} 
       />
       
       <NavItem 
         theme={realSchoolLevel}
-        active={pathname === "/social"} 
+        active={pathname.startsWith("/social")} 
         onClick={() => router.push("/social")} 
         icon={isKids ? <Smile /> : <Globe />} 
         label={isKids ? "Dunia Kita" : "Sosial"} 

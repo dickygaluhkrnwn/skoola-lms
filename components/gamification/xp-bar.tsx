@@ -19,6 +19,37 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
   // Hitung persentase untuk lebar bar (max 100%)
   const percentage = Math.min((currentXP / maxXP) * 100, 100);
 
+  // --- DYNAMIC RANK TITLE LOGIC (ADAPTIVE LOOKUP) ---
+  const getRankTitle = (theme: string, level: number) => {
+    switch (theme) {
+      case 'sd':
+        if (level <= 3) return "Petualang Muda";
+        if (level <= 6) return "Penjelajah";
+        if (level <= 9) return "Kapten";
+        return "Legenda";
+      case 'smp':
+        if (level <= 3) return "Rookie";
+        if (level <= 6) return "Challenger";
+        if (level <= 9) return "Elite";
+        return "Champion";
+      case 'sma':
+        if (level <= 3) return "Aspirant";
+        if (level <= 6) return "Achiever";
+        if (level <= 9) return "Master";
+        return "Grandmaster";
+      case 'uni':
+        // University uses academic years/titles
+        if (level <= 2) return "Freshman";
+        if (level <= 4) return "Sophomore";
+        if (level <= 6) return "Junior";
+        return "Senior";
+      default:
+        return "Learner";
+    }
+  };
+
+  const rankTitle = getRankTitle(theme, level);
+
   // --- THEME CONFIGURATION ---
   const getThemeConfig = () => {
     switch (theme) {
@@ -29,7 +60,6 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
           textColor: "text-orange-600",
           levelBadge: "bg-yellow-400 text-yellow-900 border-2 border-white shadow-md rounded-xl",
           icon: <Star size={12} fill="currentColor" className="animate-spin-slow" />,
-          label: "Petualang"
         };
       case 'smp':
         return {
@@ -38,7 +68,6 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
           textColor: "text-indigo-600",
           levelBadge: "bg-indigo-600 text-white shadow-lg shadow-indigo-200 rounded-lg",
           icon: <Zap size={12} fill="currentColor" />,
-          label: "Challenger"
         };
       case 'sma':
         return {
@@ -48,7 +77,6 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
           textColor: "text-teal-400",
           levelBadge: "bg-teal-950/50 text-teal-300 border border-teal-500/30 shadow-[0_0_10px_rgba(20,184,166,0.2)] rounded-md backdrop-blur-sm",
           icon: <Sparkles size={12} className="text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" />,
-          label: "Achiever"
         };
       case 'uni':
         return {
@@ -58,7 +86,6 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
           textColor: "text-indigo-300",
           levelBadge: "bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.3)] rounded-md backdrop-blur-md font-mono",
           icon: <GraduationCap size={12} className="text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" />,
-          label: "Scholar"
         };
       default: // Fallback same as SD
         return {
@@ -67,7 +94,6 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
           textColor: "text-gray-600",
           levelBadge: "bg-gray-500 text-white rounded-md",
           icon: <Star size={12} />,
-          label: "User"
         };
     }
   };
@@ -86,7 +112,7 @@ export function XPBar({ currentXP, maxXP, level, className }: XPBarProps) {
             LVL {level}
           </span>
           <span className={cn("text-xs font-bold uppercase tracking-wide opacity-80", config.textColor)}>
-            {config.label}
+            {rankTitle}
           </span>
         </div>
         <span className={cn("text-[10px] font-bold font-mono tracking-tight", config.textColor)}>

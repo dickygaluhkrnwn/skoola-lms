@@ -54,7 +54,7 @@ export function JoinClassModal({ isOpen, onClose, onJoin, isLoading, theme }: Jo
     try {
         // 1. Pre-Check: Cari kelas berdasarkan kode
         const classroomsRef = collection(db, "classrooms");
-        const q = query(classroomsRef, where("code", "==", code.trim())); // Asumsi field di db adalah 'code'
+        const q = query(classroomsRef, where("code", "==", code.trim()));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
@@ -65,26 +65,34 @@ export function JoinClassModal({ isOpen, onClose, onJoin, isLoading, theme }: Jo
 
         const classroomData = querySnapshot.docs[0].data();
         
-        // 2. School Isolation Check
-        // Jika user punya schoolId DAN kelas punya schoolId, harus cocok.
-        if (currentUserProfile?.schoolId && classroomData.schoolId) {
-            if (currentUserProfile.schoolId !== classroomData.schoolId) {
-                setErrorMessage("Kode valid, namun kelas ini bukan milik sekolah Anda.");
+        // 2. School Isolation Check (Validasi Sekolah)
+        // Aturan: Siswa hanya boleh masuk kelas yang:
+        // a. Milik sekolah yang sama (schoolId match)
+        // b. Kelas umum (tidak punya schoolId)
+        
+        const userSchoolId = currentUserProfile?.schoolId;
+        const classSchoolId = classroomData.schoolId;
+
+        // Kasus A: User punya sekolah, Kelas punya sekolah -> Harus Match
+        if (userSchoolId && classSchoolId) {
+            if (userSchoolId !== classSchoolId) {
+                setErrorMessage("Kelas ini milik sekolah/kampus lain.");
                 setValidating(false);
                 return;
             }
-        } else if (classroomData.schoolId && !currentUserProfile?.schoolId) {
-             // Opsional: Jika kelas punya sekolah tapi user 'umum' (belum join sekolah), tolak atau izinkan?
-             // Sesuai aturan ketat: tolak agar user join sekolah dulu.
+        } 
+        // Kasus B: User TIDAK punya sekolah, Kelas punya sekolah -> Tolak (Wajib join sekolah dulu)
+        else if (!userSchoolId && classSchoolId) {
              setErrorMessage("Anda harus bergabung dengan sekolah terlebih dahulu untuk masuk kelas ini.");
              setValidating(false);
              return;
         }
+        // Kasus C: User punya/tidak sekolah, Kelas TIDAK punya sekolah (Umum) -> Lolos
 
         // 3. Jika lolos validasi, panggil fungsi onJoin dari parent
         await onJoin(code);
         setCode("");
-        onClose(); // Tutup modal jika sukses (onJoin biasanya handle error sendiri jika gagal update db)
+        onClose(); 
 
     } catch (err) {
         console.error("Error validating class code:", err);

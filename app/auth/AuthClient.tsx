@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Eye, EyeOff, Loader2, Mail, Lock, User,
-  GraduationCap, Presentation, ArrowRight, Sparkles, ShieldCheck
+  GraduationCap, Presentation, ArrowRight, Sparkles, ShieldCheck, Palette
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import {
@@ -65,6 +65,37 @@ const InputField = ({ label, icon, type = "text", value, onChange, placeholder, 
   );
 };
 
+// --- REUSABLE LEVEL SELECTOR ---
+const SchoolLevelSelector = ({ selected, onSelect, isSMA, isUni, label = "Jenjang Sekolah" }: any) => (
+  <div className="mb-4">
+    <label className={cn("text-xs font-bold uppercase ml-1 mb-1 flex items-center gap-1", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>
+       <Palette size={12} /> {label}
+    </label>
+    <div className="grid grid-cols-4 gap-2">
+      {[
+         { id: 'sd', label: 'SD', color: 'red' },
+         { id: 'smp', label: 'SMP', color: 'violet' },
+         { id: 'sma', label: 'SMA', color: 'emerald' },
+         { id: 'uni', label: 'Univ', color: 'slate' },
+      ].map((lvl) => (
+         <div
+            key={lvl.id}
+            onClick={() => onSelect(lvl.id)}
+            className={cn(
+               "cursor-pointer py-2 rounded-lg border-2 text-center text-xs font-bold transition-all",
+               selected === lvl.id 
+                  ? (isUni ? "border-indigo-500 bg-indigo-900/30 text-indigo-400" : isSMA ? `border-teal-500 bg-teal-900/30 text-teal-400` : `border-${lvl.color}-500 bg-${lvl.color}-50 text-${lvl.color}-700`) 
+                  : ((isSMA || isUni) ? "border-slate-700 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
+            )}
+            style={selected === lvl.id && !isSMA && !isUni ? { borderColor: `var(--color-primary)`, color: `var(--color-primary)`, backgroundColor: `var(--color-secondary)` } : {}}
+         >
+            {lvl.label}
+         </div>
+      ))}
+    </div>
+  </div>
+);
+
 // --- MAIN CLIENT COMPONENT ---
 export default function AuthClient() {
   const router = useRouter();
@@ -84,17 +115,18 @@ export default function AuthClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Helper State for Themes (Dynamic based on Selection OR Current Theme)
-  const isSMA = (view === "register" && schoolLevel === "sma") || (view === "login" && theme === "sma");
-  const isUni = (view === "register" && schoolLevel === "uni") || (view === "login" && theme === "uni");
-  const isKids = (view === "register" && schoolLevel === "sd") || (view === "login" && theme === "sd");
+  // Helper State for Themes
+  const isSMA = theme === 'sma';
+  const isUni = theme === 'uni';
+  const isKids = theme === 'sd';
 
-  // Update theme preview based on selection IMMEDIATELY
+  // FIX: Safety Check untuk useEffect agar tidak loop
   useEffect(() => {
-    if (view === "register" && schoolLevel) {
+    // Hanya update tema jika schoolLevel terpilih DAN berbeda dengan tema saat ini
+    if (schoolLevel && theme !== schoolLevel) {
       toggleTheme(schoolLevel);
     }
-  }, [schoolLevel, view, toggleTheme]);
+  }, [schoolLevel, theme, toggleTheme]);
 
   // Auth Check & Redirect
   useEffect(() => {
@@ -107,7 +139,10 @@ export default function AuthClient() {
             const userData = docSnap.data();
             
             // Sync Theme Persistence
-            if (userData.schoolLevel) toggleTheme(userData.schoolLevel as Theme);
+            if (userData.schoolLevel) {
+                // Cukup set state lokal, useEffect di atas akan menangani toggleTheme
+                setSchoolLevel(userData.schoolLevel as Theme);
+            }
             
             // SMART REDIRECT LOGIC
             if (userData.role === 'admin') {
@@ -125,7 +160,7 @@ export default function AuthClient() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [router, toggleTheme]);
+  }, [router]); // Removed toggleTheme from dependencies to avoid conflicts
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,7 +222,7 @@ export default function AuthClient() {
 
   return (
     <div className={cn(
-      "min-h-screen w-full flex items-center justify-center relative overflow-hidden font-sans transition-colors duration-700 ease-in-out",
+      "min-h-screen w-full flex items-center justify-center relative font-sans transition-colors duration-700 ease-in-out py-10 px-4",
       (isSMA || isUni) ? "bg-slate-950" : "bg-slate-50"
     )}>
       
@@ -216,14 +251,17 @@ export default function AuthClient() {
         </div>
       )}
 
+      {/* --- MAIN CARD --- */}
       <div className={cn(
-         "w-full max-w-5xl h-full md:h-[650px] flex rounded-3xl overflow-hidden shadow-2xl relative z-10 m-4 transition-all duration-500",
+         "w-full max-w-5xl flex flex-col md:flex-row rounded-3xl overflow-hidden shadow-2xl relative z-10 transition-all duration-500",
+         "md:h-[700px]", 
+         "h-auto", 
          isUni ? "bg-slate-900/60 backdrop-blur-2xl border border-white/10" :
          isSMA ? "bg-slate-900/40 backdrop-blur-2xl border border-white/10" : 
          "bg-white/60 backdrop-blur-xl border border-white/50"
       )}>
         
-        {/* LEFT: VISUAL PANEL */}
+        {/* LEFT: VISUAL PANEL (Hidden on Mobile) */}
         <div className={cn(
            "hidden md:flex w-1/2 relative p-12 flex-col text-white justify-between overflow-hidden transition-colors duration-1000",
            isUni ? "bg-gradient-to-br from-indigo-900 via-slate-900 to-black" :
@@ -256,7 +294,7 @@ export default function AuthClient() {
                       isUni ? "bg-indigo-500/20 text-indigo-300" : 
                       isSMA ? "bg-teal-500/20" : 
                       "bg-white/20")}>
-                     <Sparkles size={24} className={isUni ? "text-indigo-300" : isSMA ? "text-teal-300" : "text-white"} />
+                      <Sparkles size={24} className={isUni ? "text-indigo-300" : isSMA ? "text-teal-300" : "text-white"} />
                   </div>
                   <span className="font-bold tracking-widest text-sm uppercase opacity-80">SKOOLA LMS</span>
                </div>
@@ -302,7 +340,8 @@ export default function AuthClient() {
 
         {/* RIGHT: FORM AREA */}
         <div className={cn(
-            "w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center overflow-y-auto transition-colors duration-500",
+            "w-full md:w-1/2 p-6 md:p-12 flex flex-col justify-center transition-colors duration-500",
+            "md:overflow-y-auto", 
             (isSMA || isUni) ? "bg-slate-950/50 backdrop-blur-md" : "bg-white/50 backdrop-blur-md"
         )}>
             <div className="max-w-sm w-full mx-auto">
@@ -320,10 +359,10 @@ export default function AuthClient() {
                    <button 
                       onClick={() => { setView("login"); setError(""); }}
                       className={cn(
-                         "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
-                         view === "login" 
-                           ? ((isSMA || isUni) ? "bg-slate-700 text-white shadow-sm" : "bg-white text-slate-900 shadow-sm") 
-                           : ((isSMA || isUni) ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-700")
+                          "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+                          view === "login" 
+                            ? ((isSMA || isUni) ? "bg-slate-700 text-white shadow-sm" : "bg-white text-slate-900 shadow-sm") 
+                            : ((isSMA || isUni) ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-700")
                       )}
                    >
                       Masuk
@@ -331,10 +370,10 @@ export default function AuthClient() {
                    <button 
                       onClick={() => { setView("register"); setError(""); }}
                       className={cn(
-                         "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
-                         view === "register" 
-                           ? ((isSMA || isUni) ? "bg-slate-700 text-white shadow-sm" : "bg-white text-slate-900 shadow-sm") 
-                           : ((isSMA || isUni) ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-700")
+                          "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+                          view === "register" 
+                            ? ((isSMA || isUni) ? "bg-slate-700 text-white shadow-sm" : "bg-white text-slate-900 shadow-sm") 
+                            : ((isSMA || isUni) ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-700")
                       )}
                    >
                       Daftar
@@ -351,54 +390,70 @@ export default function AuthClient() {
                       onSubmit={view === "login" ? handleLogin : handleRegister}
                       className="space-y-4"
                    >
+                      {/* --- LOGIN FORM --- */}
+                      {view === "login" && (
+                         <div className="space-y-4 animate-in slide-in-from-left-4 fade-in duration-300">
+                             {/* THEME SELECTOR FOR LOGIN (VISUAL ONLY) */}
+                             <SchoolLevelSelector 
+                                selected={schoolLevel} 
+                                onSelect={setSchoolLevel} 
+                                isSMA={isSMA} 
+                                isUni={isUni}
+                                label="Jenjang Sekolah"
+                             />
+                             
+                             <InputField
+                                label="Email"
+                                type="email"
+                                placeholder="nama@sekolah.id"
+                                icon={<Mail size={18} />}
+                                value={email}
+                                onChange={(e: any) => setEmail(e.target.value)}
+                                isSMA={isSMA}
+                                isUni={isUni}
+                             />
+                             <InputField
+                                label="Password"
+                                type="password"
+                                placeholder="••••••••"
+                                icon={<Lock size={18} />}
+                                value={password}
+                                onChange={(e: any) => setPassword(e.target.value)}
+                                isSMA={isSMA}
+                                isUni={isUni}
+                             />
+                         </div>
+                      )}
+
+                      {/* --- REGISTER FORM --- */}
                       {view === "register" && (
-                         <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
+                          <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
                             
-                            {/* Role Selection */}
+                            {/* 1. JENJANG SEKOLAH (MOVED TOP) */}
+                            <SchoolLevelSelector 
+                                selected={schoolLevel} 
+                                onSelect={setSchoolLevel} 
+                                isSMA={isSMA} 
+                                isUni={isUni}
+                            />
+                            
+                            {/* 2. ROLE SELECTION */}
                             <div className="grid grid-cols-3 gap-2">
                                {[{id: 'student', label: 'Murid', icon: GraduationCap}, {id: 'teacher', label: 'Guru/Dosen', icon: Presentation}, {id: 'admin', label: 'Operator', icon: ShieldCheck}].map(item => (
-                                 <div 
-                                    key={item.id}
-                                    onClick={() => setRole(item.id as any)}
-                                    className={cn(
-                                       "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 text-center transition-all",
-                                       role === item.id 
-                                         ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
-                                         : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
-                                    )}
-                                 >
-                                    <item.icon size={20} />
-                                    <span className="text-[10px] font-bold">{item.label}</span>
-                                 </div>
+                                  <div 
+                                     key={item.id}
+                                     onClick={() => setRole(item.id as any)}
+                                     className={cn(
+                                        "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 text-center transition-all",
+                                        role === item.id 
+                                          ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
+                                          : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
+                                     )}
+                                  >
+                                     <item.icon size={20} />
+                                     <span className="text-[10px] font-bold">{item.label}</span>
+                                  </div>
                                ))}
-                            </div>
-
-                            {/* Level Selection */}
-                            <div>
-                               <label className={cn("text-xs font-bold uppercase ml-1 mb-1 block", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>Jenjang Sekolah</label>
-                               <div className="grid grid-cols-4 gap-2">
-                                  {[
-                                     { id: 'sd', label: 'SD', color: 'red' },
-                                     { id: 'smp', label: 'SMP', color: 'violet' },
-                                     { id: 'sma', label: 'SMA', color: 'emerald' },
-                                     { id: 'uni', label: 'Univ', color: 'slate' },
-                                  ].map((lvl) => (
-                                     <div
-                                        key={lvl.id}
-                                        onClick={() => setSchoolLevel(lvl.id as Theme)}
-                                        className={cn(
-                                           "cursor-pointer py-2 rounded-lg border-2 text-center text-xs font-bold transition-all",
-                                           schoolLevel === lvl.id 
-                                             ? (isUni ? "border-indigo-500 bg-indigo-900/30 text-indigo-400" : isSMA ? `border-teal-500 bg-teal-900/30 text-teal-400` : `border-${lvl.color}-500 bg-${lvl.color}-50 text-${lvl.color}-700`) 
-                                             : ((isSMA || isUni) ? "border-slate-700 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
-                                        )}
-                                        // Override style for light mode colors
-                                        style={schoolLevel === lvl.id && !isSMA && !isUni ? { borderColor: `var(--color-primary)`, color: `var(--color-primary)`, backgroundColor: `var(--color-secondary)` } : {}}
-                                     >
-                                        {lvl.label}
-                                     </div>
-                                  ))}
-                               </div>
                             </div>
 
                             <InputField
@@ -410,59 +465,59 @@ export default function AuthClient() {
                                isSMA={isSMA}
                                isUni={isUni}
                             />
-                         </div>
+
+                            <InputField
+                                label="Email"
+                                type="email"
+                                placeholder="nama@sekolah.id"
+                                icon={<Mail size={18} />}
+                                value={email}
+                                onChange={(e: any) => setEmail(e.target.value)}
+                                isSMA={isSMA}
+                                isUni={isUni}
+                            />
+
+                            <InputField
+                                label="Password"
+                                type="password"
+                                placeholder="••••••••"
+                                icon={<Lock size={18} />}
+                                value={password}
+                                onChange={(e: any) => setPassword(e.target.value)}
+                                isSMA={isSMA}
+                                isUni={isUni}
+                            />
+                          </div>
                       )}
 
-                      <InputField
-                         label="Email"
-                         type="email"
-                         placeholder="nama@sekolah.id"
-                         icon={<Mail size={18} />}
-                         value={email}
-                         onChange={(e: any) => setEmail(e.target.value)}
-                         isSMA={isSMA}
-                         isUni={isUni}
-                      />
-
-                      <InputField
-                         label="Password"
-                         type="password"
-                         placeholder="••••••••"
-                         icon={<Lock size={18} />}
-                         value={password}
-                         onChange={(e: any) => setPassword(e.target.value)}
-                         isSMA={isSMA}
-                         isUni={isUni}
-                      />
-
                       {error && (
-                         <div className={cn(
-                            "p-3 text-xs font-bold rounded-lg border flex items-center gap-2",
-                            (isSMA || isUni) ? "bg-red-900/20 text-red-400 border-red-900/50" : "bg-red-50 text-red-600 border-red-100"
-                         )}>
-                            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                            {error}
-                         </div>
+                          <div className={cn(
+                             "p-3 text-xs font-bold rounded-lg border flex items-center gap-2",
+                             (isSMA || isUni) ? "bg-red-900/20 text-red-400 border-red-900/50" : "bg-red-50 text-red-600 border-red-100"
+                          )}>
+                             <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                             {error}
+                          </div>
                       )}
 
                       <button
-                         type="submit"
-                         disabled={authLoading}
-                         className={cn(
-                            "w-full py-3.5 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-4",
-                            isUni 
-                              ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]"
-                              : isSMA 
-                                ? "bg-teal-600 hover:bg-teal-500 text-white shadow-teal-900/20" 
-                                : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-violet-500/30"
-                         )}
+                          type="submit"
+                          disabled={authLoading}
+                          className={cn(
+                             "w-full py-3.5 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-4",
+                             isUni 
+                               ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]"
+                               : isSMA 
+                                 ? "bg-teal-600 hover:bg-teal-500 text-white shadow-teal-900/20" 
+                                 : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-violet-500/30"
+                          )}
                       >
-                         {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
-                            <>
-                               {view === "login" ? "Masuk Sekarang" : "Buat Akun Baru"}
-                               <ArrowRight size={18} />
-                            </>
-                         )}
+                          {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
+                             <>
+                                {view === "login" ? "Masuk Sekarang" : "Buat Akun Baru"}
+                                <ArrowRight size={18} />
+                             </>
+                          )}
                       </button>
                    </motion.form>
                 </AnimatePresence>

@@ -8,21 +8,33 @@ export interface UserProfile {
   role: UserRole;
   createdAt: number; // Timestamp
   lastLogin: number; // Timestamp
+  lastActivityDate?: number; // <-- NEW: Timestamp aktivitas terakhir untuk hitung streak harian
   
   // Data Akademik
   institutionId?: string; 
-  schoolId?: string; // <-- UPDATE: Field kunci untuk isolasi data sekolah
+  schoolId?: string; // Field kunci untuk isolasi data sekolah
   department?: string; 
   identityNumber?: string; 
-  schoolLevel?: 'sd' | 'smp' | 'sma' | 'uni'; // Tambahan untuk jenjang sekolah
+  schoolLevel?: 'sd' | 'smp' | 'sma' | 'uni'; // Jenjang sekolah
 
   // Gamification Stats (Khusus Student)
   gamification?: {
     xp: number;
     level: number;
     currentStreak: number;
-    lastStreakDate?: string; 
+    maxStreak: number; // <-- NEW: Rekor streak tertinggi
+    lastStreakDate?: string; // Format YYYY-MM-DD untuk cek harian
     totalBadges: number;
+  };
+
+  // Arena Stats (New for Skoola Arena)
+  arenaStats?: {
+    totalPoints: number;      // Akumulasi poin seumur hidup
+    currentSeasonPoints: number; // Poin musim ini (reset tiap season)
+    currentRank?: number;     // Ranking Global saat ini
+    currentTier?: "bronze" | "silver" | "gold" | "platinum" | "diamond";
+    gamesPlayed: number;
+    gamesWon: number;
   };
 
   // Metadata tambahan
@@ -42,7 +54,7 @@ export interface UserProfile {
   completedModules?: string[];
 }
 
-// UPDATE: Definisi tipe data untuk Sekolah (Collection 'schools')
+// Definisi tipe data untuk Sekolah (Collection 'schools')
 export interface School {
   id: string; // Document ID di Firestore
   name: string;
@@ -51,6 +63,12 @@ export interface School {
   level: 'sd' | 'smp' | 'sma' | 'uni';
   adminId: string; // UID Admin yang mengelola sekolah ini
   createdAt: number;
+  
+  // Arena Stats untuk Sekolah (Guild War)
+  arenaStats?: {
+    totalPoints: number;
+    globalRank?: number;
+  };
 }
 
 // Tipe data ringkas untuk Leaderboard/UI list agar hemat bandwidth
@@ -61,4 +79,5 @@ export interface UserSummary {
   role: UserRole; 
   xp: number;
   level: number;
+  schoolName?: string; // Penting untuk leaderboard global
 }

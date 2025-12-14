@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, User, LayoutDashboard, Calendar, School, Users, Backpack, Map, BookOpen, Smile, MessageSquare, GraduationCap, Globe } from "lucide-react";
+import { LogOut, User, LayoutDashboard, Calendar, School, Users, Backpack, Map, BookOpen, Smile, MessageSquare, GraduationCap, Globe, FileText, Trophy } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -123,16 +123,23 @@ export function StudentSidebar() {
           theme={realSchoolLevel}
           icon={isKids ? <Map size={24} /> : <LayoutDashboard size={20} />} 
           label={isKids ? "Markas Besar" : "Dashboard"} 
+          active={pathname === "/dashboard"} 
+          onClick={() => router.push("/dashboard")} 
+        />
+        
+        <SidebarItem 
+          theme={realSchoolLevel}
+          icon={isKids ? <Backpack size={24} /> : <BookOpen size={20} />} 
+          label={isKids ? "Tas Sekolah" : isUni ? "Mata Kuliah" : "Kelas Saya"} 
           active={pathname === "/learn"} 
           onClick={() => router.push("/learn")} 
         />
-        
-        {/* NEW: SOCIAL MENU */}
+
         <SidebarItem 
           theme={realSchoolLevel}
-          icon={isKids ? <Smile size={24} /> : <Globe size={20} />} 
-          label={isKids ? "Dunia Kita" : "Jejaring Sosial"} 
-          active={pathname === "/social"} 
+          icon={isKids ? <Smile size={24} /> : <Trophy size={20} />} 
+          label={isKids ? "Dunia Kita" : isUni ? "Arena Kampus" : "Arena Sosial"} 
+          active={pathname.startsWith("/social")} 
           onClick={() => router.push("/social")} 
         />
 
@@ -140,20 +147,20 @@ export function StudentSidebar() {
           theme={realSchoolLevel}
           icon={isKids ? <Users size={24} /> : <MessageSquare size={20} />} 
           label={isKids ? "Teman Sekelas" : "Forum Sekolah"} 
-          active={pathname?.startsWith("/forum")} 
+          active={pathname.startsWith("/forum")} 
           onClick={() => router.push("/forum")} 
         />
         
         <div className={cn("px-2 text-xs font-semibold uppercase tracking-wider mt-8 mb-2 opacity-70", (isUni || isSMA) ? "text-slate-500" : "text-slate-500")}>
-          {isKids ? "Tas Sekolah" : "Akademik"}
+          {isKids ? "Misi" : "Akademik"}
         </div>
         
         <SidebarItem 
           theme={realSchoolLevel}
-          icon={isKids ? <Calendar size={24} /> : <Calendar size={20} />} 
-          label={isKids ? "Jadwal Seru" : isUni ? "KRS / Jadwal Kuliah" : "Jadwal Pelajaran"} 
-          active={pathname === "/schedule"} 
-          onClick={() => alert(isKids ? "Jadwal belum dipasang guru!" : "Fitur Jadwal akan segera hadir!")} 
+          icon={<FileText size={20} />} 
+          label={isKids ? "Misi Harian" : "Survey & Tugas"} 
+          active={pathname === "/survey"} 
+          onClick={() => router.push("/survey")} 
         />
         
         {/* Additional Menu for University */}
