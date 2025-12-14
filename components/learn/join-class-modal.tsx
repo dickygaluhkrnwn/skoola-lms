@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, Terminal } from "lucide-react";
+import { Plus, X, Terminal, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"; // Import Firestore functions
+import { db, auth } from "@/lib/firebase"; // Import db config
+import { UserProfile } from "@/lib/types/user.types";
 
 interface JoinClassModalProps {
   isOpen: boolean;
@@ -16,19 +19,88 @@ interface JoinClassModalProps {
 
 export function JoinClassModal({ isOpen, onClose, onJoin, isLoading, theme }: JoinClassModalProps) {
   const [code, setCode] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+
+  // Fetch current user profile when modal opens
+  useEffect(() => {
+    if (isOpen && auth.currentUser) {
+        const fetchProfile = async () => {
+            try {
+                const docSnap = await getDoc(doc(db, "users", auth.currentUser!.uid));
+                if (docSnap.exists()) {
+                    setCurrentUserProfile(docSnap.data() as UserProfile);
+                }
+            } catch (e) {
+                console.error("Failed to fetch user profile for validation", e);
+            }
+        };
+        fetchProfile();
+    } else {
+        // Reset state when closed
+        setCode("");
+        setErrorMessage(null);
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim()) return;
     
-    await onJoin(code);
-    setCode(""); // Reset kode setelah submit (berhasil atau gagal handled di parent)
+    setErrorMessage(null);
+    setValidating(true);
+
+    try {
+        // 1. Pre-Check: Cari kelas berdasarkan kode
+        const classroomsRef = collection(db, "classrooms");
+        const q = query(classroomsRef, where("code", "==", code.trim())); // Asumsi field di db adalah 'code'
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            setErrorMessage("Kode kelas tidak ditemukan.");
+            setValidating(false);
+            return;
+        }
+
+        const classroomData = querySnapshot.docs[0].data();
+        
+        // 2. School Isolation Check
+        // Jika user punya schoolId DAN kelas punya schoolId, harus cocok.
+        if (currentUserProfile?.schoolId && classroomData.schoolId) {
+            if (currentUserProfile.schoolId !== classroomData.schoolId) {
+                setErrorMessage("Kode valid, namun kelas ini bukan milik sekolah Anda.");
+                setValidating(false);
+                return;
+            }
+        } else if (classroomData.schoolId && !currentUserProfile?.schoolId) {
+             // Opsional: Jika kelas punya sekolah tapi user 'umum' (belum join sekolah), tolak atau izinkan?
+             // Sesuai aturan ketat: tolak agar user join sekolah dulu.
+             setErrorMessage("Anda harus bergabung dengan sekolah terlebih dahulu untuk masuk kelas ini.");
+             setValidating(false);
+             return;
+        }
+
+        // 3. Jika lolos validasi, panggil fungsi onJoin dari parent
+        await onJoin(code);
+        setCode("");
+        onClose(); // Tutup modal jika sukses (onJoin biasanya handle error sendiri jika gagal update db)
+
+    } catch (err) {
+        console.error("Error validating class code:", err);
+        setErrorMessage("Terjadi kesalahan saat memvalidasi kode.");
+    } finally {
+        setValidating(false);
+    }
   };
 
   const isKids = theme === "sd";
   const isSMP = theme === "smp";
   const isSMA = theme === "sma";
   const isUni = theme === "uni";
+
+  // Combine loading states
+  const isProcessing = isLoading || validating;
 
   return (
     <AnimatePresence>
@@ -98,9 +170,10 @@ export function JoinClassModal({ isOpen, onClose, onJoin, isLoading, theme }: Jo
                 {isSMA && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500/50 font-mono text-lg">{">"}</span>}
                 <input 
                   required 
+                  disabled={isProcessing}
                   placeholder={isSMA ? "_ _ _ _ _ _" : "A1B2C3"} 
                   className={cn(
-                    "w-full px-4 py-4 border-2 text-center font-mono text-3xl uppercase tracking-[0.2em] outline-none transition-all placeholder:tracking-normal placeholder:text-base",
+                    "w-full px-4 py-4 border-2 text-center font-mono text-3xl uppercase tracking-[0.2em] outline-none transition-all placeholder:tracking-normal placeholder:text-base disabled:opacity-50 disabled:cursor-not-allowed",
                     isKids 
                       ? "rounded-2xl border-sky-100 focus:border-sky-400 bg-sky-50/50 text-sky-800 font-bold placeholder:text-sky-300" 
                       : isSMP
@@ -113,15 +186,30 @@ export function JoinClassModal({ isOpen, onClose, onJoin, isLoading, theme }: Jo
                   )}
                   value={code} 
                   maxLength={6}
-                  onChange={e => setCode(e.target.value)} 
+                  onChange={e => {
+                      setCode(e.target.value);
+                      setErrorMessage(null); // Clear error on type
+                  }} 
                 />
               </div>
+
+              {/* Error Message Display */}
+              {errorMessage && (
+                  <div className={cn(
+                      "flex items-center gap-2 p-3 rounded-lg text-xs font-medium animate-in slide-in-from-top-1",
+                      isSMA ? "bg-red-900/20 text-red-400 border border-red-900/50" : "bg-red-50 text-red-600 border border-red-100"
+                  )}>
+                      <AlertCircle size={16} className="shrink-0" />
+                      {errorMessage}
+                  </div>
+              )}
               
               <div className="flex gap-3 pt-2">
                 <Button 
                   type="button" 
                   onClick={onClose} 
                   variant="ghost"
+                  disabled={isProcessing}
                   className={cn(
                     "flex-1 border-2 border-transparent",
                     isKids ? "rounded-2xl font-bold text-slate-400 hover:bg-slate-50" : 
@@ -134,9 +222,9 @@ export function JoinClassModal({ isOpen, onClose, onJoin, isLoading, theme }: Jo
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={isLoading || code.length < 3} 
+                  disabled={isProcessing || code.length < 3} 
                   className={cn(
-                    "flex-1",
+                    "flex-1 flex items-center justify-center gap-2",
                     isKids 
                       ? "bg-sky-500 hover:bg-sky-400 text-white rounded-2xl shadow-[0_4px_0_#0369a1] active:translate-y-1 active:shadow-none font-bold text-lg" 
                       : isSMP
@@ -146,7 +234,14 @@ export function JoinClassModal({ isOpen, onClose, onJoin, isLoading, theme }: Jo
                       : "bg-primary hover:bg-primary/90 rounded-lg"
                   )}
                 >
-                  {isLoading ? (isSMA ? "CONNECTING..." : "Tunggu...") : (isSMA ? "ACCESS" : "Gabung!")}
+                  {isProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {isSMA ? "VERIFYING..." : "Memproses..."}
+                      </>
+                  ) : (
+                      isSMA ? "ACCESS" : "Gabung!"
+                  )}
                 </Button>
               </div>
             </form>

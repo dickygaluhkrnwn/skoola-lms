@@ -1,11 +1,10 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
-import { Lock, Play, BookOpen, CheckCircle, ShieldAlert, Terminal, Cpu, FileText, Gamepad2, MapPin } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useTheme } from "@/lib/theme-context";
+import { BookOpen, PlayCircle, FileText, Lock, Gamepad2, MapPin } from "lucide-react"; 
+import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 // Kita gunakan interface yang lebih fleksibel untuk modul
 interface ModuleItem {
@@ -15,16 +14,17 @@ interface ModuleItem {
   type?: 'video' | 'quiz' | 'game' | 'article' | 'map' | string;
   isLocked?: boolean;
   thumbnailUrl?: string;
-  // Field lain yang mungkin ada
+  duration?: string;
+  readTime?: string;
+  questions?: number;
 }
 
 interface ModuleListProps {
-  modules: ModuleItem[];
+  theme: string;
 }
 
-export function ModuleList({ modules }: ModuleListProps) {
+export function ModuleList({ theme }: ModuleListProps) {
   const router = useRouter();
-  const { theme } = useTheme();
 
   // Helper Theme
   const isKids = theme === "sd";
@@ -32,14 +32,21 @@ export function ModuleList({ modules }: ModuleListProps) {
   const isSMA = theme === "sma";
   const isUni = theme === "uni";
 
+  // Dummy Data untuk Modul (Nanti bisa diganti fetch real data)
+  const modules: ModuleItem[] = [
+    { id: "1", title: "Pengantar Aljabar Linear", type: "video", duration: "10 min" },
+    { id: "2", title: "Dasar Pemrograman Python", type: "quiz", questions: 15 },
+    { id: "3", title: "Sejarah Revolusi Industri", type: "reading", readTime: "5 min" },
+  ];
+
   // Helper Icon
   const getIcon = (type?: string) => {
       switch(type) {
-          case 'video': return <Play size={20} className="ml-0.5" />;
-          case 'quiz': return <FileText size={20} />;
-          case 'game': return <Gamepad2 size={20} />;
-          case 'map': return <MapPin size={20} />;
-          default: return <BookOpen size={20} />;
+          case 'video': return <PlayCircle size={24} />;
+          case 'quiz': return <FileText size={24} />;
+          case 'game': return <Gamepad2 size={24} />;
+          case 'map': return <MapPin size={24} />;
+          default: return <BookOpen size={24} />;
       }
   };
 
@@ -64,127 +71,58 @@ export function ModuleList({ modules }: ModuleListProps) {
         </span>
       </div>
       
-      <div className="grid gap-3">
-        {modules.map((modul, idx) => {
-          const isLocked = modul.isLocked;
-          
-          return (
-            <motion.div
-              key={modul.id}
-              initial={{ opacity: 0, x: -20 }} // Tech slide-in effect
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              whileHover={!isLocked ? { scale: 1.01, x: 4 } : {}}
-              className={cn(
-                "group relative flex items-center gap-4 p-4 rounded-xl border transition-all cursor-pointer overflow-hidden",
-                // Theme Logic
-                isKids 
-                  ? (isLocked ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-sky-100 hover:border-sky-300 hover:shadow-sky-100") 
-                  : isSMP
-                    ? (isLocked 
-                        ? "bg-white/40 border-slate-100 opacity-60 grayscale" 
-                        : "bg-white/80 backdrop-blur-sm border-white/60 shadow-sm hover:shadow-md hover:border-violet-300")
-                  : isSMA
-                    ? (isLocked
-                        ? "bg-slate-900/40 border-white/5 opacity-50 grayscale" // Darker locked state
-                        : "bg-slate-950/60 backdrop-blur-md border-white/10 hover:border-teal-500/40 hover:bg-slate-900/80 hover:shadow-[0_0_20px_rgba(45,212,191,0.1)]") // Techy unlocked
-                  : isUni 
-                    ? (isLocked ? "bg-slate-900 border-slate-800 opacity-50" : "bg-slate-800 border-slate-700 hover:border-blue-500")
-                    : (isLocked ? "bg-slate-50 border-slate-200 opacity-60" : "bg-white border-slate-200 hover:border-blue-300 hover:shadow-md")
-              )}
-              onClick={() => !isLocked && router.push(`/lesson/${modul.id}`)}
-            >
-              {/* SMP Accent Line */}
-              {isSMP && !isLocked && (
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-violet-500 to-fuchsia-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-              )}
-              
-              {/* SMA Tech Decoration (Side Glow & Corner Accent) */}
-              {isSMA && !isLocked && (
-                  <>
-                    <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-teal-500 to-transparent shadow-[0_0_8px_#2dd4bf]" />
-                    <div className="absolute right-0 top-0 w-4 h-4 border-t border-r border-teal-500/30 rounded-tr-lg opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-teal-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                  </>
-              )}
-
-              {/* Icon Box */}
-              <div className={cn(
-                "w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 transition-colors z-10",
-                isLocked 
-                  ? (isUni || isSMA ? "bg-slate-800/50 text-slate-600 border border-white/5" : "bg-slate-100 text-slate-400 grayscale") 
-                  : (isKids ? "bg-sky-50 text-sky-500" : 
-                     isSMP ? "bg-gradient-to-br from-violet-100 to-fuchsia-50 text-violet-600 group-hover:from-violet-500 group-hover:to-fuchsia-500 group-hover:text-white shadow-sm" :
-                     isSMA ? "bg-slate-900 border border-teal-500/20 text-teal-400 shadow-[inset_0_0_10px_rgba(45,212,191,0.1)] group-hover:text-teal-300 group-hover:shadow-[0_0_15px_rgba(45,212,191,0.2)] transition-all" :
-                     isUni ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600")
-              )}>
-                {/* Tech Icons for SMA */}
-                {isSMA 
-                    ? (isLocked ? <ShieldAlert size={20} /> : <Terminal size={20} />) 
-                    : getIcon(modul.type)
-                }
-              </div>
-
-              {/* Text Content */}
-              <div className={cn("flex-1 min-w-0 z-10", isSMA && "font-sans")}>
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className={cn(
-                     "font-bold text-sm truncate transition-colors",
-                     isLocked 
-                        ? (isUni || isSMA ? "text-slate-500" : "text-slate-400") 
-                        : (isKids ? "text-slate-800 group-hover:text-sky-700" : 
-                           isSMP ? "text-slate-800 group-hover:text-violet-700" :
-                           isSMA ? "text-slate-200 group-hover:text-teal-300 tracking-wide" :
-                           isUni ? "text-slate-200 group-hover:text-white" : "text-slate-800 group-hover:text-blue-700")
-                  )}>
-                    {modul.title}
-                  </h3>
-                  {!isLocked && (
-                     <span className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider",
-                        isKids ? "bg-green-100 text-green-700" : 
-                        isSMP ? "bg-fuchsia-100 text-fuchsia-700" :
-                        isSMA ? "bg-teal-950/50 text-teal-400 border border-teal-500/30 font-mono" :
-                        isUni ? "bg-emerald-900/50 text-emerald-400" : "bg-green-100 text-green-700"
-                     )}>
-                        {isSMA ? "ACTIVE" : "Terbuka"}
-                     </span>
-                  )}
-                </div>
-                <p className={cn(
-                    "text-xs line-clamp-1", 
-                    (isUni || isSMA) ? "text-slate-500" : "text-slate-500",
-                    isSMA && "font-mono text-[10px] opacity-70"
-                )}>
-                   {modul.description || "Pelajari materi ini untuk lanjut."}
-                </p>
-              </div>
-
-              {/* Action / Status */}
-              <div className="shrink-0 z-10">
-                {isLocked ? (
-                  <Lock size={18} className={cn((isUni || isSMA) ? "text-slate-600" : "text-slate-300")} />
-                ) : (
+      {modules.length === 0 ? (
+         <div className={cn(
+            "text-center py-12 px-6 border-2 border-dashed rounded-xl",
+            (isUni || isSMA) ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-slate-50"
+         )}>
+            <p className={cn("text-sm", (isUni || isSMA) ? "text-slate-500" : "text-slate-400")}>
+               Belum ada modul pembelajaran tersedia.
+            </p>
+         </div>
+      ) : (
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {modules.map((mod, idx) => (
+               <motion.div 
+                 key={mod.id}
+                 initial={{ opacity: 0, x: -20 }}
+                 animate={{ opacity: 1, x: 0 }}
+                 transition={{ delay: idx * 0.05 }}
+                 className={cn(
+                    "p-5 rounded-xl border transition-all cursor-pointer group flex items-start gap-4",
+                    isKids ? "bg-white border-sky-100 hover:shadow-lg hover:border-sky-300" :
+                    isUni ? "bg-slate-900/50 border-white/5 hover:border-indigo-500/50 hover:bg-slate-800" :
+                    isSMA ? "bg-slate-900 border-slate-800 hover:border-teal-500/30" :
+                    "bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md"
+                 )}
+               >
                   <div className={cn(
-                     "w-8 h-8 rounded-full flex items-center justify-center transition-all",
-                     isKids 
-                        ? "bg-sky-100 text-sky-600 group-hover:bg-sky-500 group-hover:text-white" 
-                        : isSMP 
-                           ? "bg-white text-violet-500 shadow-sm group-hover:scale-110 group-hover:text-fuchsia-600 border border-violet-100"
-                        : isSMA
-                           ? "bg-transparent text-teal-500 border border-teal-500/30 group-hover:bg-teal-500 group-hover:text-slate-900 group-hover:shadow-[0_0_10px_rgba(45,212,191,0.5)]"
-                        : isUni 
-                           ? "bg-slate-700 text-slate-300 group-hover:bg-blue-600 group-hover:text-white"
-                           : "bg-slate-100 text-slate-400 group-hover:bg-blue-600 group-hover:text-white"
+                     "p-3 rounded-lg flex items-center justify-center shrink-0",
+                     isKids ? "bg-sky-50 text-sky-500" :
+                     isUni ? "bg-indigo-500/10 text-indigo-400" :
+                     isSMA ? "bg-teal-500/10 text-teal-400" :
+                     "bg-indigo-50 text-indigo-600"
                   )}>
-                    {isSMA ? <Cpu size={14} className={cn("transition-transform group-hover:rotate-90")} /> : <Play size={14} className="ml-0.5" />}
+                     {getIcon(mod.type)}
                   </div>
-                )}
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
+                  <div>
+                     <h4 className={cn(
+                        "font-bold text-sm mb-1 line-clamp-2",
+                        (isUni || isSMA) ? "text-slate-200" : "text-slate-800"
+                     )}>
+                        {mod.title}
+                     </h4>
+                     <p className={cn(
+                        "text-xs",
+                        (isUni || isSMA) ? "text-slate-500" : "text-slate-500"
+                     )}>
+                        {mod.type === 'video' ? mod.duration : mod.type === 'quiz' ? `${mod.questions} Soal` : mod.readTime}
+                     </p>
+                  </div>
+               </motion.div>
+            ))}
+         </div>
+      )}
     </div>
   );
 }

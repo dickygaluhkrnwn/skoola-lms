@@ -8,7 +8,7 @@ import {
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../lib/firebase";
 import { 
-  doc, getDoc, collection, query, where, getDocs, orderBy, limit, onSnapshot, updateDoc, arrayUnion, increment 
+  doc, getDoc, collection, query, orderBy, limit, onSnapshot, updateDoc, arrayUnion, increment, getDocs 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { motion, Variants } from "framer-motion";
@@ -20,7 +20,10 @@ import { JoinClassModal } from "../../components/learn/join-class-modal";
 import { useTheme } from "../../lib/theme-context";
 import { cn } from "../../lib/utils";
 import { Button } from "@/components/ui/button";
-import { AssignmentType, Classroom } from "@/lib/types/course.types";
+import { Classroom } from "@/lib/types/course.types";
+import { ClassList } from "../../components/learn/class-list";
+import { ModuleList } from "../../components/learn/module-list";
+import { LearnHeader } from "../../components/learn/learn-header";
 
 // Animation Variants
 const containerVariants: Variants = {
@@ -55,8 +58,8 @@ export default function LearnClient() {
   // State
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [myClasses, setMyClasses] = useState<Classroom[]>([]);
   const [upcomingAssignments, setUpcomingAssignments] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"classes" | "modules">("classes");
   
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joining, setJoining] = useState(false);
@@ -81,8 +84,10 @@ export default function LearnClient() {
           setUserProfile(userData);
 
           const enrolled = userData.enrolledClasses || [];
+          // Note: Logic fetchClasses untuk list sudah dipindah ke ClassList component.
+          // Kita hanya perlu fetch assignments untuk widget dashboard.
           if (enrolled.length > 0) {
-            fetchClassesAndAssignments(enrolled);
+            fetchAssignments(enrolled);
           } else {
             setLoading(false);
           }
@@ -95,30 +100,27 @@ export default function LearnClient() {
     return () => unsubscribeAuth();
   }, [router]);
 
-  const fetchClassesAndAssignments = async (classIds: string[]) => {
+  // Fetch Assignments Only (Classes fetch moved to ClassList)
+  const fetchAssignments = async (classIds: string[]) => {
     try {
+      // Ambil detail kelas dulu untuk nama kelas (bisa dioptimasi nanti)
       const classesPromises = classIds.map(async (cid) => {
         const cDoc = await getDoc(doc(db, "classrooms", cid));
         return cDoc.exists() ? { id: cDoc.id, ...cDoc.data() } as Classroom : null;
       });
       const classesRes = await Promise.all(classesPromises);
       const validClasses = classesRes.filter((c): c is Classroom => c !== null);
-      setMyClasses(validClasses);
 
       if (validClasses.length > 0) {
-        // Ambil assignments dari semua kelas (limit 5 global)
         const allAssignmentsPromises = validClasses.map(async (cls) => {
            const assignRef = collection(db, "classrooms", cls.id, "assignments");
-           // Filter assignment yang belum deadline (future)
-           // Note: Firestore query complex with 'deadline' might need index. 
-           // For simplicity & robustness, fetch recent and filter in client.
            const q = query(assignRef, orderBy("deadline", "asc"), limit(5)); 
            const snap = await getDocs(q);
            return snap.docs.map(d => ({
-              id: d.id,
-              classId: cls.id,
-              className: cls.name,
-              ...d.data()
+             id: d.id,
+             classId: cls.id,
+             className: cls.name,
+             ...d.data()
            }));
         });
         
@@ -128,8 +130,6 @@ export default function LearnClient() {
         const now = Date.now();
         const sortedAssignments = allAssignments
             .filter((a: any) => {
-                // Pastikan deadline ada dan belum lewat (opsional: tampilkan yg lewat juga boleh tapi di bawah)
-                // Disini kita ambil yg deadline > now atau null (no deadline)
                 if (!a.deadline) return true;
                 const d = a.deadline.seconds ? a.deadline.seconds * 1000 : a.deadline;
                 return d > now; 
@@ -157,40 +157,45 @@ export default function LearnClient() {
     if (!user) return;
 
     try {
-      const codeUpper = code.toUpperCase();
+      // Logic validasi sudah ada di Modal (JoinClassModal)
+      // Disini tinggal eksekusi update DB setelah validasi sukses
       
-      if (myClasses.some(c => c.code === codeUpper)) {
-        alert(isKids ? "Kamu sudah punya tiket ke petualangan ini!" : "Anda sudah terdaftar di kelas ini.");
+      // Kita query lagi untuk dapat ID (redundant tapi safe)
+      const { collection, query, where, getDocs } = await import("firebase/firestore");
+      const q = query(collection(db, "classrooms"), where("code", "==", code));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        // Should not happen if modal validates correctly
+        alert("Kode kelas tidak ditemukan.");
         setJoining(false);
         return;
       }
 
-      const q = query(collection(db, "classrooms"), where("code", "==", codeUpper));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        alert(isKids ? "Kode peta harta karun salah!" : "Kode kelas tidak ditemukan.");
-        setJoining(false);
-        return;
-      }
-
-      const classDoc = querySnapshot.docs[0];
+      const classDoc = snap.docs[0];
       const classId = classDoc.id;
-      
+
+      // Cek duplikasi
+      if (userProfile?.enrolledClasses?.includes(classId)) {
+         alert("Anda sudah terdaftar di kelas ini.");
+         setJoining(false);
+         return;
+      }
+
+      // Update Classroom
       await updateDoc(doc(db, "classrooms", classId), {
         students: arrayUnion(user.uid),
         studentCount: increment(1)
       });
+
+      // Update User
       await updateDoc(doc(db, "users", user.uid), {
         enrolledClasses: arrayUnion(classId)
       });
 
       alert("Berhasil bergabung!");
       setIsJoinModalOpen(false);
-      // Refresh data is handled by onSnapshot in useEffect mostly, but forcing reload or refetch is safer for critical update
-      // For now rely on snapshot or manual state update if we were fully reactive. 
-      // Since we fetch classes manually in useEffect, let's trigger a reload or re-fetch.
-      window.location.reload(); 
+      // Reload handled by onSnapshot in ClassList component automatically
 
     } catch (error) {
       console.error(error);
@@ -231,19 +236,15 @@ export default function LearnClient() {
   return (
     <div className={cn("flex min-h-screen font-sans transition-colors duration-500 relative overflow-hidden", mainBgClass)}>
       
-      {/* --- UNI THEME BACKGROUND: Animated Mesh --- */}
+      {/* Backgrounds */}
       {isUni && (
          <div className="fixed inset-0 z-0">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950" />
-            {/* Animated Orbs */}
             <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse delay-700" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[100px] animate-pulse delay-1000" />
-            {/* Grid Pattern Overlay */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
          </div>
       )}
-
-      {/* --- SMA SPECIAL BACKGROUND --- */}
       {isSMA && (
         <div className="fixed inset-0 z-0">
            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950" />
@@ -252,8 +253,6 @@ export default function LearnClient() {
            <div className="absolute inset-0 opacity-[0.03] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
         </div>
       )}
-
-      {/* --- SMP THEME BLOBS --- */}
       {isSMP && (
         <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
             <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-400/20 rounded-full blur-[100px] animate-pulse" />
@@ -272,6 +271,12 @@ export default function LearnClient() {
         
         <div className="max-w-7xl mx-auto space-y-6">
           
+          <LearnHeader 
+             theme={theme}
+             activeTab={activeTab}
+             setActiveTab={setActiveTab}
+          />
+
           {/* 1. HERO SECTION (DYNAMIC GREETING) */}
           <motion.div 
             variants={itemVariants}
@@ -279,7 +284,6 @@ export default function LearnClient() {
               "rounded-3xl p-8 relative overflow-hidden transition-all flex flex-col md:flex-row justify-between items-start md:items-end gap-6",
               isKids ? "bg-primary text-white shadow-lg mb-8" : 
               isSMP ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-xl" :
-              // UNI & SMA: Glass Effect
               (isUni || isSMA) ? "bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl" :
               "bg-white border border-slate-200"
             )}
@@ -348,7 +352,7 @@ export default function LearnClient() {
                 <motion.div variants={containerVariants} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <StatCard 
                     label="Kelas" 
-                    value={myClasses.length} 
+                    value={userProfile?.enrolledClasses?.length || 0} 
                     icon={isKids ? <Map /> : <School />} 
                     theme={theme} variants={itemVariants} delay={0}
                   />
@@ -372,22 +376,12 @@ export default function LearnClient() {
                   />
                 </motion.div>
 
-                {/* Class List */}
+                {/* Class List OR Modules */}
                 <motion.div variants={itemVariants}>
-                   <div className="flex items-center justify-between mb-4">
-                      <h2 className={cn("text-xl font-bold", (isUni || isSMA) ? "text-white" : "text-slate-800")}>
-                         {isKids ? "Peta Petualangan" : "Kelas Saya"}
-                      </h2>
-                   </div>
-
-                   {myClasses.length === 0 ? (
-                      <EmptyClassState isSMA={isSMA} isUni={isUni} isKids={isKids} onJoin={() => setIsJoinModalOpen(true)} />
+                   {activeTab === "classes" ? (
+                      <ClassList theme={theme} onOpenJoinModal={() => setIsJoinModalOpen(true)} />
                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                         {myClasses.map((cls) => (
-                            <ClassCard key={cls.id} cls={cls} isSMA={isSMA} isUni={isUni} isKids={isKids} onClick={() => router.push(`/classroom/${cls.id}`)} />
-                         ))}
-                      </div>
+                      <ModuleList theme={theme} />
                    )}
                 </motion.div>
               </div>
@@ -518,83 +512,4 @@ function StatCard({ label, value, icon, theme, variants }: any) {
       </div>
     </motion.div>
   );
-}
-
-function ClassCard({ cls, isSMA, isUni, isKids, onClick }: any) {
-   return (
-      <motion.div 
-         whileHover={{ scale: 1.02, y: -4 }}
-         whileTap={{ scale: 0.98 }}
-         onClick={onClick}
-         className={cn(
-            "group relative p-6 rounded-3xl border transition-all cursor-pointer overflow-hidden flex flex-col justify-between h-full min-h-[180px]",
-            // UNI STYLE: Techy & Clean
-            isUni ? "bg-white/5 border-white/5 hover:bg-white/10 hover:border-indigo-500/50 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)]" :
-            // SMA STYLE: Sleek Dark
-            isSMA ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-teal-500/50 hover:shadow-[0_0_30px_rgba(20,184,166,0.1)]" :
-            isKids ? "bg-white border-2 border-b-8 border-gray-100 hover:border-primary" : 
-            "bg-white border-gray-200 hover:border-primary hover:shadow-md"
-         )}
-      >
-         <div className="flex items-start justify-between mb-4">
-            <div className={cn(
-               "w-12 h-12 flex items-center justify-center font-bold text-xl rounded-2xl shadow-sm transition-transform group-hover:scale-110",
-               isUni ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white" :
-               isSMA ? "bg-gradient-to-br from-teal-500 to-emerald-600 text-white" :
-               "bg-primary/10 text-primary"
-            )}>
-               {cls.name.charAt(0)}
-            </div>
-            <span className={cn(
-               "text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider",
-               (isUni || isSMA) ? "bg-slate-800 text-slate-400 border border-slate-700" :
-               "bg-gray-100 text-gray-500"
-            )}>
-               {cls.category || "Umum"}
-            </span>
-         </div>
-         
-         <div>
-            <h3 className={cn("font-bold text-lg truncate mb-1 transition-colors", 
-               isUni ? "text-slate-100 group-hover:text-indigo-300" :
-               isSMA ? "text-slate-100 group-hover:text-teal-300" : 
-               "text-slate-800"
-            )}>
-               {cls.name}
-            </h3>
-            <p className={cn("text-xs truncate mb-4 line-clamp-2", (isUni || isSMA) ? "text-slate-500" : "text-gray-500")}>
-               {cls.description || "Tidak ada deskripsi"}
-            </p>
-         </div>
-         
-         <div className={cn(
-            "flex items-center text-xs font-bold transition-transform group-hover:translate-x-1 mt-auto pt-4 border-t border-dashed",
-            (isUni || isSMA) ? "border-white/10" : "border-gray-100",
-            isUni ? "text-indigo-400" : isSMA ? "text-teal-400" : "text-primary"
-         )}>
-            Masuk Kelas <ArrowRight size={14} className="ml-1" />
-         </div>
-      </motion.div>
-   )
-}
-
-function EmptyClassState({ isSMA, isUni, isKids, onJoin }: any) {
-   return (
-      <div className={cn(
-          "text-center p-12 border-2 border-dashed rounded-3xl transition-all",
-          (isUni || isSMA) ? "border-slate-800 bg-slate-900/50" : "border-gray-200 bg-gray-50"
-      )}>
-         <div className={cn("w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center", 
-            (isUni || isSMA) ? "bg-slate-800 text-slate-500" : "bg-white text-slate-500 shadow-sm"
-         )}>
-            <School size={32} />
-         </div>
-         <h3 className={cn("font-bold mb-1", (isUni || isSMA) ? "text-slate-300" : "text-gray-600")}>
-            Belum ada kelas
-         </h3>
-         <Button onClick={onJoin} variant="outline" className="mt-4">
-            Gabung Kelas Sekarang
-         </Button>
-      </div>
-   )
 }

@@ -10,34 +10,68 @@ import {
   School,
   Loader2,
   Mail,
-  Calendar
+  Calendar,
+  AlertCircle
 } from "lucide-react";
-import { collection, query, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, query, getDocs, deleteDoc, doc, where } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { db, auth } from "@/lib/firebase";
 import { UserProfile, UserRole } from "@/lib/types/user.types";
 import { cn } from "@/lib/utils";
 
 export default function UserManagementView() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adminSchoolName, setAdminSchoolName] = useState<string>("");
   
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all");
 
-  // 1. Fetch Users Data
+  // 1. Fetch Users Data (Multi-Tenant Logic)
   useEffect(() => {
-    const fetchUsers = async () => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        // Mengambil semua user
-        const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
-        const snapshot = await getDocs(q);
+        
+        // Langkah A: Cari Sekolah milik Admin ini
+        const schoolQuery = query(
+            collection(db, "schools"), 
+            where("adminId", "==", currentUser.uid)
+        );
+        const schoolSnap = await getDocs(schoolQuery);
+
+        if (schoolSnap.empty) {
+           // Admin belum setup sekolah
+           setLoading(false);
+           return;
+        }
+
+        const schoolDoc = schoolSnap.docs[0];
+        const mySchoolId = schoolDoc.id;
+        setAdminSchoolName(schoolDoc.data().name);
+
+        // Langkah B: Ambil User yang terdaftar di sekolah ini
+        // Kita gunakan filtering client-side untuk sorting agar tidak kena error index firestore
+        const usersQuery = query(
+            collection(db, "users"), 
+            where("schoolId", "==", mySchoolId)
+        );
+        
+        const usersSnap = await getDocs(usersQuery);
         
         const fetchedUsers: UserProfile[] = [];
-        snapshot.forEach((doc) => {
+        usersSnap.forEach((doc) => {
           fetchedUsers.push(doc.data() as UserProfile);
         });
+        
+        // Sorting manual descending (terbaru diatas)
+        fetchedUsers.sort((a, b) => b.createdAt - a.createdAt);
         
         setUsers(fetchedUsers);
       } catch (error) {
@@ -45,12 +79,12 @@ export default function UserManagementView() {
       } finally {
         setLoading(false);
       }
-    };
+    });
 
-    fetchUsers();
+    return () => unsubscribe();
   }, []);
 
-  // 2. Filter Logic
+  // 2. Filter Logic (Local)
   const filteredUsers = users.filter((user) => {
     // Filter by Role
     if (roleFilter !== "all" && user.role !== roleFilter) return false;
@@ -82,15 +116,21 @@ export default function UserManagementView() {
   // Helper: Date Formatter
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "-";
-    return new Date(timestamp).toLocaleDateString("id-ID", {
+    // Handle Firestore Timestamp or number
+    const date = typeof timestamp === 'number' ? new Date(timestamp) : timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString("id-ID", {
       day: "numeric", month: "short", year: "numeric"
     });
   };
 
-  // Action: Delete User (Placeholder Logic)
+  // Action: Delete User (Placeholder Logic - Hati-hati di production)
   const handleDeleteUser = async (userId: string) => {
-    if (confirm("Apakah Anda yakin ingin menghapus user ini? Tindakan ini tidak dapat dibatalkan.")) {
+    if (confirm("Apakah Anda yakin ingin menghapus user ini dari sekolah?")) {
       try {
+        // PENTING: Sebaiknya jangan deleteDoc user sepenuhnya jika user bisa punya akun global.
+        // Tapi untuk skenario sekolah terisolasi, kita asumsikan delete = remove access.
+        // Disini kita hanya menghapus data dari Firestore. Di real production harus hapus dari Auth juga (butuh Cloud Functions).
+        
         await deleteDoc(doc(db, "users", userId));
         setUsers(users.filter(u => u.uid !== userId));
         alert("User berhasil dihapus.");
@@ -101,14 +141,25 @@ export default function UserManagementView() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+        <p className="text-sm font-medium">Memuat data warga sekolah...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Manajemen Pengguna</h2>
-          <p className="text-slate-500 text-sm">Kelola data siswa, guru, dan admin sekolah.</p>
+          <h2 className="text-2xl font-bold text-slate-800">Manajemen Warga Sekolah</h2>
+          <p className="text-slate-500 text-sm flex items-center gap-1">
+             Data terisolasi untuk: <span className="font-bold text-indigo-600">{adminSchoolName || "..."}</span>
+          </p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
@@ -124,7 +175,7 @@ export default function UserManagementView() {
             />
           </div>
           
-          {/* Add User Button (Placeholder) */}
+          {/* Add User Button */}
           <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md shadow-indigo-200 transition-colors">
             + Tambah User
           </button>
@@ -156,13 +207,15 @@ export default function UserManagementView() {
 
       {/* Users Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        {loading ? (
-          <div className="p-12 flex justify-center items-center text-indigo-500">
-            <Loader2 className="w-8 h-8 animate-spin" />
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <p>Tidak ada user yang ditemukan.</p>
+        {filteredUsers.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 flex flex-col items-center">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+               <AlertCircle className="w-8 h-8 text-slate-300" />
+            </div>
+            <p className="font-bold text-slate-600">Belum ada warga sekolah</p>
+            <p className="text-sm mt-1 max-w-xs mx-auto">
+              Bagikan <strong>Kode Sekolah</strong> (ada di menu Pengaturan) kepada guru dan siswa agar mereka bisa bergabung.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -235,7 +288,7 @@ export default function UserManagementView() {
       </div>
       
       <div className="text-xs text-slate-400 text-center">
-        Menampilkan {filteredUsers.length} dari total {users.length} pengguna terdaftar.
+        Menampilkan {filteredUsers.length} warga sekolah.
       </div>
     </div>
   );

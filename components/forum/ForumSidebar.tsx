@@ -26,6 +26,7 @@ interface ForumSidebarProps {
   activeChannelId?: string;
   userRole?: 'student' | 'teacher' | 'admin';
   isLoading?: boolean;
+  userSchoolId?: string; // Tambahan: ID Sekolah User untuk filtering visual
 }
 
 type ServerGroup = {
@@ -39,7 +40,8 @@ export default function ForumSidebar({
   channels, 
   activeChannelId,
   userRole = 'student',
-  isLoading = false
+  isLoading = false,
+  userSchoolId
 }: ForumSidebarProps) {
   // State untuk expand/collapse Kategori Utama (Sekolah, Jurusan, dll)
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -75,6 +77,13 @@ export default function ForumSidebar({
     const standaloneChannels: ForumChannelExtended[] = [];
 
     channels.forEach(channel => {
+      // --- FILTERING LOGIC (CLIENT SIDE) ---
+      // Jika user terikat sekolah, sembunyikan channel dari sekolah lain
+      if (userSchoolId && channel.schoolId && channel.schoolId !== userSchoolId) {
+         return; 
+      }
+      // -------------------------------------
+
       // Jika punya parentId dan groupName, masukkan ke grup server
       if (channel.parentId && channel.groupName) {
         // Buat unique key untuk mengatasi duplikasi parentId jika ada kesalahan data
@@ -106,7 +115,7 @@ export default function ForumSidebar({
     });
 
     return { groups, standaloneChannels };
-  }, [channels]);
+  }, [channels, userSchoolId]);
 
   // Helper untuk mengambil list server berdasarkan tipe
   const getServersByType = (type: ChannelType) => {

@@ -10,12 +10,12 @@ import {
   serverTimestamp,
   Timestamp,
   doc,
-  getDoc
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { UserProfile } from '@/lib/types/user.types';
 import { ForumMessage, ForumChannel } from '@/lib/types/forum.types';
-import { Send, Paperclip, Smile, User, MessageSquare, Reply, X, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, Paperclip, Smile, User, MessageSquare, Reply, X, Lock, ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ChatAreaProps {
@@ -82,13 +82,12 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
     return () => unsubscribe();
   }, [channelId]);
 
-  // Auto scroll ke bawah hanya jika tidak sedang melihat history jauh (opsional)
-  // Untuk simpelnya kita auto scroll saat pesan baru masuk
+  // Auto scroll ke bawah
   useEffect(() => {
     setTimeout(() => {
       scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }, 200);
-  }, [messages.length, replyTo]); // Scroll juga saat klik reply
+  }, [messages.length, replyTo]); 
 
   // 3. Logic Permission: Siapa yang boleh posting?
   const isAnnouncementChannel = channel?.category === 'announcement';
@@ -106,7 +105,7 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
 
   // 4. Grouping Messages untuk Tampilan "Thread/Tweet"
   const threadMessages = useMemo(() => {
-    if (!isAnnouncementChannel) return messages; // Kembalikan flat list jika bukan pengumuman
+    if (!isAnnouncementChannel) return messages; 
 
     const mainPosts: ForumMessage[] = [];
     const replies: Record<string, ForumMessage[]> = {};
@@ -142,6 +141,8 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
         senderRole: userProfile.role,
         senderAvatar: userProfile.photoURL || "",
         createdAt: serverTimestamp(),
+        // INJECT SCHOOL ID: Penting untuk isolasi data di masa depan
+        schoolId: userProfile.schoolId || null
       };
 
       // Jika sedang me-reply, tambahkan referensi
@@ -155,13 +156,24 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
 
       await addDoc(collection(db, 'messages'), messageData);
       setNewMessage(""); 
-      setReplyTo(null); // Tutup mode reply setelah kirim
+      setReplyTo(null); 
     } catch (error) {
       console.error("Gagal mengirim pesan:", error);
       alert("Gagal mengirim pesan. Periksa koneksi.");
     } finally {
       setSending(false);
     }
+  };
+
+  // Tambahan: Delete Message
+  const handleDeleteMessage = async (msgId: string) => {
+      if(confirm("Hapus pesan ini?")) {
+          try {
+            await deleteDoc(doc(db, "messages", msgId));
+          } catch (err) {
+            console.error("Gagal hapus pesan", err);
+          }
+      }
   };
 
   const toggleReplies = (postId: string) => {
@@ -171,10 +183,16 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
     }));
   };
 
+  // Helper: Format Time tanpa date-fns
   const formatTime = (timestamp: any) => {
     if (!timestamp) return "";
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    // Menggunakan Native JS Intl API untuk format 'HH:mm'
+    return date.toLocaleTimeString('id-ID', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: false 
+    }).replace('.', ':'); // Memastikan pemisah titik dua jika locale ID pakai titik
   };
 
   const getRoleBadge = (role: string) => {
@@ -187,11 +205,13 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
   const AnnouncementThread = ({ post }: { post: ForumMessage & { replies: ForumMessage[] } }) => {
     const isRepliesVisible = showReplies[post.id];
     const replyCount = post.replies.length;
+    const isMe = post.senderId === userProfile.uid;
+    const canDelete = isMe || userProfile.role === 'admin';
 
     return (
-      <div className="mb-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+      <div className="mb-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm group">
         {/* Main Post Header */}
-        <div className="p-4 pb-2 flex items-start gap-3">
+        <div className="p-4 pb-2 flex items-start gap-3 relative">
           <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden border-2 border-indigo-50">
              {post.senderAvatar ? (
                <img src={post.senderAvatar} alt={post.senderName} className="w-full h-full object-cover" />
@@ -211,6 +231,17 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
               {post.content}
             </p>
             
+            {/* Delete Button Thread */}
+            {canDelete && (
+                <button 
+                    onClick={() => handleDeleteMessage(post.id)}
+                    className="absolute top-2 right-2 p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Hapus Thread"
+                >
+                    <Trash2 size={14} />
+                </button>
+            )}
+
             {/* Action Bar */}
             <div className="mt-3 flex items-center gap-4 border-t border-slate-50 dark:border-slate-800/50 pt-2">
               <button 
@@ -239,14 +270,14 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
         {replyCount > 0 && isRepliesVisible && (
           <div className="bg-slate-50 dark:bg-slate-800/50 p-3 border-t border-slate-100 dark:border-slate-800 space-y-3 animate-in slide-in-from-top-2 duration-200">
             {post.replies.map(reply => (
-              <div key={reply.id} className="flex gap-2 items-start ml-4 md:ml-12 relative">
+              <div key={reply.id} className="flex gap-2 items-start ml-4 md:ml-12 relative group/reply">
                 {/* Connector Line */}
                 <div className="absolute -left-4 top-3 w-3 h-3 border-l-2 border-b-2 border-slate-300 rounded-bl-lg" />
                 
                 <div className="w-7 h-7 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden">
                    {reply.senderAvatar ? <img src={reply.senderAvatar} className="w-full h-full object-cover"/> : <User className="p-1 w-full h-full text-slate-500"/>}
                 </div>
-                <div className="bg-white dark:bg-slate-800 p-2.5 rounded-lg rounded-tl-none border border-slate-200 dark:border-slate-700 flex-1 shadow-sm">
+                <div className="bg-white dark:bg-slate-800 p-2.5 rounded-lg rounded-tl-none border border-slate-200 dark:border-slate-700 flex-1 shadow-sm relative">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
                       {reply.senderName}
@@ -255,6 +286,16 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
                     <span className="text-[10px] text-slate-400">{formatTime(reply.createdAt)}</span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-300">{reply.content}</p>
+                  
+                  {/* Delete Reply Button */}
+                  {(reply.senderId === userProfile.uid || userProfile.role === 'admin') && (
+                      <button 
+                          onClick={() => handleDeleteMessage(reply.id)}
+                          className="absolute top-1 right-1 p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover/reply:opacity-100 transition-opacity"
+                      >
+                          <Trash2 size={12} />
+                      </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -267,8 +308,10 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
   // --- RENDER COMPONENT: BUBBLE CHAT (DISKUSI BIASA) ---
   const ChatBubble = ({ msg }: { msg: ForumMessage }) => {
     const isMe = msg.senderId === userProfile.uid;
+    const canDelete = isMe || userProfile.role === 'admin';
+
     return (
-      <div className={cn("flex w-full mb-4", isMe ? "justify-end" : "justify-start")}>
+      <div className={cn("flex w-full mb-4 group/bubble", isMe ? "justify-end" : "justify-start")}>
         <div className={cn("flex max-w-[80%] md:max-w-[70%]", isMe ? "flex-row-reverse" : "flex-row")}>
           <div className={cn(
             "flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center overflow-hidden border",
@@ -293,6 +336,20 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
               <span className={cn("text-[10px] block text-right mt-1 opacity-70", isMe ? "text-blue-100" : "text-slate-400")}>
                 {formatTime(msg.createdAt)}
               </span>
+
+              {/* Delete Button */}
+              {canDelete && (
+                  <button 
+                      onClick={() => handleDeleteMessage(msg.id)}
+                      className={cn(
+                          "absolute -right-7 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-red-500 opacity-0 group-hover/bubble:opacity-100 transition-opacity",
+                          isMe && "right-auto -left-7"
+                      )}
+                      title="Hapus pesan"
+                  >
+                      <Trash2 size={14} />
+                  </button>
+              )}
             </div>
           </div>
         </div>
@@ -317,7 +374,6 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
         {/* Render Berdasarkan Tipe Channel */}
         {isAnnouncementChannel ? (
           // MODE PENGUMUMAN (Thread Style)
-          // TypeScript casting untuk meyakinkan tipe threadMessages
           (threadMessages as (ForumMessage & { replies: ForumMessage[] })[]).map(post => (
             <AnnouncementThread key={post.id} post={post} />
           ))
@@ -365,10 +421,7 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
                     ? (canPostMainMessage ? "Tulis pengumuman baru..." : "Hanya Guru yang dapat memposting pengumuman.") 
                     : "Kirim pesan..."
               }
-              // Logic Disabled:
-              // 1. Jika ini channel Pengumuman
-              // 2. DAN User BUKAN Guru/Admin
-              // 3. DAN User TIDAK sedang me-reply (Siswa boleh reply, tapi tidak boleh post baru)
+              // Logic Disabled
               disabled={isAnnouncementChannel && !canPostMainMessage && !replyTo}
               
               className={cn(
@@ -390,7 +443,7 @@ export default function ChatArea({ channelId, userProfile }: ChatAreaProps) {
             disabled={!newMessage.trim() || sending || (isAnnouncementChannel && !canPostMainMessage && !replyTo)}
             className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-transform active:scale-95"
           >
-            <Send className="w-5 h-5" />
+            {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
           </button>
         </form>
         

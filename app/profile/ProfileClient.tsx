@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { Loader2, LayoutDashboard, ShieldCheck, School, CheckCircle2 } from "lucide-react";
 import { auth, db } from "../../lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useTheme } from "../../lib/theme-context";
@@ -42,6 +42,7 @@ export default function ProfileClient() {
         return;
       }
 
+      // Gunakan onSnapshot untuk realtime update (misal saat badge terbuka atau level naik)
       const unsubscribeDoc = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -53,7 +54,8 @@ export default function ProfileClient() {
             completedModules: data.completedModules || [],
             enrolledClasses: data.enrolledClasses || [],
             schoolLevel: data.schoolLevel || 'sd', 
-            schoolName: data.schoolName || 'Sekolah Skoola'
+            schoolName: data.schoolName || 'Sekolah Skoola',
+            schoolId: data.schoolId || null // Pastikan schoolId terbaca
           };
           setUserProfile(normalizedData);
         }
@@ -135,89 +137,138 @@ export default function ProfileClient() {
         isUni={isUni} isSMP={isSMP} isSMA={isSMA} isKids={isKids} textPrimary={textPrimary}
       />
 
-      <main className="max-w-6xl mx-auto p-4 md:p-8 space-y-6 relative z-10">
+      <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 relative z-10">
         
         {/* === TEACHER DASHBOARD ACCESS BANNER === */}
         {userProfile?.role === 'teacher' && (
           <div className={cn(
-            "rounded-xl p-6 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500",
-            isUni ? "bg-indigo-900/40 border border-indigo-500/30 backdrop-blur-md" : 
-            isSMA ? "bg-teal-900/40 border border-teal-500/30 backdrop-blur-md" :
-            "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+            "rounded-2xl p-6 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4 duration-500 border overflow-hidden relative",
+            isUni ? "bg-indigo-950/60 border-indigo-500/30 backdrop-blur-md" : 
+            isSMA ? "bg-teal-900/60 border-teal-500/30 backdrop-blur-md" :
+            "bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-transparent"
           )}>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-5 z-10">
               <div className={cn(
-                "p-3 rounded-lg backdrop-blur-sm", 
+                "p-4 rounded-xl backdrop-blur-sm shadow-inner", 
                 (isUni || isSMA) ? "bg-white/10" : "bg-white/20"
               )}>
-                 <LayoutDashboard size={28} className={cn((isUni || isSMA) ? "text-white" : "text-white")} />
+                  <LayoutDashboard size={32} className="text-white" />
               </div>
               <div className="text-center md:text-left">
-                <h3 className={cn("font-bold text-lg", (isUni || isSMA) ? "text-white" : "text-white")}>
-                  Mode Guru Aktif
+                <h3 className={cn("font-bold text-xl", (isUni || isSMA) ? "text-white" : "text-white")}>
+                  Portal Guru
                 </h3>
-                <p className={cn("text-sm max-w-md", (isUni || isSMA) ? "text-slate-300" : "text-blue-100")}>
-                  Anda terdeteksi sebagai Guru. Akses dashboard pengelolaan kelas dan siswa Anda di sini.
+                <p className={cn("text-sm max-w-lg mt-1", (isUni || isSMA) ? "text-slate-300" : "text-blue-100")}>
+                  Akses dashboard untuk mengelola kelas, materi, dan memantau perkembangan siswa Anda.
                 </p>
               </div>
             </div>
             <button 
               onClick={() => router.push('/teacher')}
               className={cn(
-                "px-6 py-2.5 font-bold rounded-lg transition-all shadow-sm w-full md:w-auto",
-                isUni ? "bg-indigo-600 hover:bg-indigo-500 text-white" :
-                isSMA ? "bg-teal-600 hover:bg-teal-500 text-white" :
-                "bg-white text-blue-600 hover:bg-blue-50"
+                "px-8 py-3 font-bold rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-95 w-full md:w-auto z-10",
+                isUni ? "bg-indigo-500 hover:bg-indigo-400 text-white" :
+                isSMA ? "bg-teal-500 hover:bg-teal-400 text-white" :
+                "bg-white text-indigo-700 hover:bg-blue-50"
               )}
             >
-              Buka Dashboard Guru
+              Masuk Dashboard
             </button>
+            {/* Decoration */}
+            <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-white/10 to-transparent skew-x-12 pointer-events-none" />
           </div>
         )}
         
         {/* === ADMIN SCHOOL DASHBOARD ACCESS BANNER === */}
         {userProfile?.role === 'admin' && (
           <div className={cn(
-            "rounded-xl p-6 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500",
-            isUni ? "bg-purple-900/40 border border-purple-500/30 backdrop-blur-md" : 
-            isSMA ? "bg-slate-800/60 border border-slate-600/30 backdrop-blur-md" :
-            "bg-gradient-to-r from-slate-800 to-slate-900 text-white"
+            "rounded-2xl p-6 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4 duration-500 border overflow-hidden relative",
+            isUni ? "bg-purple-950/60 border-purple-500/30 backdrop-blur-md" : 
+            isSMA ? "bg-slate-800/80 border-slate-600/30 backdrop-blur-md" :
+            "bg-gradient-to-br from-slate-800 to-slate-900 text-white border-transparent"
           )}>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-5 z-10">
               <div className={cn(
-                "p-3 rounded-lg backdrop-blur-sm", 
+                "p-4 rounded-xl backdrop-blur-sm shadow-inner", 
                 (isUni || isSMA) ? "bg-white/10" : "bg-white/20"
               )}>
-                 <ShieldCheck size={28} className={cn((isUni || isSMA) ? "text-white" : "text-white")} />
+                  <ShieldCheck size={32} className="text-white" />
               </div>
               <div className="text-center md:text-left">
-                <h3 className={cn("font-bold text-lg", (isUni || isSMA) ? "text-white" : "text-white")}>
-                  Mode Operator Sekolah
+                <h3 className={cn("font-bold text-xl", (isUni || isSMA) ? "text-white" : "text-white")}>
+                  Operator Sekolah
                 </h3>
-                <p className={cn("text-sm max-w-md", (isUni || isSMA) ? "text-slate-300" : "text-slate-200")}>
-                  Akses panel admin untuk mengelola data sekolah, pengguna, dan forum.
+                <p className={cn("text-sm max-w-lg mt-1", (isUni || isSMA) ? "text-slate-300" : "text-slate-300")}>
+                  Panel admin untuk mengelola identitas sekolah, verifikasi pengguna, dan forum diskusi.
                 </p>
               </div>
             </div>
             <button 
               onClick={() => router.push('/admin-school')}
               className={cn(
-                "px-6 py-2.5 font-bold rounded-lg transition-all shadow-sm w-full md:w-auto",
+                "px-8 py-3 font-bold rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-95 w-full md:w-auto z-10",
                 isUni ? "bg-purple-600 hover:bg-purple-500 text-white" :
                 isSMA ? "bg-slate-600 hover:bg-slate-500 text-white" :
-                "bg-white text-slate-900 hover:bg-slate-50"
+                "bg-white text-slate-900 hover:bg-slate-100"
               )}
             >
-              Buka Dashboard Admin
+              Kelola Sekolah
             </button>
+            {/* Decoration */}
+            <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-white/5 to-transparent skew-x-12 pointer-events-none" />
           </div>
         )}
-        {/* === END DASHBOARD BANNERS === */}
 
-        <div className="grid md:grid-cols-12 gap-6">
+        {/* === STUDENT VERIFIED SCHOOL BANNER (NEW) === */}
+        {userProfile?.schoolId && userProfile?.role !== 'admin' && userProfile?.role !== 'teacher' && (
+          <div className={cn(
+            "rounded-2xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500 border relative overflow-hidden group",
+            isUni ? "bg-slate-900/50 border-emerald-500/30 hover:border-emerald-500/50 transition-colors" : 
+            isSMA ? "bg-slate-800/50 border-emerald-500/30 hover:border-emerald-500/50 transition-colors" :
+            "bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-100"
+          )}>
+            <div className="flex items-center gap-5 relative z-10">
+              <div className={cn(
+                "p-3 rounded-xl flex items-center justify-center shadow-sm", 
+                (isUni || isSMA) ? "bg-emerald-500/10 text-emerald-400" : "bg-white text-emerald-600"
+              )}>
+                  <School size={32} />
+              </div>
+              <div className="text-center md:text-left">
+                <h3 className={cn("font-bold text-lg flex flex-col md:flex-row items-center md:items-end gap-2", (isUni || isSMA) ? "text-white" : "text-emerald-950")}>
+                  Afiliasi Sekolah Terverifikasi
+                  <span className={cn(
+                    "text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border font-bold mb-0.5", 
+                    (isUni || isSMA) ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400" : "bg-emerald-100 border-emerald-200 text-emerald-700"
+                  )}>
+                    Aktif
+                  </span>
+                </h3>
+                <p className={cn("text-sm mt-0.5", (isUni || isSMA) ? "text-slate-400" : "text-emerald-700")}>
+                  Anda terdaftar resmi sebagai siswa di <span className="font-bold border-b border-dotted border-current cursor-help" title={`ID: ${userProfile.schoolId}`}>{userProfile.schoolName}</span>.
+                </p>
+              </div>
+            </div>
+            
+             <div className={cn(
+                "w-12 h-12 rounded-full flex items-center justify-center relative z-10 shadow-sm",
+                (isUni || isSMA) ? "bg-emerald-500/20 text-emerald-400" : "bg-white text-emerald-600"
+              )}>
+                <CheckCircle2 size={24} />
+             </div>
+
+             {/* Background Decoration */}
+             <div className={cn("absolute right-0 top-0 w-48 h-full bg-gradient-to-l opacity-20 transform skew-x-12", isUni || isSMA ? "from-emerald-500" : "from-emerald-400")} />
+          </div>
+        )}
+        {/* === END BANNERS === */}
+
+        {/* LAYOUT GRID UTAMA - PROPORTIONAL FIX */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
           {/* LEFT COLUMN: PROFILE CARD */}
-          <div className="md:col-span-4 lg:col-span-4 space-y-6">
+          {/* Mengubah proporsi grid: Sidebar 3/12, Content 9/12 */}
+          <div className="lg:col-span-3 space-y-6 sticky top-24">
             <ProfileCard 
               userProfile={userProfile} 
               isKids={isKids} isSMP={isSMP} isSMA={isSMA} isUni={isUni}
@@ -227,7 +278,7 @@ export default function ProfileClient() {
           </div>
 
           {/* RIGHT COLUMN: CONTENT TABS */}
-          <div className="md:col-span-8 lg:col-span-8 space-y-6">
+          <div className="lg:col-span-9 space-y-6 min-w-0">
             
             {/* 1. Main Stats Horizontal */}
             <StatsOverview 
@@ -242,7 +293,7 @@ export default function ProfileClient() {
             />
 
             {/* TAB CONTENT */}
-            <div className="min-h-[300px]">
+            <div className="min-h-[300px] animate-in fade-in slide-in-from-bottom-2 duration-300">
               
               {/* TAB: ACHIEVEMENTS */}
               {activeTab === "achievements" && (

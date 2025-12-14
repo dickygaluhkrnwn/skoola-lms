@@ -14,6 +14,9 @@ export interface ForumChannel {
   groupName?: string; // Nama Server/Grup (misal: "Kelas 10-A")
   
   type: ChannelType;
+
+  // Multi-Tenant Isolation
+  schoolId?: string; // <-- UPDATE: Field kunci untuk isolasi forum per sekolah
   
   // Hierarki Baru
   forumId?: string; // ID Dokumen Forum Induk (Server ID)
@@ -46,5 +49,8 @@ export interface ForumMessage {
   replyToName?: string; 
   createdAt: any; 
   updatedAt?: any;
-  reactions?: Record<string, string[]>; 
+  reactions?: Record<string, string[]>;
+  
+  // Opsional: Jika kita butuh query message langsung tanpa lewat channel
+  schoolId?: string; 
 }

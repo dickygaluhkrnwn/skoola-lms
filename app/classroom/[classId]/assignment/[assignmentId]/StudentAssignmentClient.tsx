@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, Clock, FileText, CheckCircle2, UploadCloud, 
   Send, Loader2, AlertCircle, Music, Image as ImageIcon, X, File,
-  Gamepad2, Lightbulb, Play, RotateCcw, Trophy // Added Trophy
+  Gamepad2, Lightbulb, Play, RotateCcw, Trophy, Lock // Added Lock icon
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase"; 
 import { 
@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { onAuthStateChanged } from "firebase/auth";
 import { useTheme } from "@/lib/theme-context";
 import { AssignmentType, GameType, QuizQuestion } from "@/lib/types/course.types";
+import { UserProfile } from "@/lib/types/user.types"; // Added import
 
 // --- TIPE DATA ---
 interface AssignmentData {
@@ -55,9 +56,11 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
   
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null); // State for User Profile
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [submission, setSubmission] = useState<Submission | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false); // State for Access Denied
   
   // --- STATE PENGERJAAN ---
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number | string>>({}); // Flexible: number (index) or string (text)
@@ -83,10 +86,25 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
 
   // 1. AUTH & DATA FETCHING
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUserId(user.uid);
-        fetchData(user.uid);
+        
+        // Fetch User Profile first
+        try {
+            const userDocSnap = await getDoc(doc(db, "users", user.uid));
+            if (userDocSnap.exists()) {
+                const profileData = userDocSnap.data() as UserProfile;
+                setUserProfile(profileData);
+                fetchData(user.uid, profileData); // Pass profile data
+            } else {
+                fetchData(user.uid, null); // Fallback if no profile
+            }
+        } catch (e) {
+            console.error("Error fetching user profile", e);
+            fetchData(user.uid, null);
+        }
+
       } else {
         router.push("/");
       }
@@ -94,8 +112,32 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
     return () => unsubAuth();
   }, [classId, assignmentId, router]);
 
-  const fetchData = async (uid: string) => {
+  const fetchData = async (uid: string, profile: UserProfile | null) => {
     try {
+      // 0. Validate School Isolation
+      const classRef = doc(db, "classrooms", classId);
+      const classSnap = await getDoc(classRef);
+      
+      if (!classSnap.exists()) {
+         alert("Kelas tidak ditemukan.");
+         router.push("/learn");
+         return;
+      }
+
+      const classData = classSnap.data();
+      
+      // Validasi: Jika kelas punya schoolId, user harus punya schoolId yang sama
+      if (classData.schoolId && profile?.schoolId && classData.schoolId !== profile.schoolId) {
+          setAccessDenied(true);
+          setLoading(false);
+          return;
+      } else if (classData.schoolId && !profile?.schoolId) {
+          // Strict mode: User tanpa sekolah tidak bisa akses kelas bersekolah
+          setAccessDenied(true); 
+          setLoading(false);
+          return;
+      }
+
       // A. Fetch Assignment Detail
       const assignRef = doc(db, "classrooms", classId, "assignments", assignmentId);
       const assignSnap = await getDoc(assignRef);
@@ -368,6 +410,27 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
     </div>
   );
 
+  // Tampilan Akses Ditolak
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+            <Lock className="w-8 h-8 text-red-500" />
+        </div>
+        <h1 className="text-xl font-bold text-slate-800">Akses Tugas Dibatasi</h1>
+        <p className="text-slate-500 mt-2 max-w-md">
+            Anda tidak dapat mengakses tugas ini karena berasal dari sekolah yang berbeda atau Anda belum bergabung dengan sekolah.
+        </p>
+        <button 
+            onClick={() => router.push('/learn')}
+            className="mt-6 px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold transition-colors"
+        >
+            Kembali ke Dashboard
+        </button>
+      </div>
+    );
+  }
+
   if (!assignment) return null;
 
   const isSubmitted = !!submission;
@@ -463,10 +526,10 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
                                             : "border-slate-100 hover:border-blue-200"
                                     )}
                                   >
-                                     <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", quizAnswers[q.id] === optIdx ? "border-blue-500" : "border-slate-300")}>
-                                         {quizAnswers[q.id] === optIdx && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"/>}
-                                     </div>
-                                     <span>{opt}</span>
+                                      <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", quizAnswers[q.id] === optIdx ? "border-blue-500" : "border-slate-300")}>
+                                          {quizAnswers[q.id] === optIdx && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"/>}
+                                      </div>
+                                      <span>{opt}</span>
                                   </div>
                                ))}
                             </div>
@@ -532,12 +595,12 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
                              <div className="grid grid-cols-4 gap-3">
                                  {gameData?.cards.map((card: any, idx: number) => (
                                      <div 
-                                        key={idx} 
-                                        onClick={() => handleCardClick(idx)}
-                                        className={cn(
-                                            "aspect-square rounded-xl cursor-pointer transition-all duration-300 transform perspective-1000 relative",
-                                            card.isFlipped || card.isMatched ? "rotate-y-180" : "bg-slate-700 hover:bg-slate-600 border-2 border-slate-600"
-                                        )}
+                                         key={idx} 
+                                         onClick={() => handleCardClick(idx)}
+                                         className={cn(
+                                             "aspect-square rounded-xl cursor-pointer transition-all duration-300 transform perspective-1000 relative",
+                                             card.isFlipped || card.isMatched ? "rotate-y-180" : "bg-slate-700 hover:bg-slate-600 border-2 border-slate-600"
+                                         )}
                                      >
                                          {(card.isFlipped || card.isMatched) && (
                                              <div className={cn("absolute inset-0 rounded-xl flex items-center justify-center p-2 text-center text-xs font-bold break-words bg-white text-slate-900 border-2", card.isMatched ? "border-green-500 bg-green-50" : "border-white")}>
@@ -601,30 +664,30 @@ export default function StudentAssignmentClient({ classId, assignmentId }: Stude
                             )}
                             onClick={() => fileInputRef.current?.click()}
                          >
-                             {isUploading ? (
-                                 <div className="flex flex-col items-center text-blue-600 gap-2">
-                                     <Loader2 className="animate-spin" /> Mengupload...
-                                 </div>
-                             ) : fileUrl ? (
-                                 <div className="flex items-center gap-3 text-green-700">
-                                     <div className="w-10 h-10 bg-green-200 rounded-full flex items-center justify-center">
-                                         <CheckCircle2 size={20} />
-                                     </div>
-                                     <div className="flex-1 overflow-hidden">
-                                         <p className="font-bold text-sm truncate">File Terupload</p>
-                                         <p className="text-xs opacity-70 truncate">{fileUrl}</p>
-                                     </div>
-                                     <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); setFileUrl(""); }}>
-                                         Hapus
-                                     </Button>
-                                 </div>
-                             ) : (
-                                 <div className="text-center text-slate-400">
-                                     <UploadCloud size={32} className="mx-auto mb-2" />
-                                     <p className="text-sm font-medium">Klik untuk upload file proyek</p>
-                                     <p className="text-xs opacity-70">PDF, JPG, PNG, DOCX (Max 10MB)</p>
-                                 </div>
-                             )}
+                            {isUploading ? (
+                                <div className="flex flex-col items-center text-blue-600 gap-2">
+                                    <Loader2 className="animate-spin" /> Mengupload...
+                                </div>
+                            ) : fileUrl ? (
+                                <div className="flex items-center gap-3 text-green-700">
+                                    <div className="w-10 h-10 bg-green-200 rounded-full flex items-center justify-center">
+                                        <CheckCircle2 size={20} />
+                                    </div>
+                                    <div className="flex-1 overflow-hidden">
+                                        <p className="font-bold text-sm truncate">File Terupload</p>
+                                        <p className="text-xs opacity-70 truncate">{fileUrl}</p>
+                                    </div>
+                                    <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); setFileUrl(""); }}>
+                                        Hapus
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="text-center text-slate-400">
+                                    <UploadCloud size={32} className="mx-auto mb-2" />
+                                    <p className="text-sm font-medium">Klik untuk upload file proyek</p>
+                                    <p className="text-xs opacity-70">PDF, JPG, PNG, DOCX (Max 10MB)</p>
+                                </div>
+                            )}
                          </div>
                          <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
                      </div>

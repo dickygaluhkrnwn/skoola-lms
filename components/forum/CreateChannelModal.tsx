@@ -118,6 +118,9 @@ export default function CreateChannelModal({
       // Gunakan Batch Write agar Atomicity terjaga (Semua sukses atau semua gagal)
       const batch = writeBatch(db);
       
+      // Ambil School ID dari user profile
+      const userSchoolId = userProfile.schoolId || null;
+
       // STEP 1: Buat Dokumen INDUK (Server/Forum) di collection 'forums'
       // Ini menjawab kekhawatiran masa depanmu!
       const forumRef = doc(db, 'forums', forumId);
@@ -128,6 +131,7 @@ export default function CreateChannelModal({
         type: formData.type,
         // Jika ini sub-forum (misal forum jurusan), parentId merujuk ke ID Jurusan
         parentId: formData.parentId || '', 
+        schoolId: userSchoolId, // <-- INJECT SCHOOL ID
         createdBy: userProfile.uid,
         moderators: [userProfile.uid],
         members: initialMembers,
@@ -145,6 +149,7 @@ export default function CreateChannelModal({
         forumId: forumId, 
         parentId: forumId, // field parentId tetap ada agar kompatibel dengan logika sidebar saat ini
         groupName: formData.name, // Denormalisasi nama grup untuk display cepat di sidebar
+        schoolId: userSchoolId, // <-- INJECT SCHOOL ID
         
         description: `Pengumuman resmi untuk ${formData.name}`,
         type: formData.type,
@@ -164,6 +169,7 @@ export default function CreateChannelModal({
         forumId: forumId,
         parentId: forumId,
         groupName: formData.name,
+        schoolId: userSchoolId, // <-- INJECT SCHOOL ID
         
         description: `Ruang diskusi bebas untuk ${formData.name}`,
         type: formData.type,

@@ -11,6 +11,7 @@ export interface UserProfile {
   
   // Data Akademik
   institutionId?: string; 
+  schoolId?: string; // <-- UPDATE: Field kunci untuk isolasi data sekolah
   department?: string; 
   identityNumber?: string; 
   schoolLevel?: 'sd' | 'smp' | 'sma' | 'uni'; // Tambahan untuk jenjang sekolah
@@ -39,6 +40,17 @@ export interface UserProfile {
   // Class Enrollment
   enrolledClasses?: string[];
   completedModules?: string[];
+}
+
+// UPDATE: Definisi tipe data untuk Sekolah (Collection 'schools')
+export interface School {
+  id: string; // Document ID di Firestore
+  name: string;
+  schoolCode: string; // Kode unik untuk join (misal: SKL-8X92)
+  address?: string;
+  level: 'sd' | 'smp' | 'sma' | 'uni';
+  adminId: string; // UID Admin yang mengelola sekolah ini
+  createdAt: number;
 }
 
 // Tipe data ringkas untuk Leaderboard/UI list agar hemat bandwidth

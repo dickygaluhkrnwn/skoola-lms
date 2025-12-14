@@ -6,7 +6,7 @@ import {
   collection, 
   query, 
   onSnapshot,
-  orderBy 
+  where
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -52,14 +52,22 @@ export default function ForumLayoutClient({
     return () => unsubscribe();
   }, [router]);
 
-  // 2. Fetch Channels (Realtime)
+  // 2. Fetch Channels (Optimized & Isolated)
   useEffect(() => {
     if (!user || !userProfile) return;
 
-    // Ambil semua channel, Sidebar yang akan bertugas mengelompokkan (Grouping)
-    // Gunakan orderBy createdAt agar urutan channel konsisten
     const channelsRef = collection(db, 'channels');
-    const q = query(channelsRef, orderBy('createdAt', 'asc'));
+    let q;
+
+    // A. ISOLASI SEKOLAH: Jika User punya School ID
+    if (userProfile.schoolId) {
+       // Query hanya channel milik sekolah tersebut
+       // PENTING: Sorting dilakukan di client-side untuk menghindari index error Firestore
+       q = query(channelsRef, where('schoolId', '==', userProfile.schoolId));
+    } else {
+       // B. FALLBACK: User umum / belum join sekolah
+       q = query(channelsRef);
+    }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedChannels: ForumChannel[] = [];
@@ -68,23 +76,28 @@ export default function ForumLayoutClient({
         fetchedChannels.push({ id: doc.id, ...data });
       });
 
-      // FILTERING LOGIC (Security Layer)
-      // Menentukan channel mana yang boleh dilihat user
+      // C. CLIENT-SIDE SORTING (createdAt ASC)
+      fetchedChannels.sort((a, b) => {
+         const dateA = a.createdAt?.seconds || 0;
+         const dateB = b.createdAt?.seconds || 0;
+         return dateA - dateB; 
+      });
+
+      // D. FILTERING LOGIC (Security Layer - Lapis Kedua)
       const allowedChannels = fetchedChannels.filter(channel => {
-        // 1. Admin bisa lihat semua
+        // 1. Admin bisa lihat semua di lingkup querynya
         if (userProfile.role === 'admin') return true;
 
-        // 2. Tipe Sekolah (School) biasanya publik untuk warga sekolah
-        // Tapi jika ada field members khusus, kita utamakan cek members
-        if (channel.type === 'school') return true;
+        // 2. Tipe Sekolah & Jurusan public untuk warga sekolah
+        if (channel.type === 'school' || channel.type === 'faculty') return true;
 
-        // 3. Cek Membership (Array 'members' berisi UID user)
-        // Ini dibuat otomatis oleh CreateChannelModal untuk tipe Class/Group
-        if (channel.members && Array.isArray(channel.members)) {
-          return channel.members.includes(user.uid);
+        // 3. Logic Private Channel (Class/Group)
+        // PERBAIKAN ERROR TYPESCRIPT DISINI: Gunakan Array.isArray
+        if (Array.isArray(channel.members) && channel.members.length > 0) {
+           return channel.members.includes(user.uid);
         }
 
-        // Fallback untuk data lama atau channel bebas
+        // 4. Jika members undefined atau kosong, anggap Public di dalam sekolah tersebut
         return true; 
       });
 
@@ -103,6 +116,7 @@ export default function ForumLayoutClient({
           channels={channels} 
           userRole={userProfile?.role}
           isLoading={loading}
+          userSchoolId={userProfile?.schoolId} 
         />
       </div>
 

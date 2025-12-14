@@ -2,8 +2,8 @@ import React from 'react';
 import ForumLayoutClient from './ForumLayoutClient';
 
 export const metadata = {
-  title: 'Forum Sekolah | Skoola LMS',
-  description: 'Diskusi dan kolaborasi sekolah',
+  title: 'Forum Diskusi | Skoola LMS',
+  description: 'Ruang diskusi dan kolaborasi siswa dan guru.',
 };
 
 export default function ForumLayout({

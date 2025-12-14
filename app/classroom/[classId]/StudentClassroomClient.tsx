@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/lib/theme-context"; 
 import { cn } from "@/lib/utils";
 import { onAuthStateChanged } from "firebase/auth";
+import { UserProfile } from "@/lib/types/user.types";
 
 // --- IMPORT SUB-COMPONENTS ---
 import { ClassroomSidebar } from "@/components/student/classroom/ClassroomSidebar";
@@ -30,6 +31,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
   const { theme } = useTheme(); 
 
   const [userId, setUserId] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [classData, setClassData] = useState<any>(null);
   const [materials, setMaterials] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -37,6 +39,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
   
   const [activeTab, setActiveTab] = useState<"dashboard" | "materials" | "assignments" | "people" | "adventure">("dashboard");
   const [loading, setLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Helper Theme
   const isKids = theme === "sd";
@@ -46,15 +49,27 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
 
   // Auth Check & Fetch Logic
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) setUserId(user.uid);
-      else router.push("/");
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUserId(user.uid);
+        // Fetch User Profile untuk cek schoolId
+        try {
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+                setUserProfile(userDoc.data() as UserProfile);
+            }
+        } catch (e) {
+            console.error("Error fetch user profile", e);
+        }
+      } else {
+        router.push("/");
+      }
     });
     return () => unsub();
   }, [router]);
 
   useEffect(() => {
-    if (!classId) return;
+    if (!classId || !userId || !userProfile) return;
 
     const fetchClassAndMembers = async () => {
       try {
@@ -63,6 +78,18 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
         
         if (docSnap.exists()) {
           const data = docSnap.data();
+          
+          // --- VALIDASI ISOLASI SEKOLAH ---
+          // 1. Cek apakah kelas punya schoolId (Backward compatibility: jika tdk punya, anggap public/legacy)
+          // 2. Jika punya, pastikan sama dengan schoolId siswa
+          if (data.schoolId && userProfile.schoolId && data.schoolId !== userProfile.schoolId) {
+             console.warn("Access Denied: School mismatch");
+             setAccessDenied(true);
+             setLoading(false);
+             return;
+          }
+          // --------------------------------
+
           setClassData(data);
 
           if (data.students && Array.isArray(data.students) && data.students.length > 0) {
@@ -97,7 +124,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
     
     fetchClassAndMembers();
 
-    // Realtime listener for Materials (Fetch all fields needed for rendering icons/types)
+    // Realtime listener for Materials
     const materialsRef = collection(db, "classrooms", classId, "materials");
     const qMat = query(materialsRef, orderBy("createdAt", "desc"));
     const unsubMat = onSnapshot(qMat, (snapshot) => {
@@ -105,7 +132,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
       setMaterials(mats);
     });
 
-    // Realtime listener for Assignments (Fetch types like 'game', 'quiz', etc.)
+    // Realtime listener for Assignments
     const assignmentsRef = collection(db, "classrooms", classId, "assignments");
     const qAss = query(assignmentsRef, orderBy("createdAt", "desc"));
     const unsubAss = onSnapshot(qAss, (snapshot) => {
@@ -117,7 +144,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
       unsubMat();
       unsubAss();
     };
-  }, [classId, router]);
+  }, [classId, router, userId, userProfile]);
 
   const classTotalXP = classMembers.reduce((total, member: any) => total + (member.xp || 0), 0);
 
@@ -136,6 +163,26 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
     </div>
   );
 
+  if (accessDenied) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 p-4 text-center">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                <Lock className="w-10 h-10 text-red-500" />
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Akses Ditolak</h1>
+            <p className="text-slate-500 max-w-md mb-6">
+                Maaf, Anda tidak memiliki izin untuk mengakses kelas ini karena terdaftar di sekolah yang berbeda.
+            </p>
+            <button 
+                onClick={() => router.push('/learn')}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+            >
+                Kembali ke Dashboard
+            </button>
+        </div>
+      );
+  }
+
   // Background logic update for Uni Theme
   const bgSoft = isKids ? "bg-yellow-50" 
     : isUni ? "bg-slate-950 text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-200" 
@@ -143,18 +190,17 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
     : isSMA ? "bg-transparent text-slate-100" 
     : "bg-slate-50";
 
-  // Data Adapter for Adventure Map (Simplified for now)
+  // Data Adapter for Adventure Map
   const mapModules = [...materials, ...assignments].map(item => ({
       id: item.id,
       title: item.title,
       description: item.description,
       isLocked: false, 
-      type: item.type, // Added type
-      url: item.url, // Added url
-      locationData: item.locationData, // Added locationData
-      gameConfig: item.gameConfig, // Added gameConfig
-      content: item.content, // Added content
-      // Thumbnail logic based on type
+      type: item.type, 
+      url: item.url, 
+      locationData: item.locationData, 
+      gameConfig: item.gameConfig, 
+      content: item.content, 
       thumbnailUrl: item.type === 'video' ? '📺' : 
                     item.type === 'quiz' ? '📝' : 
                     item.type === 'game' ? '🎮' : 
@@ -196,31 +242,31 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
 
       {/* 1. SIDEBAR (DESKTOP) */}
       <ClassroomSidebar 
-         classData={classData}
-         activeTab={activeTab}
-         setActiveTab={setActiveTab}
-         isKids={isKids}
-         isUni={isUni}
-         isSMP={isSMP}
-         theme={theme}
+          classData={classData}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isKids={isKids}
+          isUni={isUni}
+          isSMP={isSMP}
+          theme={theme}
       />
 
       {/* 2. MOBILE HEADER */}
       <ClassroomMobileHeader 
-         classData={classData}
-         isKids={isKids}
-         isUni={isUni}
-         isSMP={isSMP}
+          classData={classData}
+          isKids={isKids}
+          isUni={isUni}
+          isSMP={isSMP}
       />
 
       {/* 3. MOBILE NAV */}
       <ClassroomMobileNav 
-         activeTab={activeTab}
-         setActiveTab={setActiveTab}
-         isKids={isKids}
-         isUni={isUni}
-         isSMP={isSMP}
-         theme={theme}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isKids={isKids}
+          isUni={isUni}
+          isSMP={isSMP}
+          theme={theme}
       />
 
       {/* 4. MAIN CONTENT AREA */}
@@ -230,12 +276,12 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
                
                {activeTab === "dashboard" && (
                   <DashboardView 
-                     classData={classData} 
-                     classTotalXP={classTotalXP} 
-                     assignments={assignments} 
-                     classMembers={classMembers} 
-                     setActiveTab={setActiveTab} 
-                     isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme}
+                      classData={classData} 
+                      classTotalXP={classTotalXP} 
+                      assignments={assignments} 
+                      classMembers={classMembers} 
+                      setActiveTab={setActiveTab} 
+                      isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme}
                   />
                )}
 
@@ -254,9 +300,9 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
 
                {activeTab === "assignments" && (
                   <AssignmentsView 
-                     assignments={assignments} 
-                     isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme} 
-                     router={router} classId={classId}
+                      assignments={assignments} 
+                      isKids={isKids} isSMP={isSMP} isUni={isUni} isSMA={isSMA} theme={theme} 
+                      router={router} classId={classId}
                   />
                )}
 
