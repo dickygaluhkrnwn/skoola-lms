@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { 
   BookOpen, Plus, Video, FileText, Link as LinkIcon, Trash2, Calendar,
-  MapPin, Image as ImageIcon, AlignLeft, ExternalLink, X, File
+  MapPin, Image as ImageIcon, AlignLeft, ExternalLink, X, File, Layers
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -24,6 +24,8 @@ interface MaterialData {
     placeName: string;
   };
   createdAt: Timestamp;
+  subjectName?: string; // NEW: Nama Mapel
+  subjectId?: string;   // NEW: ID Mapel
 }
 
 interface MaterialsViewProps {
@@ -59,7 +61,7 @@ export default function MaterialsView({
   const getMaterialIcon = (type: MaterialType) => {
     switch (type) {
         case 'video': return { icon: <Video size={24} />, color: "text-red-600 bg-red-50 group-hover:bg-red-100" };
-        case 'pdf': return { icon: <FileText size={24} />, color: "text-red-500 bg-red-50 group-hover:bg-red-100" }; // PDF identik dengan merah adobe
+        case 'pdf': return { icon: <FileText size={24} />, color: "text-red-500 bg-red-50 group-hover:bg-red-100" }; 
         case 'image': return { icon: <ImageIcon size={24} />, color: "text-purple-600 bg-purple-50 group-hover:bg-purple-100" };
         case 'map': return { icon: <MapPin size={24} />, color: "text-green-600 bg-green-50 group-hover:bg-green-100" };
         case 'link': return { icon: <LinkIcon size={24} />, color: "text-blue-600 bg-blue-50 group-hover:bg-blue-100" };
@@ -80,7 +82,7 @@ export default function MaterialsView({
   };
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-5xl space-y-6 pb-20">
        {/* Header Section */}
        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div>
@@ -137,9 +139,18 @@ export default function MaterialsView({
                              {item.title}
                           </p>
                           <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2 mt-1">
+                             {/* Badge Tipe Materi */}
                              <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wide text-slate-500 border border-slate-200">
                                 {getLabel(item.type)}
                              </span>
+
+                             {/* Badge Mapel (NEW FEATURE) */}
+                             {item.subjectName && (
+                                <span className="bg-indigo-50 px-2 py-0.5 rounded text-[10px] font-bold text-indigo-600 border border-indigo-100 flex items-center gap-1">
+                                   <Layers size={10} /> {item.subjectName}
+                                </span>
+                             )}
+
                              <span className="flex items-center gap-1">
                                 <Calendar size={12} />
                                 {item.createdAt 
@@ -184,31 +195,37 @@ export default function MaterialsView({
          {readingMaterial && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
                 <motion.div 
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    onClick={() => setReadingMaterial(null)}
-                    className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                   onClick={() => setReadingMaterial(null)}
+                   className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
                 />
                 <motion.div 
-                    initial={{ scale: 0.95, opacity: 0, y: 20 }} 
-                    animate={{ scale: 1, opacity: 1, y: 0 }} 
-                    exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                    className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl relative z-10 max-h-[85vh] flex flex-col"
+                   initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+                   animate={{ scale: 1, opacity: 1, y: 0 }} 
+                   exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                   className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl relative z-10 max-h-[85vh] flex flex-col"
                 >
-                    <div className="p-6 border-b border-slate-100 flex justify-between items-start">
-                        <div>
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Artikel</span>
-                            <h3 className="text-xl font-bold text-slate-900 mt-1">{readingMaterial.title}</h3>
-                        </div>
-                        <button onClick={() => setReadingMaterial(null)} className="text-slate-400 hover:text-slate-700">
-                            <X size={24} />
-                        </button>
-                    </div>
-                    <div className="p-6 overflow-y-auto prose prose-slate max-w-none">
-                        {/* Render simple text with line breaks if it's not HTML, or just text */}
-                        <div className="whitespace-pre-wrap text-slate-700 leading-relaxed">
-                            {readingMaterial.content}
-                        </div>
-                    </div>
+                   <div className="p-6 border-b border-slate-100 flex justify-between items-start">
+                       <div>
+                           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Artikel</span>
+                           <h3 className="text-xl font-bold text-slate-900 mt-1">{readingMaterial.title}</h3>
+                           {/* Badge Subject in Reader */}
+                           {readingMaterial.subjectName && (
+                              <span className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                                 {readingMaterial.subjectName}
+                              </span>
+                           )}
+                       </div>
+                       <button onClick={() => setReadingMaterial(null)} className="text-slate-400 hover:text-slate-700">
+                           <X size={24} />
+                       </button>
+                   </div>
+                   <div className="p-6 overflow-y-auto prose prose-slate max-w-none">
+                       {/* Render simple text with line breaks if it's not HTML, or just text */}
+                       <div className="whitespace-pre-wrap text-slate-700 leading-relaxed">
+                           {readingMaterial.content}
+                       </div>
+                   </div>
                 </motion.div>
             </div>
          )}

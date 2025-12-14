@@ -1,27 +1,55 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { User, LogOut, LayoutDashboard, School, Users, Map, Backpack, Smile } from "lucide-react";
+import { User, LogOut, LayoutDashboard, School, Users, Map, Backpack, Smile, Calendar, GraduationCap, Globe } from "lucide-react";
 import { signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme-context";
+import { UserProfile } from "@/lib/types/user.types";
 
 export function MobileNav() {
   const router = useRouter();
   const pathname = usePathname();
-  const { theme } = useTheme();
+  const { theme } = useTheme(); // Fallback theme
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [schoolData, setSchoolData] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+            const data = snap.data() as UserProfile;
+            setUserProfile(data);
+            
+            if (data.schoolId) {
+                const schoolSnap = await getDoc(doc(db, "schools", data.schoolId));
+                if (schoolSnap.exists()) {
+                    setSchoolData(schoolSnap.data());
+                }
+            }
+        }
+      }
+    };
+    fetchProfile();
+  }, []);
 
   const handleLogout = async () => {
     await signOut(auth);
     router.push("/");
   };
 
-  const isUni = theme === "uni";
-  const isKids = theme === "sd";
-  const isSMP = theme === "smp";
-  const isSMA = theme === "sma";
+  // Determine Real School Level
+  const realSchoolLevel = schoolData?.level || userProfile?.schoolLevel || theme;
+  
+  const isKids = realSchoolLevel === "sd";
+  const isSMP = realSchoolLevel === "smp";
+  const isSMA = realSchoolLevel === "sma";
+  const isUni = realSchoolLevel === "uni";
 
   return (
     <nav className={cn(
@@ -42,53 +70,36 @@ export function MobileNav() {
       "bg-white border-t border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
     )}>
       <NavItem 
-        theme={theme}
+        theme={realSchoolLevel}
         active={pathname === "/learn"} 
         onClick={() => router.push("/learn")} 
         icon={isKids ? <Map /> : <LayoutDashboard />} 
-        label={isKids ? "Markas" : "Home"} 
+        label={isKids ? "Markas" : isUni ? "Kampus" : "Home"} 
       />
       
       <NavItem 
-        theme={theme}
+        theme={realSchoolLevel}
         active={pathname.includes("class")} 
         onClick={() => router.push("/learn?tab=classes")} 
         icon={isKids ? <Backpack /> : <School />} 
-        label={isKids ? "Kelas" : "Kelas"} 
+        label={isKids ? "Tas Sekolah" : isUni ? "Kuliah" : "Kelas"} 
       />
       
       <NavItem 
-        theme={theme}
+        theme={realSchoolLevel}
         active={pathname === "/social"} 
         onClick={() => router.push("/social")} 
-        icon={isKids ? <Smile /> : <Users />} 
-        label={isKids ? "Teman" : "Sosial"} 
+        icon={isKids ? <Smile /> : <Globe />} 
+        label={isKids ? "Dunia Kita" : "Sosial"} 
       />
       
       <NavItem 
-        theme={theme}
+        theme={realSchoolLevel}
         active={pathname === "/profile"} 
         onClick={() => router.push("/profile")} 
         icon={<User />} 
         label={isKids ? "Kartu" : "Profil"} 
       />
-      
-      <button 
-        onClick={handleLogout} 
-        className={cn(
-          "flex flex-col items-center gap-1 transition-colors p-2 rounded-lg group",
-          theme === "sd" ? "text-red-300 hover:text-red-500 active:scale-95" : 
-          theme === "smp" ? "text-slate-400 hover:text-red-500" : 
-          theme === "sma" ? "text-slate-500 hover:text-rose-500" :
-          isUni ? "text-slate-500 hover:text-rose-400 hover:bg-rose-900/20" :
-          "text-slate-400 hover:text-red-500"
-        )}
-      >
-        <div className={cn("transition-transform group-active:scale-90", isKids && "bg-red-50 p-1 rounded-full")}>
-            <LogOut size={isKids ? 20 : 24} className={isKids ? "text-red-400" : ""} />
-        </div>
-        <span className={cn("text-[10px] font-bold", isKids && "text-red-400")}>{isKids ? "Keluar" : "Out"}</span>
-      </button>
     </nav>
   );
 }
@@ -103,28 +114,28 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
     <button 
       onClick={onClick} 
       className={cn(
-        "flex flex-col items-center gap-1 p-2 transition-all relative",
+        "flex flex-col items-center gap-1 p-2 transition-all relative min-w-[60px]",
         
         // Kids Theme
-        isKids ? "rounded-2xl w-16" : "rounded-md",
-        isKids && active && "text-white bg-primary shadow-lg shadow-primary/30 -translate-y-4 scale-110 border-4 border-white",
+        isKids ? "rounded-2xl" : "rounded-lg",
+        isKids && active && "text-white bg-primary shadow-lg shadow-primary/30 -translate-y-4 scale-110 border-4 border-white z-10",
         isKids && !active && "text-gray-400 hover:text-primary hover:bg-primary/5",
         
-        // Uni Theme: Neon Glow without heavy borders
-        isUni && "rounded-lg",
-        isUni && active && "text-indigo-400 drop-shadow-[0_0_10px_rgba(99,102,241,0.8)] scale-110",
-        isUni && !active && "text-slate-500 hover:text-slate-300 hover:scale-105",
+        // Uni Theme: Neon Glow
+        isUni && active && "text-indigo-400 drop-shadow-[0_0_10px_rgba(99,102,241,0.8)] scale-110 -translate-y-1",
+        isUni && !active && "text-slate-500 hover:text-slate-300",
 
         // SMP Theme
-        isSMP && active && "text-violet-600 scale-110",
+        isSMP && active && "text-violet-600 scale-110 -translate-y-1",
+        isSMP && !active && "text-slate-400",
         
         // SMA Theme
         isSMA && active && "text-teal-400 scale-105 drop-shadow-[0_0_8px_rgba(45,212,191,0.5)]",
         isSMA && !active && "text-slate-500 hover:text-slate-300",
 
         // Default
-        !isKids && !isUni && !isSMP && !isSMA && active && "text-primary bg-primary/10",
-        !isKids && !isUni && !isSMP && !isSMA && !active && "text-slate-400 hover:text-slate-600"
+        !isKids && !isUni && !isSMP && !isSMA && active && "text-primary",
+        !isKids && !isUni && !isSMP && !isSMA && !active && "text-slate-400"
       )}
     >
       <div className={cn(
@@ -137,16 +148,15 @@ function NavItem({ icon, label, active = false, onClick, theme }: any) {
            className: active && !isKids && !isSMP && !isUni && !isSMA ? "fill-current opacity-20" : "" 
         }) : icon}
       </div>
-      <span className={cn("text-[10px] font-bold", isKids && active && "hidden")}>{label}</span>
+      <span className={cn(
+          "text-[10px] font-bold transition-all", 
+          isKids && active && "hidden",
+          active ? "opacity-100" : "opacity-70 scale-90"
+      )}>{label}</span>
       
-      {/* Active Dot for SMP */}
-      {isSMP && active && <div className="absolute -bottom-1 w-1 h-1 bg-violet-600 rounded-full shadow-[0_0_5px_currentColor] animate-pulse" />}
-      
-      {/* Active Indicator for SMA */}
-      {isSMA && active && <div className="absolute -bottom-1 w-1 h-1 bg-teal-400 rounded-full shadow-[0_0_5px_currentColor]" />}
-
-      {/* Active Glow for Uni */}
-      {isUni && active && <div className="absolute -bottom-1 w-12 h-1 bg-indigo-500/50 rounded-full blur-[4px]" />}
+      {/* Active Indicators */}
+      {isUni && active && <div className="absolute -bottom-1 w-8 h-1 bg-indigo-500/50 rounded-full blur-[4px]" />}
+      {isSMA && active && <div className="absolute -bottom-2 w-1 h-1 bg-teal-400 rounded-full shadow-[0_0_5px_currentColor]" />}
     </button>
   );
 }

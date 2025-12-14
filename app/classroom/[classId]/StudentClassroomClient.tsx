@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Lock } from "lucide-react";
+import { Loader2, Lock, ArrowLeft } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
@@ -169,7 +169,7 @@ export default function StudentClassroomClient({ classId }: StudentClassroomClie
             <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-6">
                 <Lock className="w-10 h-10 text-red-500" />
             </div>
-            <h1 className="text-2xl font-bold mb-2">Akses Ditolak</h1>
+            <h1 className="text-2xl font-bold mb-2">Akses Dibatasi</h1>
             <p className="text-slate-500 max-w-md mb-6">
                 Maaf, Anda tidak memiliki izin untuk mengakses kelas ini karena terdaftar di sekolah yang berbeda.
             </p>

@@ -19,13 +19,15 @@ interface CreateChannelModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  schoolType?: 'sd' | 'smp' | 'sma' | 'uni'; // New Prop for Context
 }
 
 export default function CreateChannelModal({ 
   userProfile, 
   isOpen, 
   onClose,
-  onSuccess
+  onSuccess,
+  schoolType = 'sd' // Default
 }: CreateChannelModalProps) {
   const [loading, setLoading] = useState(false);
   
@@ -45,7 +47,6 @@ export default function CreateChannelModal({
     if (isOpen && userProfile.role === 'teacher') {
       const fetchClasses = async () => {
         try {
-          console.log("Fetching classes for teacher:", userProfile.uid);
           // Menggunakan 'classrooms' sesuai TeacherClient.tsx
           const q = query(
             collection(db, 'classrooms'), 
@@ -66,26 +67,41 @@ export default function CreateChannelModal({
     }
   }, [isOpen, userProfile]);
 
-  // Tentukan opsi tipe channel berdasarkan Role
+  // Tentukan opsi tipe channel berdasarkan Role & School Type
   const getAvailableTypes = () => {
     const types: { value: ChannelType; label: string }[] = [];
     
+    // --- ADMIN ONLY TYPES ---
     if (userProfile.role === 'admin') {
-      types.push({ value: 'school', label: 'Sekolah (Umum)' });
-      types.push({ value: 'faculty', label: 'Jurusan / Fakultas' });
+      types.push({ value: 'school', label: schoolType === 'uni' ? 'Kampus (Umum)' : 'Sekolah (Umum)' });
+      
+      if (schoolType === 'uni' || schoolType === 'sma') {
+        types.push({ value: 'faculty', label: schoolType === 'uni' ? 'Fakultas / Prodi' : 'Jurusan' });
+      }
     }
     
+    // --- TEACHER ONLY TYPES ---
     if (userProfile.role === 'teacher') {
-      types.push({ value: 'class', label: 'Kelas' });
+      types.push({ value: 'class', label: schoolType === 'uni' ? 'Kelas Kuliah' : 'Kelas' });
     }
     
-    // Semua role bisa buat group (diskusi bebas)
+    // --- ALL ROLES ---
     types.push({ value: 'group', label: 'Kelompok Belajar' });
 
     return types;
   };
 
   const availableTypes = getAvailableTypes();
+
+  // Reset form type if not available for current role
+  useEffect(() => {
+     if (isOpen) {
+        const types = getAvailableTypes();
+        if (!types.find(t => t.value === formData.type)) {
+            setFormData(prev => ({ ...prev, type: types[0].value }));
+        }
+     }
+  }, [isOpen, userProfile.role, schoolType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +114,6 @@ export default function CreateChannelModal({
       const initialMembers = [userProfile.uid]; 
 
       // Jika tipe kelas & import dipilih, gunakan ID Kelas sebagai ID Forum
-      // Ini bagus agar 1 Kelas = 1 Forum (tidak duplikat)
       if (formData.type === 'class' && selectedImportClass) {
         forumId = selectedImportClass; 
         
@@ -115,23 +130,19 @@ export default function CreateChannelModal({
         console.log(`Mengimport ${studentSnap.size} siswa ke forum.`);
       }
 
-      // Gunakan Batch Write agar Atomicity terjaga (Semua sukses atau semua gagal)
+      // Gunakan Batch Write agar Atomicity terjaga
       const batch = writeBatch(db);
-      
-      // Ambil School ID dari user profile
       const userSchoolId = userProfile.schoolId || null;
 
-      // STEP 1: Buat Dokumen INDUK (Server/Forum) di collection 'forums'
-      // Ini menjawab kekhawatiran masa depanmu!
+      // STEP 1: Buat Dokumen INDUK (Server/Forum)
       const forumRef = doc(db, 'forums', forumId);
       batch.set(forumRef, {
         id: forumId,
         name: formData.name,
         description: formData.description,
         type: formData.type,
-        // Jika ini sub-forum (misal forum jurusan), parentId merujuk ke ID Jurusan
         parentId: formData.parentId || '', 
-        schoolId: userSchoolId, // <-- INJECT SCHOOL ID
+        schoolId: userSchoolId, 
         createdBy: userProfile.uid,
         moderators: [userProfile.uid],
         members: initialMembers,
@@ -145,11 +156,10 @@ export default function CreateChannelModal({
       const announcementRef = doc(collection(db, 'channels'));
       batch.set(announcementRef, {
         name: "Pengumuman",
-        // PENTING: Menghubungkan channel ke dokumen 'forums' di atas
         forumId: forumId, 
-        parentId: forumId, // field parentId tetap ada agar kompatibel dengan logika sidebar saat ini
-        groupName: formData.name, // Denormalisasi nama grup untuk display cepat di sidebar
-        schoolId: userSchoolId, // <-- INJECT SCHOOL ID
+        parentId: forumId, 
+        groupName: formData.name, 
+        schoolId: userSchoolId, 
         
         description: `Pengumuman resmi untuk ${formData.name}`,
         type: formData.type,
@@ -169,7 +179,7 @@ export default function CreateChannelModal({
         forumId: forumId,
         parentId: forumId,
         groupName: formData.name,
-        schoolId: userSchoolId, // <-- INJECT SCHOOL ID
+        schoolId: userSchoolId, 
         
         description: `Ruang diskusi bebas untuk ${formData.name}`,
         type: formData.type,
@@ -182,14 +192,13 @@ export default function CreateChannelModal({
         updatedAt: serverTimestamp(),
       });
 
-      // Commit Batch
       await batch.commit();
 
       // 3. Reset form & close
       setFormData({
         name: '',
         description: '',
-        type: 'group',
+        type: availableTypes[0].value,
         parentId: '',
       });
       setSelectedImportClass("");
@@ -267,7 +276,7 @@ export default function CreateChannelModal({
           {userProfile.role === 'teacher' && formData.type === 'class' && (
              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-100 dark:border-blue-800">
                 <label className="block text-xs font-bold uppercase text-blue-800 dark:text-blue-300 mb-1">
-                  Link ke Kelas (Otomatis)
+                  Link ke {schoolType === 'uni' ? 'Kelas Kuliah' : 'Kelas'} (Otomatis)
                 </label>
                 <select
                   value={selectedImportClass}
@@ -282,7 +291,7 @@ export default function CreateChannelModal({
                   }}
                   className="w-full px-3 py-2 border border-blue-200 dark:border-blue-700 rounded-md bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">-- Pilih Kelas Asal (Opsional) --</option>
+                  <option value="">-- Pilih {schoolType === 'uni' ? 'Kelas' : 'Kelas'} Asal (Opsional) --</option>
                   {teacherClasses.map((cls) => (
                     <option key={cls.id} value={cls.id}>
                       {cls.name}
@@ -304,12 +313,12 @@ export default function CreateChannelModal({
           {formData.type === 'faculty' && (
              <div>
              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-               Nama Jurusan / Fakultas
+               Nama {schoolType === 'uni' ? 'Fakultas / Prodi' : 'Jurusan'}
              </label>
              <input
                type="text"
                required
-               placeholder="Contoh: Teknik Informatika"
+               placeholder={schoolType === 'uni' ? "Contoh: Teknik Informatika" : "Contoh: IPA"}
                value={formData.parentId}
                onChange={(e) => setFormData({...formData, parentId: e.target.value})}
                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"

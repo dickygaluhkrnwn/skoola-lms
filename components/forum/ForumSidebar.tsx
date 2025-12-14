@@ -11,7 +11,9 @@ import {
   BookOpen,
   MessageSquare,
   Volume2,
-  Lock
+  Lock,
+  Building2, // Icon untuk Fakultas/Prodi
+  Briefcase // Icon untuk Organisasi/BEM/OSIS
 } from 'lucide-react';
 import { ForumChannel, ChannelType } from '@/lib/types/forum.types';
 
@@ -19,6 +21,7 @@ import { ForumChannel, ChannelType } from '@/lib/types/forum.types';
 interface ForumChannelExtended extends ForumChannel {
   groupName?: string;
   category?: 'announcement' | 'discussion';
+  schoolId?: string; // Pastikan ini ada
 }
 
 interface ForumSidebarProps {
@@ -26,7 +29,8 @@ interface ForumSidebarProps {
   activeChannelId?: string;
   userRole?: 'student' | 'teacher' | 'admin';
   isLoading?: boolean;
-  userSchoolId?: string; // Tambahan: ID Sekolah User untuk filtering visual
+  userSchoolId?: string;
+  schoolType?: 'sd' | 'smp' | 'sma' | 'uni'; // NEW PROP
 }
 
 type ServerGroup = {
@@ -41,18 +45,20 @@ export default function ForumSidebar({
   activeChannelId,
   userRole = 'student',
   isLoading = false,
-  userSchoolId
+  userSchoolId,
+  schoolType = 'sd' // Default SD
 }: ForumSidebarProps) {
-  // State untuk expand/collapse Kategori Utama (Sekolah, Jurusan, dll)
+  
+  // State untuk expand/collapse Kategori Utama
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     school: true,
     faculty: true,
     class: true,
     group: true,
+    org: true // New section for Organizations
   });
 
   // State untuk expand/collapse Server/Grup individual
-  // Key: Unique Key (parentId + groupName), Value: boolean
   const [expandedServers, setExpandedServers] = useState<Record<string, boolean>>({});
 
   const toggleSection = (section: string) => {
@@ -71,8 +77,6 @@ export default function ForumSidebar({
 
   // LOGIC: Grouping Flat Channels menjadi Servers
   const groupedServers = useMemo(() => {
-    // Kuncinya sekarang kombinasi parentId dan groupName agar unik
-    // Format Key: "parentId_groupName"
     const groups: Record<string, ServerGroup> = {};
     const standaloneChannels: ForumChannelExtended[] = [];
 
@@ -82,16 +86,17 @@ export default function ForumSidebar({
       if (userSchoolId && channel.schoolId && channel.schoolId !== userSchoolId) {
          return; 
       }
-      // -------------------------------------
+      
+      // Role-based visibility (Opsional, bisa dikembangkan)
+      // if (channel.isLocked && userRole === 'student') return; // Contoh filter strict
 
       // Jika punya parentId dan groupName, masukkan ke grup server
       if (channel.parentId && channel.groupName) {
-        // Buat unique key untuk mengatasi duplikasi parentId jika ada kesalahan data
         const uniqueGroupKey = `${channel.parentId}_${channel.groupName}`;
         
         if (!groups[uniqueGroupKey]) {
           groups[uniqueGroupKey] = {
-            id: uniqueGroupKey, // Gunakan unique key sebagai ID render
+            id: uniqueGroupKey,
             name: channel.groupName,
             type: channel.type,
             channels: []
@@ -99,15 +104,13 @@ export default function ForumSidebar({
         }
         groups[uniqueGroupKey].channels.push(channel);
       } else {
-        // Fallback untuk channel lama / single channel
         standaloneChannels.push(channel);
       }
     });
 
-    // Urutkan channel di dalam setiap server (Pengumuman dulu, baru Diskusi)
+    // Urutkan channel di dalam setiap server
     Object.values(groups).forEach(group => {
       group.channels.sort((a, b) => {
-        // Pengumuman (locked) selalu di atas
         if (a.isLocked && !b.isLocked) return -1;
         if (!a.isLocked && b.isLocked) return 1;
         return 0;
@@ -120,6 +123,28 @@ export default function ForumSidebar({
   // Helper untuk mengambil list server berdasarkan tipe
   const getServersByType = (type: ChannelType) => {
     return Object.values(groupedServers.groups).filter(server => server.type === type);
+  };
+
+  // --- ADAPTIVE LABELS ---
+  const getLabel = (key: string) => {
+      if (schoolType === 'uni') {
+          if (key === 'faculty') return "Fakultas / Prodi";
+          if (key === 'class') return "Kelas Kuliah";
+          if (key === 'org') return "Organisasi / UKM";
+          if (key === 'school') return "Kampus";
+      }
+      if (key === 'faculty') return "Jurusan"; // SMA/SMK
+      if (key === 'org') return "Ekskul & OSIS";
+      if (key === 'school') return "Sekolah";
+      return "Kelas";
+  };
+
+  const getIcon = (key: string) => {
+      if (key === 'faculty') return schoolType === 'uni' ? Building2 : GraduationCap;
+      if (key === 'org') return Briefcase;
+      if (key === 'class') return BookOpen;
+      if (key === 'group') return Users;
+      return School;
   };
 
   // Komponen: Single Channel Item (Child)
@@ -149,7 +174,6 @@ export default function ForumSidebar({
 
   // Komponen: Server Group Item (Parent)
   const ServerItem = ({ server }: { server: ServerGroup }) => {
-    // Default expanded jika belum ada di state
     const isExpanded = expandedServers[server.id] !== false; 
 
     return (
@@ -175,27 +199,26 @@ export default function ForumSidebar({
 
   // Komponen: Section Kategori Utama
   const SidebarSection = ({ 
-    title, 
     type, 
-    icon: SectionIcon,
+    idKey // Key for label & icon lookup
   }: { 
-    title: string; 
     type: ChannelType; 
-    icon: any;
+    idKey: string;
   }) => {
     const servers = getServersByType(type);
     if (servers.length === 0) return null;
 
-    const isExpanded = expandedSections[type];
+    const isExpanded = expandedSections[idKey];
+    const Icon = getIcon(idKey);
 
     return (
       <div className="mb-6">
         <button 
-          onClick={() => toggleSection(type)}
+          onClick={() => toggleSection(idKey)}
           className="flex items-center w-full px-2 mb-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
         >
-          <SectionIcon className="h-3 w-3 mr-2" />
-          {title}
+          <Icon className="h-3 w-3 mr-2" />
+          {getLabel(idKey)}
           <span className="ml-auto text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 rounded-full text-slate-500">
             {servers.length}
           </span>
@@ -235,42 +258,29 @@ export default function ForumSidebar({
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-slate-50 dark:bg-slate-900 z-10">
         <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center">
           <MessageSquare className="h-5 w-5 mr-2 text-indigo-600" />
-          Forum Sekolah
+          Forum {schoolType === 'uni' ? 'Kampus' : 'Sekolah'}
         </h2>
         <p className="text-xs text-slate-500 mt-1 pl-7">
-          {userRole === 'student' ? 'Area Siswa' : userRole === 'teacher' ? 'Area Guru' : 'Area Admin'}
+          {userRole === 'student' ? (schoolType === 'uni' ? 'Area Mahasiswa' : 'Area Siswa') : userRole === 'teacher' ? (schoolType === 'uni' ? 'Area Dosen' : 'Area Guru') : 'Area Admin'}
         </p>
       </div>
 
       {/* List Channel */}
       <div className="flex-1 p-3">
-        {/* 1. Level Sekolah */}
-        <SidebarSection 
-          title="Sekolah" 
-          type="school" 
-          icon={School} 
-        />
+        {/* 1. Level Sekolah/Kampus */}
+        <SidebarSection type="school" idKey="school" />
 
         {/* 2. Level Fakultas/Jurusan */}
-        <SidebarSection 
-          title="Jurusan" 
-          type="faculty" 
-          icon={GraduationCap} 
-        />
+        <SidebarSection type="faculty" idKey="faculty" />
 
         {/* 3. Level Kelas */}
-        <SidebarSection 
-          title="Kelas Saya" 
-          type="class" 
-          icon={BookOpen} 
-        />
-
-        {/* 4. Level Kelompok */}
-        <SidebarSection 
-          title="Kelompok Belajar" 
-          type="group" 
-          icon={Users} 
-        />
+        <SidebarSection type="class" idKey="class" />
+        
+        {/* 4. Level Organisasi (New for Uni) */}
+        {/* Asumsikan kita punya tipe channel baru 'org' atau mapping existing */}
+        
+        {/* 5. Level Kelompok */}
+        <SidebarSection type="group" idKey="group" />
         
         {/* Empty State */}
         {channels.length === 0 && (

@@ -6,15 +6,17 @@ import {
   collection, 
   query, 
   onSnapshot,
-  where
+  where,
+  doc, 
+  getDoc 
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import ForumSidebar from '@/components/forum/ForumSidebar';
 import { ForumChannel } from '@/lib/types/forum.types';
 import { UserProfile } from '@/lib/types/user.types';
-import { doc, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils'; // Pastikan import cn ada
 
 export default function ForumLayoutClient({ 
   children 
@@ -26,6 +28,9 @@ export default function ForumLayoutClient({
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [channels, setChannels] = useState<ForumChannel[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // NEW STATE: School Data for Adaptive UI
+  const [schoolType, setSchoolType] = useState<'sd' | 'smp' | 'sma' | 'uni'>('sd');
 
   // 1. Auth & User Profile Check
   useEffect(() => {
@@ -42,7 +47,19 @@ export default function ForumLayoutClient({
         const userDocSnapshot = await getDoc(userDocRef);
         
         if (userDocSnapshot.exists()) {
-          setUserProfile(userDocSnapshot.data() as UserProfile);
+          const uData = userDocSnapshot.data() as UserProfile;
+          setUserProfile(uData);
+
+          // FETCH SCHOOL DATA (NEW LOGIC)
+          if (uData.schoolId) {
+             const schoolDocRef = doc(db, 'schools', uData.schoolId);
+             const schoolSnap = await getDoc(schoolDocRef);
+             if (schoolSnap.exists()) {
+                const sData = schoolSnap.data();
+                // Set school type global for this layout
+                setSchoolType(sData.level || 'sd');
+             }
+          }
         }
       } catch (error) {
         console.error("Error fetching user profile:", error);
@@ -62,7 +79,6 @@ export default function ForumLayoutClient({
     // A. ISOLASI SEKOLAH: Jika User punya School ID
     if (userProfile.schoolId) {
        // Query hanya channel milik sekolah tersebut
-       // PENTING: Sorting dilakukan di client-side untuk menghindari index error Firestore
        q = query(channelsRef, where('schoolId', '==', userProfile.schoolId));
     } else {
        // B. FALLBACK: User umum / belum join sekolah
@@ -78,9 +94,9 @@ export default function ForumLayoutClient({
 
       // C. CLIENT-SIDE SORTING (createdAt ASC)
       fetchedChannels.sort((a, b) => {
-         const dateA = a.createdAt?.seconds || 0;
-         const dateB = b.createdAt?.seconds || 0;
-         return dateA - dateB; 
+        const dateA = a.createdAt?.seconds || 0;
+        const dateB = b.createdAt?.seconds || 0;
+        return dateA - dateB; 
       });
 
       // D. FILTERING LOGIC (Security Layer - Lapis Kedua)
@@ -92,9 +108,8 @@ export default function ForumLayoutClient({
         if (channel.type === 'school' || channel.type === 'faculty') return true;
 
         // 3. Logic Private Channel (Class/Group)
-        // PERBAIKAN ERROR TYPESCRIPT DISINI: Gunakan Array.isArray
         if (Array.isArray(channel.members) && channel.members.length > 0) {
-           return channel.members.includes(user.uid);
+            return channel.members.includes(user.uid);
         }
 
         // 4. Jika members undefined atau kosong, anggap Public di dalam sekolah tersebut
@@ -109,7 +124,11 @@ export default function ForumLayoutClient({
   }, [user, userProfile]);
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
+    // FIX: Terapkan class adaptif di sini agar font & warna berubah global
+    <div className={cn(
+      "flex h-screen overflow-hidden transition-colors duration-500",
+      schoolType === 'uni' ? "bg-slate-950 font-sans text-slate-100" : "bg-slate-50 font-display text-slate-900"
+    )}>
       {/* Sidebar Desktop - Hidden on Mobile */}
       <div className="hidden md:block h-full border-r border-slate-200 dark:border-slate-800">
         <ForumSidebar 
@@ -117,6 +136,7 @@ export default function ForumLayoutClient({
           userRole={userProfile?.role}
           isLoading={loading}
           userSchoolId={userProfile?.schoolId} 
+          schoolType={schoolType} // Pass prop baru ke Sidebar
         />
       </div>
 

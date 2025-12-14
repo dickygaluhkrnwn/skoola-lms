@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, LayoutDashboard, ShieldCheck, School, CheckCircle2 } from "lucide-react";
 import { auth, db } from "../../lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { useTheme } from "../../lib/theme-context";
 import { cn } from "../../lib/utils";
 import { onAuthStateChanged } from "firebase/auth";
@@ -23,27 +23,22 @@ import { BADGE_SYSTEM } from "@/lib/data/badge-system";
 
 export default function ProfileClient() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme } = useTheme(); // Theme dari context global (jika masih dipakai)
   const [loading, setLoading] = useState(true);
   
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [schoolData, setSchoolData] = useState<any>(null); // State baru untuk data sekolah
   const [activeTab, setActiveTab] = useState<"achievements" | "friends" | "stats">("achievements");
 
-  // Helper Theme
-  const isKids = theme === "sd";
-  const isUni = theme === "uni";
-  const isSMP = theme === "smp";
-  const isSMA = theme === "sma";
-
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.push("/");
         return;
       }
 
-      // Gunakan onSnapshot untuk realtime update (misal saat badge terbuka atau level naik)
-      const unsubscribeDoc = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+      // Gunakan onSnapshot untuk realtime update User
+      const unsubscribeDoc = onSnapshot(doc(db, "users", user.uid), async (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
           const normalizedData = {
@@ -53,11 +48,22 @@ export default function ProfileClient() {
             streak: data.streak ?? data.gamification?.currentStreak ?? 0,
             completedModules: data.completedModules || [],
             enrolledClasses: data.enrolledClasses || [],
-            schoolLevel: data.schoolLevel || 'sd', 
-            schoolName: data.schoolName || 'Sekolah Skoola',
-            schoolId: data.schoolId || null // Pastikan schoolId terbaca
+            schoolId: data.schoolId || null
           };
           setUserProfile(normalizedData);
+
+          // FETCH DATA SEKOLAH (Source of Truth)
+          // Jika user punya schoolId, ambil data sekolah terbaru untuk memastikan level/jenjang sinkron
+          if (data.schoolId) {
+             try {
+                const schoolSnap = await getDoc(doc(db, "schools", data.schoolId));
+                if (schoolSnap.exists()) {
+                   setSchoolData(schoolSnap.data());
+                }
+             } catch (err) {
+                console.error("Gagal ambil data sekolah:", err);
+             }
+          }
         }
         setLoading(false);
       }, (error) => {
@@ -70,6 +76,19 @@ export default function ProfileClient() {
 
     return () => unsubscribeAuth();
   }, [router]);
+
+  // --- LOGIC ADAPTIF (CORE FIX) ---
+  // Tentukan Level Sekolah yang AKURAT
+  // Prioritas 1: Data dari dokumen 'schools' (Real-time & Admin controlled)
+  // Prioritas 2: Data dari dokumen 'users' (Legacy / User input)
+  // Default: 'sd'
+  const realSchoolLevel = schoolData?.level || userProfile?.schoolLevel || 'sd';
+  
+  // Update variabel helper theme berdasarkan realSchoolLevel
+  const isKids = realSchoolLevel === "sd";
+  const isUni = realSchoolLevel === "uni";
+  const isSMP = realSchoolLevel === "smp";
+  const isSMA = realSchoolLevel === "sma";
 
   const checkBadge = (badge: typeof BADGE_SYSTEM[0]) => {
     if (!userProfile) return false;
@@ -99,6 +118,14 @@ export default function ProfileClient() {
   
   const textMuted = (isUni || isSMA) ? "text-slate-400" : "text-slate-500";
   const textPrimary = (isUni || isSMA) ? "text-white" : "text-slate-900";
+
+  // Override profile data for display to components
+  // Kita inject data sekolah yang benar ke dalam object userProfile yang dilempar ke komponen anak
+  const displayProfile = {
+      ...userProfile,
+      schoolName: schoolData?.name || userProfile?.schoolName || "Sekolah Skoola",
+      schoolLevel: realSchoolLevel // Paksa level ikut data sekolah
+  };
 
   return (
     <div className={cn("min-h-screen font-sans transition-colors duration-500 pb-20 relative overflow-hidden", bgStyle)}>
@@ -156,10 +183,10 @@ export default function ProfileClient() {
               </div>
               <div className="text-center md:text-left">
                 <h3 className={cn("font-bold text-xl", (isUni || isSMA) ? "text-white" : "text-white")}>
-                  Portal Guru
+                  Portal {isUni ? "Dosen" : "Guru"}
                 </h3>
                 <p className={cn("text-sm max-w-lg mt-1", (isUni || isSMA) ? "text-slate-300" : "text-blue-100")}>
-                  Akses dashboard untuk mengelola kelas, materi, dan memantau perkembangan siswa Anda.
+                  Akses dashboard untuk mengelola kelas, materi, dan memantau perkembangan {isUni ? "mahasiswa" : "siswa"} Anda.
                 </p>
               </div>
             </div>
@@ -196,10 +223,10 @@ export default function ProfileClient() {
               </div>
               <div className="text-center md:text-left">
                 <h3 className={cn("font-bold text-xl", (isUni || isSMA) ? "text-white" : "text-white")}>
-                  Operator Sekolah
+                  Operator {isUni ? "Kampus" : "Sekolah"}
                 </h3>
                 <p className={cn("text-sm max-w-lg mt-1", (isUni || isSMA) ? "text-slate-300" : "text-slate-300")}>
-                  Panel admin untuk mengelola identitas sekolah, verifikasi pengguna, dan forum diskusi.
+                  Panel admin untuk mengelola identitas {isUni ? "kampus" : "sekolah"}, verifikasi pengguna, dan forum diskusi.
                 </p>
               </div>
             </div>
@@ -212,7 +239,7 @@ export default function ProfileClient() {
                 "bg-white text-slate-900 hover:bg-slate-100"
               )}
             >
-              Kelola Sekolah
+              Kelola {isUni ? "Kampus" : "Sekolah"}
             </button>
             {/* Decoration */}
             <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-white/5 to-transparent skew-x-12 pointer-events-none" />
@@ -236,7 +263,7 @@ export default function ProfileClient() {
               </div>
               <div className="text-center md:text-left">
                 <h3 className={cn("font-bold text-lg flex flex-col md:flex-row items-center md:items-end gap-2", (isUni || isSMA) ? "text-white" : "text-emerald-950")}>
-                  Afiliasi Sekolah Terverifikasi
+                  Afiliasi {isUni ? "Kampus" : "Sekolah"} Terverifikasi
                   <span className={cn(
                     "text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border font-bold mb-0.5", 
                     (isUni || isSMA) ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400" : "bg-emerald-100 border-emerald-200 text-emerald-700"
@@ -245,16 +272,16 @@ export default function ProfileClient() {
                   </span>
                 </h3>
                 <p className={cn("text-sm mt-0.5", (isUni || isSMA) ? "text-slate-400" : "text-emerald-700")}>
-                  Anda terdaftar resmi sebagai siswa di <span className="font-bold border-b border-dotted border-current cursor-help" title={`ID: ${userProfile.schoolId}`}>{userProfile.schoolName}</span>.
+                  Anda terdaftar resmi sebagai {isUni ? "mahasiswa" : "siswa"} di <span className="font-bold border-b border-dotted border-current cursor-help" title={`ID: ${userProfile.schoolId}`}>{schoolData?.name || userProfile.schoolName}</span>.
                 </p>
               </div>
             </div>
             
              <div className={cn(
-                "w-12 h-12 rounded-full flex items-center justify-center relative z-10 shadow-sm",
-                (isUni || isSMA) ? "bg-emerald-500/20 text-emerald-400" : "bg-white text-emerald-600"
-              )}>
-                <CheckCircle2 size={24} />
+               "w-12 h-12 rounded-full flex items-center justify-center relative z-10 shadow-sm",
+               (isUni || isSMA) ? "bg-emerald-500/20 text-emerald-400" : "bg-white text-emerald-600"
+             )}>
+               <CheckCircle2 size={24} />
              </div>
 
              {/* Background Decoration */}
@@ -263,14 +290,13 @@ export default function ProfileClient() {
         )}
         {/* === END BANNERS === */}
 
-        {/* LAYOUT GRID UTAMA - PROPORTIONAL FIX */}
+        {/* LAYOUT GRID UTAMA */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
           {/* LEFT COLUMN: PROFILE CARD */}
-          {/* Mengubah proporsi grid: Sidebar 3/12, Content 9/12 */}
           <div className="lg:col-span-3 space-y-6 sticky top-24">
             <ProfileCard 
-              userProfile={userProfile} 
+              userProfile={displayProfile} // Gunakan data yang sudah di-override
               isKids={isKids} isSMP={isSMP} isSMA={isSMA} isUni={isUni}
               textPrimary={textPrimary} textMuted={textMuted}
               getLevel={getLevel}
@@ -298,7 +324,7 @@ export default function ProfileClient() {
               {/* TAB: ACHIEVEMENTS */}
               {activeTab === "achievements" && (
                 <AchievementsTab 
-                   userProfile={userProfile} 
+                   userProfile={displayProfile} 
                    isKids={isKids} isSMP={isSMP} isSMA={isSMA} isUni={isUni}
                    textPrimary={textPrimary} textMuted={textMuted}
                 />
@@ -307,7 +333,7 @@ export default function ProfileClient() {
               {/* TAB: STATS */}
               {activeTab === "stats" && (
                 <StatsTab 
-                   userProfile={userProfile} 
+                   userProfile={displayProfile} 
                    isSMP={isSMP} isSMA={isSMA} isUni={isUni}
                    textPrimary={textPrimary} 
                 />

@@ -4,12 +4,12 @@ import React, { useState } from "react";
 import { 
   Plus, Calendar, Clock, FileText, CheckCircle2, 
   MoreVertical, FileCheck, ClipboardList, PenTool,
-  Gamepad2, UploadCloud, Trophy
+  Gamepad2, UploadCloud, Trophy, Layers
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Timestamp } from "firebase/firestore";
 import { cn } from "../../../lib/utils";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { AssignmentType, GameType } from "../../../lib/types/course.types";
 
 // --- INTERFACES ---
@@ -26,6 +26,7 @@ export interface AssignmentData {
   createdAt: Timestamp;
   status: "active" | "closed";
   submissionCount?: number; 
+  subjectName?: string; // NEW: Nama Mapel agar Wali Kelas tidak bingung
 }
 
 interface AssignmentsViewProps {
@@ -68,7 +69,7 @@ export default function AssignmentsView({
   };
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-5xl space-y-6 pb-20">
        
        {/* 1. Header & Actions */}
        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -163,9 +164,17 @@ export default function AssignmentsView({
                             </div>
 
                             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1.5">
-                               <span className="bg-slate-100 px-2 py-0.5 rounded uppercase font-bold tracking-wider text-[10px] border border-slate-200">
+                               <span className={cn("px-2 py-0.5 rounded uppercase font-bold tracking-wider text-[10px] border", info.color)}>
                                   {info.label}
                                </span>
+
+                               {/* Badge Mapel (NEW FEATURE) */}
+                               {item.subjectName && (
+                                  <span className="bg-indigo-50 px-2 py-0.5 rounded text-[10px] font-bold text-indigo-600 border border-indigo-100 flex items-center gap-1">
+                                     <Layers size={10} /> {item.subjectName}
+                                  </span>
+                               )}
+
                                <span className="flex items-center gap-1">
                                   <Calendar size={12} /> 
                                   Deadline: {item.deadline 
@@ -178,10 +187,10 @@ export default function AssignmentsView({
 
                       {/* Right Side Stats */}
                       <div className="text-left md:text-right shrink-0">
-                         <p className="text-xs font-bold uppercase text-slate-400 mb-1">Sudah Mengumpulkan</p>
-                         <div className="flex items-center md:justify-end gap-1 text-purple-600 font-bold text-lg">
-                            <CheckCircle2 size={18} /> {item.submissionCount || 0} Murid
-                         </div>
+                          <p className="text-xs font-bold uppercase text-slate-400 mb-1">Sudah Mengumpulkan</p>
+                          <div className="flex items-center md:justify-end gap-1 text-purple-600 font-bold text-lg">
+                             <CheckCircle2 size={18} /> {item.submissionCount || 0} Murid
+                          </div>
                       </div>
                    </div>
 

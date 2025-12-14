@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   School, LayoutDashboard, Clock, Calendar, CheckCircle, 
-  AlertCircle, BookOpen, TrendingUp, Plus, ArrowRight, Star, Map, Scroll, Zap, Sparkles, Loader2
+  AlertCircle, BookOpen, TrendingUp, Plus, ArrowRight, Star, Map, Scroll, Zap, Sparkles, Loader2, GraduationCap
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../lib/firebase";
@@ -24,6 +24,7 @@ import { Classroom } from "@/lib/types/course.types";
 import { ClassList } from "../../components/learn/class-list";
 import { ModuleList } from "../../components/learn/module-list";
 import { LearnHeader } from "../../components/learn/learn-header";
+import { UserProfile } from "@/lib/types/user.types";
 
 // Animation Variants
 const containerVariants: Variants = {
@@ -56,19 +57,22 @@ export default function LearnClient() {
   const { theme } = useTheme();
   
   // State
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [upcomingAssignments, setUpcomingAssignments] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"classes" | "modules">("classes");
+  const [schoolData, setSchoolData] = useState<any>(null); // New: School Data State
   
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joining, setJoining] = useState(false);
 
   // Helper Theme Logic
-  const isKids = theme === "sd";
-  const isSMP = theme === "smp";
-  const isSMA = theme === "sma";
-  const isUni = theme === "uni";
+  // Prioritize school data if available, fallback to theme context
+  const realSchoolLevel = schoolData?.level || (userProfile as any)?.schoolLevel || 'sd';
+  const isKids = realSchoolLevel === "sd";
+  const isSMP = realSchoolLevel === "smp";
+  const isSMA = realSchoolLevel === "sma";
+  const isUni = realSchoolLevel === "uni";
 
   // --- INITIAL FETCH ---
   useEffect(() => {
@@ -80,12 +84,20 @@ export default function LearnClient() {
 
       const unsubUser = onSnapshot(doc(db, "users", user.uid), async (docSnap) => {
         if (docSnap.exists()) {
-          const userData = docSnap.data();
+          const userData = docSnap.data() as UserProfile;
           setUserProfile(userData);
 
+          // Fetch School Data for Adaptive UI
+          if (userData.schoolId) {
+             try {
+                const schoolSnap = await getDoc(doc(db, "schools", userData.schoolId));
+                if (schoolSnap.exists()) {
+                   setSchoolData(schoolSnap.data());
+                }
+             } catch (e) { console.error(e); }
+          }
+
           const enrolled = userData.enrolledClasses || [];
-          // Note: Logic fetchClasses untuk list sudah dipindah ke ClassList component.
-          // Kita hanya perlu fetch assignments untuk widget dashboard.
           if (enrolled.length > 0) {
             fetchAssignments(enrolled);
           } else {
@@ -214,7 +226,7 @@ export default function LearnClient() {
   };
 
   if (loading) return (
-    <div className={cn("min-h-screen flex items-center justify-center", isUni ? "bg-slate-950 text-white" : "bg-slate-900 text-white")}>
+    <div className={cn("min-h-screen flex flex-col items-center justify-center", isUni ? "bg-slate-950 text-white" : "bg-slate-900 text-white")}>
       <div className="flex flex-col items-center gap-4">
         <Loader2 className={cn("w-10 h-10 animate-spin", isUni ? "text-indigo-500" : "text-teal-400")} />
         <span className="font-bold text-sm tracking-widest uppercase">Loading Experience...</span>
@@ -272,9 +284,9 @@ export default function LearnClient() {
         <div className="max-w-7xl mx-auto space-y-6">
           
           <LearnHeader 
-             theme={theme}
-             activeTab={activeTab}
-             setActiveTab={setActiveTab}
+              theme={realSchoolLevel}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
           />
 
           {/* 1. HERO SECTION (DYNAMIC GREETING) */}
@@ -290,17 +302,17 @@ export default function LearnClient() {
           >
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-2 opacity-80">
-                 {(isUni || isSMA) && <Sparkles size={16} className={cn(isUni ? "text-indigo-400" : "text-teal-400")} />}
-                 <span className="text-xs font-bold uppercase tracking-widest">
-                    {(isUni || isSMA) ? new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : "Dashboard"}
-                 </span>
+                  {(isUni || isSMA) && <Sparkles size={16} className={cn(isUni ? "text-indigo-400" : "text-teal-400")} />}
+                  <span className="text-xs font-bold uppercase tracking-widest">
+                    {(isUni || isSMA) ? new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }) : "Dashboard"}
+                  </span>
               </div>
               
               <h1 className={cn("font-bold leading-tight", 
-                 isKids ? "text-4xl font-display" : 
-                 isUni ? "text-4xl md:text-6xl tracking-tighter font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-white to-indigo-200" :
-                 isSMA ? "text-4xl md:text-5xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-white" : 
-                 "text-3xl"
+                  isKids ? "text-4xl font-display" : 
+                  isUni ? "text-4xl md:text-6xl tracking-tighter font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-white to-indigo-200" :
+                  isSMA ? "text-4xl md:text-5xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-white" : 
+                  "text-3xl"
               )}>
                 {(isUni || isSMA) ? `${getGreeting()},` : isKids ? `Halo, ${userProfile?.displayName?.split(' ')[0]}!` : `Hai, ${userProfile?.displayName}`}
                 <br/>
@@ -351,37 +363,38 @@ export default function LearnClient() {
                 {/* Stats Row */}
                 <motion.div variants={containerVariants} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <StatCard 
-                    label="Kelas" 
+                    label={isUni ? "Kelas" : "Mapel"} 
                     value={userProfile?.enrolledClasses?.length || 0} 
                     icon={isKids ? <Map /> : <School />} 
-                    theme={theme} variants={itemVariants} delay={0}
+                    theme={realSchoolLevel} variants={itemVariants} delay={0}
                   />
                   <StatCard 
                     label="Tugas" 
                     value={upcomingAssignments.length} 
                     icon={isKids ? <Scroll /> : <BookOpen />} 
-                    theme={theme} variants={itemVariants} delay={0.1}
+                    theme={realSchoolLevel} variants={itemVariants} delay={0.1}
                   />
                   <StatCard 
                     label="Hadir" 
                     value="98%" 
                     icon={<CheckCircle />} 
-                    theme={theme} variants={itemVariants} delay={0.2}
+                    theme={realSchoolLevel} variants={itemVariants} delay={0.2}
                   />
                   <StatCard 
                     label="XP" 
-                    value={userProfile?.gamification?.xp || userProfile?.xp || 0} 
+                    // FIXED: TypeScript error 2339 handling
+                    value={userProfile?.gamification?.xp || (userProfile as any)?.xp || 0} 
                     icon={isKids ? <Star className="fill-yellow-400 text-yellow-500" /> : <TrendingUp />} 
-                    theme={theme} variants={itemVariants} delay={0.3}
+                    theme={realSchoolLevel} variants={itemVariants} delay={0.3}
                   />
                 </motion.div>
 
                 {/* Class List OR Modules */}
                 <motion.div variants={itemVariants}>
                    {activeTab === "classes" ? (
-                      <ClassList theme={theme} onOpenJoinModal={() => setIsJoinModalOpen(true)} />
+                      <ClassList theme={realSchoolLevel} onOpenJoinModal={() => setIsJoinModalOpen(true)} />
                    ) : (
-                      <ModuleList theme={theme} />
+                      <ModuleList theme={realSchoolLevel} />
                    )}
                 </motion.div>
               </div>
@@ -472,7 +485,7 @@ export default function LearnClient() {
         onClose={() => setIsJoinModalOpen(false)} 
         onJoin={handleJoinClass}
         isLoading={joining}
-        theme={theme}
+        theme={realSchoolLevel}
       />
     </div>
   );

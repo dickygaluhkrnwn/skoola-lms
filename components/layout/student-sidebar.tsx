@@ -2,25 +2,38 @@
 
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, User, LayoutDashboard, Calendar, School, Users, Backpack, Map, BookOpen, Smile, MessageSquare } from "lucide-react";
+import { LogOut, User, LayoutDashboard, Calendar, School, Users, Backpack, Map, BookOpen, Smile, MessageSquare, GraduationCap, Globe } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme-context";
+import { UserProfile } from "@/lib/types/user.types";
 
 export function StudentSidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { theme } = useTheme();
-  const [name, setName] = useState("Sobat Skoola");
+  const { theme } = useTheme(); // Fallback theme
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [schoolData, setSchoolData] = useState<any>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       const user = auth.currentUser;
       if (user) {
         const snap = await getDoc(doc(db, "users", user.uid));
-        if (snap.exists()) setName(snap.data().displayName);
+        if (snap.exists()) {
+            const data = snap.data() as UserProfile;
+            setUserProfile(data);
+            
+            // Fetch School Data for accurate branding & context
+            if (data.schoolId) {
+                const schoolSnap = await getDoc(doc(db, "schools", data.schoolId));
+                if (schoolSnap.exists()) {
+                    setSchoolData(schoolSnap.data());
+                }
+            }
+        }
       }
     };
     fetchProfile();
@@ -31,10 +44,14 @@ export function StudentSidebar() {
     router.push("/");
   };
 
-  const isKids = theme === "sd";
-  const isSMP = theme === "smp";
-  const isSMA = theme === "sma";
-  const isUni = theme === "uni";
+  // Determine Real School Level
+  // Prioritas: Data Sekolah > Data User > Theme Context
+  const realSchoolLevel = schoolData?.level || userProfile?.schoolLevel || theme;
+  
+  const isKids = realSchoolLevel === "sd";
+  const isSMP = realSchoolLevel === "smp";
+  const isSMA = realSchoolLevel === "sma";
+  const isUni = realSchoolLevel === "uni";
 
   return (
     <aside className={cn(
@@ -71,9 +88,9 @@ export function StudentSidebar() {
            {isKids && <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full animate-ping" />}
           {isKids ? <span className="text-3xl">🎒</span> : <span className="font-bold text-lg">S</span>}
         </div>
-        <div>
+        <div className="min-w-0">
           <h1 className={cn(
-            "font-bold leading-none tracking-tight transition-all",
+            "font-bold leading-none tracking-tight transition-all truncate",
             isKids ? "text-3xl text-primary font-display uppercase drop-shadow-sm" : 
             isSMP ? "text-2xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-fuchsia-600" :
             isSMA ? "text-xl font-bold text-slate-100 tracking-tight" :
@@ -82,14 +99,16 @@ export function StudentSidebar() {
             SKOOLA
           </h1>
           <p className={cn(
-            "text-[10px] font-bold uppercase tracking-widest mt-1",
+            "text-[10px] font-bold uppercase tracking-widest mt-1 truncate",
             isKids ? "text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full inline-block mt-2" : 
             isSMP ? "text-violet-500" : 
             isSMA ? "text-teal-400/80" :
             isUni ? "text-indigo-400" :
             "text-muted-foreground"
           )}>
-            {theme === 'sd' ? 'Petualang Cilik' : theme === 'smp' ? 'Gen-Z Learning' : theme === 'sma' ? 'High School' : 'University Hub'}
+            {schoolData?.name 
+               ? (schoolData.name.length > 15 ? schoolData.name.substring(0, 15) + '...' : schoolData.name) 
+               : (isKids ? 'Petualang Cilik' : isUni ? 'University Hub' : 'LMS Portal')}
           </p>
         </div>
       </div>
@@ -101,17 +120,26 @@ export function StudentSidebar() {
         </div>
         
         <SidebarItem 
-          theme={theme}
+          theme={realSchoolLevel}
           icon={isKids ? <Map size={24} /> : <LayoutDashboard size={20} />} 
           label={isKids ? "Markas Besar" : "Dashboard"} 
           active={pathname === "/learn"} 
           onClick={() => router.push("/learn")} 
         />
         
+        {/* NEW: SOCIAL MENU */}
         <SidebarItem 
-          theme={theme}
-          icon={isKids ? <Smile size={24} /> : <MessageSquare size={20} />} 
-          label={isKids ? "Teman Main" : "Forum"} 
+          theme={realSchoolLevel}
+          icon={isKids ? <Smile size={24} /> : <Globe size={20} />} 
+          label={isKids ? "Dunia Kita" : "Jejaring Sosial"} 
+          active={pathname === "/social"} 
+          onClick={() => router.push("/social")} 
+        />
+
+        <SidebarItem 
+          theme={realSchoolLevel}
+          icon={isKids ? <Users size={24} /> : <MessageSquare size={20} />} 
+          label={isKids ? "Teman Sekelas" : "Forum Sekolah"} 
           active={pathname?.startsWith("/forum")} 
           onClick={() => router.push("/forum")} 
         />
@@ -121,12 +149,24 @@ export function StudentSidebar() {
         </div>
         
         <SidebarItem 
-          theme={theme}
+          theme={realSchoolLevel}
           icon={isKids ? <Calendar size={24} /> : <Calendar size={20} />} 
-          label={isKids ? "Jadwal Seru" : "Jadwal"} 
+          label={isKids ? "Jadwal Seru" : isUni ? "KRS / Jadwal Kuliah" : "Jadwal Pelajaran"} 
           active={pathname === "/schedule"} 
-          onClick={() => alert(isKids ? "Jadwal belum dipasang guru!" : "Fitur Jadwal segera hadir!")} 
+          onClick={() => alert(isKids ? "Jadwal belum dipasang guru!" : "Fitur Jadwal akan segera hadir!")} 
         />
+        
+        {/* Additional Menu for University */}
+        {isUni && (
+            <SidebarItem 
+               theme={realSchoolLevel}
+               icon={<GraduationCap size={20} />} 
+               label="Transkrip Nilai" 
+               active={false}
+               onClick={() => alert("Fitur Transkrip Nilai segera hadir!")} 
+            />
+        )}
+
       </nav>
 
       {/* USER FOOTER */}
@@ -149,21 +189,25 @@ export function StudentSidebar() {
           )}
         >
            <div className={cn(
-             "flex items-center justify-center shadow-sm transition-transform group-hover:scale-110",
+             "flex items-center justify-center shadow-sm transition-transform group-hover:scale-110 shrink-0",
              isKids 
              ? "w-10 h-10 bg-white text-secondary-foreground border-2 border-secondary rounded-full overflow-hidden" 
              : isUni 
-               ? "w-9 h-9 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full"
-               : "w-9 h-9 bg-primary/10 text-primary rounded-full"
+               ? "w-9 h-9 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full overflow-hidden"
+               : "w-9 h-9 bg-primary/10 text-primary rounded-full overflow-hidden"
            )}>
-             <span className="font-bold text-sm">{name.charAt(0)}</span>
+             {userProfile?.photoURL ? (
+                <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" />
+             ) : (
+                <span className="font-bold text-sm">{userProfile?.displayName?.charAt(0) || "U"}</span>
+             )}
            </div>
-           <div className="flex-1 overflow-hidden">
-             <p className={cn("text-sm font-bold truncate", (isUni || isSMA) ? "text-slate-200 group-hover:text-white" : "text-slate-800")}>
-               {name}
+           <div className="flex-1 overflow-hidden min-w-0">
+             <p className="text-sm font-bold truncate text-slate-800 dark:text-slate-200 group-hover:text-primary">
+               {userProfile?.displayName || "Loading..."}
              </p>
-             <p className={cn("text-[10px] truncate opacity-70 font-medium", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>
-               {isKids ? "Level 1 Explorer" : "Lihat Profil"}
+             <p className="text-[10px] truncate opacity-70 font-medium text-slate-500 dark:text-slate-400">
+               {isKids ? "Level 1 Explorer" : isUni ? "Mahasiswa Aktif" : "Lihat Profil"}
              </p>
            </div>
         </div>

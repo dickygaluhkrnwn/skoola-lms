@@ -1,10 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import { 
-  Users, CheckCircle2, XCircle, MinusCircle, AlertCircle, Calendar, Clock
+  Users, CheckCircle2, XCircle, MinusCircle, AlertCircle, 
+  Calendar, Clock, MapPin, ChevronRight, Lock, Unlock
 } from "lucide-react";
 import { cn } from "../../../lib/utils";
+import { db } from "../../../lib/firebase";
+import { collection, query, where, getDocs, onSnapshot, orderBy } from "firebase/firestore";
 
 // --- INTERFACES ---
 interface StudentData {
@@ -13,43 +17,122 @@ interface StudentData {
   email: string;
   photoURL?: string;
   lastActiveModule?: string;
-  // Field opsional lain jika ada di masa depan
+}
+
+interface ScheduleItem {
+  id: string;
+  day: string;
+  startTime: string;
+  endTime: string;
+  subjectName: string;
+  teacherName: string;
+  room?: string;
+  subjectId?: string;
 }
 
 interface AttendanceViewProps {
   students: StudentData[];
 }
 
+const DAYS_MAP = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
 export default function AttendanceView({ students }: AttendanceViewProps) {
-  const [filter, setFilter] = useState<"all" | "present" | "absent">("all");
+  const params = useParams();
+  const classId = params.classId as string;
+  const appId = (typeof window !== 'undefined' && (window as any).__app_id) || 'skoola-lms-default';
+
+  const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  
+  // State Presensi Lokal (Simulasi)
+  // Di real app, ini akan sync dengan collection 'attendance_records'
+  const [attendanceState, setAttendanceState] = useState<Record<string, "present" | "absent" | "late" | "excused">>({});
 
   // Logic Hari Ini
   const today = new Date();
-  const isSunday = today.getDay() === 0; // 0 = Minggu
+  const currentDayName = DAYS_MAP[today.getDay()];
+  const currentTimeString = today.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  
   const formattedDate = today.toLocaleDateString('id-ID', { 
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
   });
 
-  // Helper Logic Presensi
-  const getStatus = (student: StudentData) => {
-     if (isSunday) return "holiday";
-     // Logic sederhana: jika ada lastActiveModule, dianggap hadir
-     // Idealnya nanti dicek timestamp aktivitas terakhir vs hari ini
-     return student.lastActiveModule ? "present" : "absent";
+  // --- 1. FETCH SCHEDULES HARI INI ---
+  useEffect(() => {
+    if (!classId || !appId) return;
+
+    const fetchTodaySchedule = async () => {
+      try {
+        setLoading(true);
+        // Query ke artifacts schedules
+        const q = query(
+          collection(db, 'artifacts', appId, 'public', 'data', 'schedules'),
+          where("classId", "==", classId),
+          where("day", "==", currentDayName) // Filter hari ini
+        );
+        
+        // Note: Sort client-side karena compound query kadang butuh index
+        const snapshot = await getDocs(q);
+        const todaysSchedules = snapshot.docs.map(doc => ({
+           id: doc.id,
+           ...doc.data()
+        } as ScheduleItem));
+
+        // Sort by start time
+        todaysSchedules.sort((a, b) => a.startTime.localeCompare(b.startTime));
+        
+        setSchedules(todaysSchedules);
+      } catch (error) {
+        console.error("Gagal load jadwal:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTodaySchedule();
+  }, [classId, currentDayName, appId]);
+
+  // Helper: Cek status sesi (Active, Upcoming, Done)
+  const getSessionStatus = (item: ScheduleItem) => {
+     if (currentTimeString >= item.startTime && currentTimeString <= item.endTime) return "active";
+     if (currentTimeString < item.startTime) return "upcoming";
+     return "done";
   };
 
-  const filteredStudents = students.filter(s => {
-     if (filter === "all") return true;
-     return getStatus(s) === filter;
-  });
+  // Helper: Init state presensi saat sesi dibuka
+  const handleOpenSession = (scheduleId: string) => {
+     setActiveSessionId(scheduleId);
+     // Default semua siswa hadir (optimistic)
+     const initial: any = {};
+     students.forEach(s => initial[s.uid] = "present");
+     setAttendanceState(initial);
+  };
 
-  // Stats
-  const presentCount = students.filter(s => getStatus(s) === "present").length;
-  const absentCount = students.filter(s => getStatus(s) === "absent").length;
-  const attendanceRate = students.length > 0 ? Math.round((presentCount / students.length) * 100) : 0;
+  const toggleStatus = (studentId: string) => {
+     setAttendanceState(prev => {
+        const current = prev[studentId];
+        const next = current === "present" ? "absent" : 
+                     current === "absent" ? "late" : 
+                     current === "late" ? "excused" : "present";
+        return { ...prev, [studentId]: next };
+     });
+  };
+
+  // Stats calculation
+  const getStats = () => {
+     const total = students.length;
+     if (total === 0) return { present: 0, absent: 0, rate: 0 };
+     const present = Object.values(attendanceState).filter(s => s === "present" || s === "late").length;
+     return {
+        present,
+        absent: total - present,
+        rate: Math.round((present / total) * 100)
+     };
+  };
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-5xl space-y-6 pb-20">
        
        {/* 1. Header Section */}
        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -57,7 +140,9 @@ export default function AttendanceView({ students }: AttendanceViewProps) {
            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               <Calendar className="text-blue-600" /> Presensi Kelas
            </h2>
-           <p className="text-slate-500 text-sm mt-1">Pantau keaktifan belajar harian siswa secara real-time.</p>
+           <p className="text-slate-500 text-sm mt-1">
+              {currentDayName === "Minggu" ? "Hari Libur" : `Jadwal Pelajaran Hari ${currentDayName}`}
+           </p>
          </div>
          <div className="text-right bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
            <p className="text-xs font-bold uppercase text-slate-400 mb-1">Hari Ini</p>
@@ -67,166 +152,160 @@ export default function AttendanceView({ students }: AttendanceViewProps) {
          </div>
        </div>
 
-       {/* 2. Overview Cards */}
-       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-5 rounded-2xl border border-green-100 shadow-sm flex items-center gap-4">
-             <div className="w-12 h-12 bg-green-50 text-green-600 rounded-full flex items-center justify-center">
-                <CheckCircle2 size={24} />
-             </div>
-             <div>
-                <p className="text-2xl font-bold text-green-700">{presentCount}</p>
-                <p className="text-xs font-bold uppercase text-green-600/60">Siswa Hadir</p>
-             </div>
-          </div>
+       {/* 2. Schedule Grid */}
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          <div className="bg-white p-5 rounded-2xl border border-red-100 shadow-sm flex items-center gap-4">
-             <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center">
-                <XCircle size={24} />
-             </div>
-             <div>
-                <p className="text-2xl font-bold text-red-700">{absentCount}</p>
-                <p className="text-xs font-bold uppercase text-red-600/60">Belum Aktif</p>
-             </div>
+          {/* List Jadwal Hari Ini */}
+          <div className="lg:col-span-1 space-y-4">
+             <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                <Clock size={18} /> Sesi Hari Ini
+             </h3>
+             
+             {loading ? (
+                <div className="text-center py-8 text-slate-400 text-sm">Memuat jadwal...</div>
+             ) : schedules.length === 0 ? (
+                <div className="bg-slate-50 border border-slate-200 border-dashed rounded-xl p-6 text-center">
+                   <p className="text-slate-500 text-sm">Tidak ada jadwal pelajaran hari ini.</p>
+                </div>
+             ) : (
+                <div className="space-y-3">
+                   {schedules.map(item => {
+                      const status = getSessionStatus(item);
+                      const isActive = activeSessionId === item.id;
+                      
+                      return (
+                         <div 
+                            key={item.id}
+                            onClick={() => handleOpenSession(item.id)}
+                            className={cn(
+                               "p-4 rounded-xl border transition-all cursor-pointer relative overflow-hidden",
+                               isActive 
+                                 ? "bg-blue-600 border-blue-600 text-white shadow-md ring-2 ring-blue-200" 
+                                 : "bg-white border-slate-200 hover:border-blue-400 hover:shadow-sm"
+                            )}
+                         >
+                            <div className="flex justify-between items-start mb-2">
+                               <span className={cn(
+                                  "text-xs font-bold px-2 py-0.5 rounded",
+                                  isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                               )}>
+                                  {item.startTime} - {item.endTime}
+                               </span>
+                               {status === "active" && (
+                                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider animate-pulse text-green-500 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
+                                     Live
+                                  </span>
+                               )}
+                            </div>
+                            <h4 className={cn("font-bold text-lg", isActive ? "text-white" : "text-slate-800")}>
+                               {item.subjectName}
+                            </h4>
+                            <p className={cn("text-xs flex items-center gap-1 mt-1", isActive ? "text-blue-100" : "text-slate-500")}>
+                               <Users size={12} /> {item.teacherName}
+                            </p>
+                            
+                            {isActive && (
+                               <div className="absolute -right-2 -bottom-2 text-white/10">
+                                  <CheckCircle2 size={64} />
+                               </div>
+                            )}
+                         </div>
+                      );
+                   })}
+                </div>
+             )}
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm flex items-center gap-4">
-             <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center">
-                <Users size={24} />
-             </div>
-             <div>
-                <p className="text-2xl font-bold text-blue-700">{attendanceRate}%</p>
-                <p className="text-xs font-bold uppercase text-blue-600/60">Tingkat Kehadiran</p>
-             </div>
+          {/* Attendance Sheet */}
+          <div className="lg:col-span-2">
+             {activeSessionId ? (
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm animate-in fade-in slide-in-from-right-4">
+                   {/* Sheet Header */}
+                   <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                      <div>
+                         <h3 className="font-bold text-slate-800 text-lg">Lembar Presensi</h3>
+                         <p className="text-sm text-slate-500">
+                            {schedules.find(s => s.id === activeSessionId)?.subjectName} • {formattedDate}
+                         </p>
+                      </div>
+                      <div className="flex gap-4 text-center">
+                         <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase">Hadir</p>
+                            <p className="text-xl font-bold text-green-600">{getStats().present}</p>
+                         </div>
+                         <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase">Absen</p>
+                            <p className="text-xl font-bold text-red-500">{getStats().absent}</p>
+                         </div>
+                         <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase">Rate</p>
+                            <p className="text-xl font-bold text-blue-600">{getStats().rate}%</p>
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Student List */}
+                   {students.length === 0 ? (
+                      <div className="p-12 text-center text-slate-400">Belum ada siswa di kelas ini.</div>
+                   ) : (
+                      <div className="divide-y divide-slate-100">
+                         {students.map((student) => {
+                            const status = attendanceState[student.uid] || "absent";
+                            return (
+                               <div key={student.uid} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                     <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden">
+                                        {student.photoURL ? <img src={student.photoURL} className="w-full h-full object-cover"/> : null}
+                                     </div>
+                                     <div>
+                                        <p className="font-bold text-slate-700">{student.displayName}</p>
+                                        <p className="text-xs text-slate-400">{student.email}</p>
+                                     </div>
+                                  </div>
+                                  
+                                  <button 
+                                     onClick={() => toggleStatus(student.uid)}
+                                     className={cn(
+                                        "px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all min-w-[120px] justify-center border",
+                                        status === "present" ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100" :
+                                        status === "absent" ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100" :
+                                        status === "late" ? "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100" :
+                                        "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" // excused
+                                     )}
+                                  >
+                                     {status === "present" && <><CheckCircle2 size={16}/> Hadir</>}
+                                     {status === "absent" && <><XCircle size={16}/> Absen</>}
+                                     {status === "late" && <><Clock size={16}/> Terlambat</>}
+                                     {status === "excused" && <><MinusCircle size={16}/> Izin</>}
+                                  </button>
+                               </div>
+                            );
+                         })}
+                      </div>
+                   )}
+                   
+                   {/* Footer Save Action (Placeholder) */}
+                   <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+                      <button 
+                        onClick={() => alert("Data presensi tersimpan!")}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all"
+                      >
+                         Simpan Presensi
+                      </button>
+                   </div>
+                </div>
+             ) : (
+                <div className="bg-slate-50 border border-slate-200 border-dashed rounded-2xl h-full flex flex-col items-center justify-center text-center p-12 min-h-[400px]">
+                   <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 text-slate-300">
+                      <Users size={32} />
+                   </div>
+                   <h3 className="font-bold text-slate-700 text-lg">Pilih Sesi Jadwal</h3>
+                   <p className="text-slate-400 text-sm max-w-xs mt-1">
+                      Klik salah satu sesi jadwal di sebelah kiri untuk membuka lembar presensi.
+                   </p>
+                </div>
+             )}
           </div>
-       </div>
-
-       {/* 3. Table Card */}
-       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-         
-         {/* Filter Tabs */}
-         <div className="flex border-b border-slate-100 px-4 pt-4 gap-2">
-            <button 
-               onClick={() => setFilter("all")}
-               className={cn(
-                  "px-4 py-2 text-sm font-bold border-b-2 transition-colors",
-                  filter === "all" ? "border-blue-600 text-blue-700" : "border-transparent text-slate-400 hover:text-slate-600"
-               )}
-            >
-               Semua Siswa
-            </button>
-            <button 
-               onClick={() => setFilter("present")}
-               className={cn(
-                  "px-4 py-2 text-sm font-bold border-b-2 transition-colors",
-                  filter === "present" ? "border-green-600 text-green-700" : "border-transparent text-slate-400 hover:text-slate-600"
-               )}
-            >
-               Hadir
-            </button>
-            <button 
-               onClick={() => setFilter("absent")}
-               className={cn(
-                  "px-4 py-2 text-sm font-bold border-b-2 transition-colors",
-                  filter === "absent" ? "border-red-600 text-red-700" : "border-transparent text-slate-400 hover:text-slate-600"
-               )}
-            >
-               Belum Hadir
-            </button>
-         </div>
-         
-         {/* Empty State */}
-         {students.length === 0 ? (
-           <div className="text-center py-16 px-4 bg-slate-50/50 flex flex-col items-center">
-             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 text-slate-300">
-               <Users size={32} />
-             </div>
-             <h3 className="font-bold text-slate-700 mb-1">Tidak Ada Data</h3>
-             <p className="text-sm text-slate-400 max-w-xs">Belum ada murid di kelas ini.</p>
-           </div>
-         ) : filteredStudents.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
-               Tidak ada siswa dengan status ini.
-            </div>
-         ) : (
-           /* Table Data */
-           <div className="overflow-x-auto">
-             <table className="w-full text-left">
-               <thead className="bg-slate-50/50 border-b border-slate-100">
-                  <tr>
-                     <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">Nama Murid</th>
-                     <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase">Aktivitas Terakhir</th>
-                     <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase text-center">Status Hari Ini</th>
-                  </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-50">
-                  {filteredStudents.map((s) => {
-                     const status = getStatus(s);
-                     
-                     let statusEl;
-                     if (status === "holiday") {
-                        statusEl = (
-                           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold border border-slate-200">
-                              <MinusCircle size={14}/> Libur
-                           </span>
-                        );
-                     } else if (status === "present") {
-                        statusEl = (
-                           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-bold border border-green-200">
-                              <CheckCircle2 size={14}/> Hadir
-                           </span>
-                        );
-                     } else {
-                        statusEl = (
-                           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-200">
-                              <XCircle size={14}/> Alpa
-                           </span>
-                        );
-                     }
-
-                     return (
-                        <tr key={s.uid} className="hover:bg-slate-50 transition-colors">
-                           <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs overflow-hidden border border-slate-200">
-                                    {s.photoURL ? <img src={s.photoURL} alt="av" className="w-full h-full object-cover"/> : "🎓"}
-                                 </div>
-                                 <div>
-                                    <p className="font-bold text-slate-700 text-sm">{s.displayName}</p>
-                                    <p className="text-xs text-slate-400">{s.email}</p>
-                                 </div>
-                              </div>
-                           </td>
-                           <td className="px-6 py-4 text-sm text-slate-500">
-                              {s.lastActiveModule ? (
-                                 <span className="flex items-center gap-2 text-blue-600 font-medium">
-                                    <Clock size={14} /> Mengerjakan Modul
-                                 </span>
-                              ) : (
-                                 <span className="text-slate-400 italic">Belum ada aktivitas</span>
-                              )}
-                           </td>
-                           <td className="px-6 py-4 text-center">
-                              {statusEl}
-                           </td>
-                        </tr>
-                     )
-                  })}
-               </tbody>
-             </table>
-           </div>
-         )}
-       </div>
-       
-       {/* 3. Info Rules Box */}
-       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex gap-3">
-         <AlertCircle className="text-yellow-600 shrink-0" size={20} />
-         <div>
-            <h4 className="font-bold text-yellow-800 text-sm">Aturan Presensi Otomatis</h4>
-            <p className="text-xs text-yellow-700 mt-1 leading-relaxed">
-              Siswa dianggap <strong>Hadir</strong> jika sistem mendeteksi aktivitas belajar (menyelesaikan materi/kuis) pada hari tersebut.
-              Hari Minggu dihitung sebagai hari libur.
-            </p>
-         </div>
        </div>
     </div>
   );

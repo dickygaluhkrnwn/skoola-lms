@@ -4,15 +4,16 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, Users, BookOpen, Settings, LogOut, Copy, School, Loader2, 
-  GraduationCap, Palette, MessageSquare, Hash, Calendar, Briefcase
+  GraduationCap, Palette, MessageSquare, Hash, Calendar, Briefcase, Globe
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { auth, db } from "../../lib/firebase"; 
+import { useRouter, usePathname } from "next/navigation"; // Added usePathname
+import { auth, db } from "@/lib/firebase"; 
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs, addDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
-import { Button } from "../../components/ui/button";
-import { UserProfile } from "../../lib/types/user.types";
-import { Classroom, ClassLevel, CourseSubject } from "../../lib/types/course.types"; 
+import { Button } from "@/components/ui/button";
+import { UserProfile } from "@/lib/types/user.types";
+import { Classroom, ClassLevel, CourseSubject } from "@/lib/types/course.types"; 
+import { cn } from "@/lib/utils"; 
 
 // --- TYPES ---
 interface ExtendedClassroom extends Classroom {
@@ -22,6 +23,7 @@ interface ExtendedClassroom extends Classroom {
 
 export default function TeacherClient() {
   const router = useRouter();
+  const pathname = usePathname(); // Get current path
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [classrooms, setClassrooms] = useState<ExtendedClassroom[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +33,7 @@ export default function TeacherClient() {
   // Tab State
   const [activeTab, setActiveTab] = useState<"classes" | "community">("classes");
 
-  // Modal States (Simplified for now, focus on Dashboard Logic)
+  // Modal States
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
   const [isForumModalOpen, setIsForumModalOpen] = useState(false);
 
@@ -79,7 +81,7 @@ export default function TeacherClient() {
            const data = doc.data() as Classroom;
            myClassesMap.set(doc.id, {
              ...data,
-             id: doc.id, // Explicit ID assignment
+             id: doc.id, 
              role: 'homeroom'
            });
         });
@@ -97,7 +99,7 @@ export default function TeacherClient() {
         scheduleSnap.forEach((doc) => {
            const sData = doc.data();
            scheduleClassIds.add(sData.classId);
-           // Simpan nama mapel (bisa multiple, ambil yg pertama atau join)
+           // Simpan nama mapel
            classSubjects.set(sData.classId, sData.subjectName); 
         });
 
@@ -109,7 +111,7 @@ export default function TeacherClient() {
                  const data = classDoc.data() as Classroom;
                  myClassesMap.set(classId, {
                     ...data,
-                    id: classId, // Explicit ID assignment
+                    id: classId,
                     role: 'teacher',
                     subjectName: classSubjects.get(classId)
                  });
@@ -139,8 +141,6 @@ export default function TeacherClient() {
   // Helper Labels
   const getStudentLabel = () => schoolType === 'uni' ? 'Mahasiswa' : 'Siswa';
   const getClassLabel = () => schoolType === 'uni' ? 'Kelas / Seksi' : 'Kelas';
-  // Helper for teacher label inside component scope
-  const getTeacherLabel = () => schoolType === 'uni' ? 'Dosen' : 'Guru';
 
   if (loading) {
     return (
@@ -172,14 +172,21 @@ export default function TeacherClient() {
              icon={<School size={20} />} 
              label={`Daftar ${getClassLabel()}`} 
            />
+           {/* FIX: Tambahkan properti active untuk menu Jejaring Sosial */}
+           <SidebarItem 
+             active={pathname === "/social"} 
+             onClick={() => router.push("/social")} 
+             icon={<Globe size={20} />} 
+             label="Jejaring Sosial" 
+           />
            <SidebarItem 
              active={activeTab === "community"} 
              onClick={() => setActiveTab("community")} 
              icon={<MessageSquare size={20} />} 
-             label="Forum Komunitas" 
+             label="Forum Internal" 
            />
-           <SidebarItem icon={<BookOpen size={20} />} label="Bank Soal" onClick={() => alert("Segera Hadir!")} />
-           <SidebarItem icon={<Settings size={20} />} label="Pengaturan" onClick={() => {}} />
+           <SidebarItem active={false} icon={<BookOpen size={20} />} label="Bank Soal" onClick={() => alert("Segera Hadir!")} />
+           <SidebarItem active={false} icon={<Settings size={20} />} label="Pengaturan" onClick={() => {}} />
         </nav>
 
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
@@ -215,8 +222,6 @@ export default function TeacherClient() {
                         Kelola {getStudentLabel().toLowerCase()} dan materi pembelajaran untuk kelas yang Anda ampu.
                       </p>
                   </div>
-                  {/* Tombol Buat Kelas dihilangkan agar Guru fokus pada kelas yang di-assign Admin. 
-                      Jika ingin dikembalikan, uncomment logic modal class. */}
                 </header>
 
                 {/* CLASS GRID */}
@@ -288,12 +293,15 @@ export default function TeacherClient() {
             </>
         )}
 
-        {/* VIEW: COMMUNITY (Placeholder) */}
+        {/* VIEW: COMMUNITY */}
         {activeTab === "community" && (
             <div className="flex flex-col items-center justify-center h-96 text-slate-400 text-center">
                <MessageSquare size={48} className="mb-4 text-slate-300" />
-               <h3 className="text-lg font-bold text-slate-700">Forum Komunitas</h3>
-               <p className="text-sm max-w-sm">Fitur diskusi antar {getTeacherLabel().toLowerCase()} dan {getStudentLabel().toLowerCase()} sedang dikembangkan.</p>
+               <h3 className="text-lg font-bold text-slate-700">Forum Komunitas Internal</h3>
+               <p className="text-sm max-w-sm mb-6">Akses diskusi khusus internal {schoolType === 'uni' ? 'kampus' : 'sekolah'}.</p>
+               <Button onClick={() => router.push('/forum')} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                  Buka Forum
+               </Button>
             </div>
         )}
 
@@ -302,17 +310,17 @@ export default function TeacherClient() {
   );
 }
 
-function SidebarItem({ icon, label, active, onClick }: any) {
+// Sub-Component Kecil untuk Sidebar Item
+function SidebarItem({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
   return (
     <button 
-      onClick={onClick} 
-      className={`
-        flex items-center gap-3 px-4 py-3 w-full rounded-xl transition-all text-sm font-bold
-        ${active 
-          ? "bg-blue-50 text-blue-600 border-2 border-blue-100" 
-          : "text-slate-500 hover:bg-slate-50 border-2 border-transparent hover:text-slate-900"
-        }
-      `}
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all",
+        active 
+          ? "bg-blue-50 text-blue-700 font-bold shadow-sm" 
+          : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+      )}
     >
       {icon} {label}
     </button>

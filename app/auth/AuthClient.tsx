@@ -27,7 +27,7 @@ const InputField = ({ label, icon, type = "text", value, onChange, placeholder, 
       <div className="relative group">
         <div className={cn("absolute left-4 top-1/2 -translate-y-1/2 transition-colors", 
             isUni ? "text-indigo-400 group-focus-within:text-indigo-300" :
-            isSMA ? "text-slate-500 group-focus-within:text-teal-400" : 
+            isSMA ? "text-teal-500 group-focus-within:text-teal-400" : 
             "text-slate-400 group-focus-within:text-violet-600"
         )}>
           {icon}
@@ -84,18 +84,19 @@ export default function AuthClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Helper State for Themes
+  // Helper State for Themes (Dynamic based on Selection OR Current Theme)
   const isSMA = (view === "register" && schoolLevel === "sma") || (view === "login" && theme === "sma");
   const isUni = (view === "register" && schoolLevel === "uni") || (view === "login" && theme === "uni");
+  const isKids = (view === "register" && schoolLevel === "sd") || (view === "login" && theme === "sd");
 
-  // Update theme preview based on selection
+  // Update theme preview based on selection IMMEDIATELY
   useEffect(() => {
     if (view === "register" && schoolLevel) {
       toggleTheme(schoolLevel);
     }
   }, [schoolLevel, view, toggleTheme]);
 
-  // Auth Check
+  // Auth Check & Redirect
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -104,12 +105,18 @@ export default function AuthClient() {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             const userData = docSnap.data();
+            
+            // Sync Theme Persistence
             if (userData.schoolLevel) toggleTheme(userData.schoolLevel as Theme);
             
-            // Redirect Logic - UNIFIED
-            // Semua role (Admin, Teacher, Student) diarahkan ke halaman utama /learn
-            // Akses dashboard khusus dilakukan via menu Profil
-            router.push("/learn");
+            // SMART REDIRECT LOGIC
+            if (userData.role === 'admin') {
+                router.push("/admin-school");
+            } else if (userData.role === 'teacher') {
+                router.push("/teacher");
+            } else {
+                router.push("/learn");
+            }
           }
         } catch (error) {
           console.error("Auth check failed:", error);
@@ -126,7 +133,9 @@ export default function AuthClient() {
     setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      // Redirect handled by listener
     } catch (err: any) {
+      console.error(err);
       setError("Email atau password salah.");
       setAuthLoading(false);
     }
@@ -143,24 +152,22 @@ export default function AuthClient() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Default data structure
       const userData: any = {
         uid: userCredential.user.uid,
         displayName: name,
         email: email,
         role: role,
-        schoolLevel: schoolLevel,
+        schoolLevel: schoolLevel, // Critical for Adaptive UI
         createdAt: Date.now(),
       };
 
-      // Tambahkan field spesifik berdasarkan role
       if (role === 'student') {
         userData.xp = 0;
         userData.level = 1;
         userData.streak = 1;
         userData.enrolledClasses = [];
+        userData.gamification = { xp: 0, level: 1, currentStreak: 1 };
       } else if (role === 'admin') {
-        // Admin mungkin butuh nama sekolah, nanti bisa diupdate di dashboard
         userData.schoolName = "Nama Sekolah Belum Diatur"; 
       }
 
@@ -180,35 +187,37 @@ export default function AuthClient() {
 
   return (
     <div className={cn(
-      "min-h-screen w-full flex items-center justify-center relative overflow-hidden font-sans transition-colors duration-500",
+      "min-h-screen w-full flex items-center justify-center relative overflow-hidden font-sans transition-colors duration-700 ease-in-out",
       (isSMA || isUni) ? "bg-slate-950" : "bg-slate-50"
     )}>
       
-      {/* --- AMBIENT BACKGROUND BLOBS --- */}
-      {isUni ? (
-         <div className="fixed inset-0 z-0 pointer-events-none">
+      {/* --- DYNAMIC BACKGROUNDS --- */}
+      {isUni && (
+         <div className="fixed inset-0 z-0 pointer-events-none animate-in fade-in duration-1000">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0B1121] to-indigo-950" />
             <div className="absolute top-[-20%] right-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse" />
             <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[150px]" />
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
          </div>
-      ) : isSMA ? (
-        <div className="fixed inset-0 z-0 pointer-events-none">
+      )}
+      {isSMA && (
+        <div className="fixed inset-0 z-0 pointer-events-none animate-in fade-in duration-1000">
            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950" />
            <div className="absolute top-[-20%] right-[-10%] w-[800px] h-[800px] bg-teal-600/10 rounded-full blur-[120px] animate-pulse" />
            <div className="absolute bottom-[10%] left-[-10%] w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-[150px]" />
            <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
         </div>
-      ) : (
-        <div className="fixed inset-0 z-0 pointer-events-none">
+      )}
+      {!isUni && !isSMA && (
+        <div className="fixed inset-0 z-0 pointer-events-none animate-in fade-in duration-1000">
           <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-violet-400/30 rounded-full blur-[120px] animate-pulse" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-fuchsia-400/30 rounded-full blur-[120px] animate-pulse delay-1000" />
-          <div className="absolute top-[40%] left-[40%] w-[400px] h-[400px] bg-cyan-400/20 rounded-full blur-[100px] animate-pulse delay-500" />
+          {isKids && <div className="absolute top-[40%] left-[40%] w-[400px] h-[400px] bg-yellow-400/20 rounded-full blur-[100px] animate-pulse delay-500" />}
         </div>
       )}
 
       <div className={cn(
-         "w-full max-w-5xl h-full md:h-[600px] flex rounded-3xl overflow-hidden shadow-2xl relative z-10 m-4 transition-all duration-500",
+         "w-full max-w-5xl h-full md:h-[650px] flex rounded-3xl overflow-hidden shadow-2xl relative z-10 m-4 transition-all duration-500",
          isUni ? "bg-slate-900/60 backdrop-blur-2xl border border-white/10" :
          isSMA ? "bg-slate-900/40 backdrop-blur-2xl border border-white/10" : 
          "bg-white/60 backdrop-blur-xl border border-white/50"
@@ -216,9 +225,10 @@ export default function AuthClient() {
         
         {/* LEFT: VISUAL PANEL */}
         <div className={cn(
-           "hidden md:flex w-1/2 relative p-12 flex-col text-white justify-between overflow-hidden transition-colors duration-500",
+           "hidden md:flex w-1/2 relative p-12 flex-col text-white justify-between overflow-hidden transition-colors duration-1000",
            isUni ? "bg-gradient-to-br from-indigo-900 via-slate-900 to-black" :
            isSMA ? "bg-gradient-to-br from-slate-900 to-indigo-950" : 
+           isKids ? "bg-gradient-to-br from-yellow-400 to-orange-500" :
            "bg-gradient-to-br from-violet-600 to-indigo-700"
         )}>
             {/* Pattern Overlay */}
@@ -230,23 +240,27 @@ export default function AuthClient() {
                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                className="absolute top-20 right-10 text-6xl opacity-20"
             >
-               {isSMA || isUni ? '⚛️' : '🚀'}
+               {isSMA || isUni ? '⚛️' : isKids ? '🎈' : '🚀'}
             </motion.div>
             <motion.div 
                animate={{ y: [0, 20, 0] }}
                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
                className="absolute bottom-40 left-10 text-6xl opacity-20"
             >
-               {isSMA || isUni ? '🧬' : '💡'}
+               {isSMA || isUni ? '🧬' : isKids ? '🎨' : '💡'}
             </motion.div>
 
             <div className="relative z-10">
                <div className="flex items-center gap-2 mb-6">
-                  <div className={cn("p-2 rounded-lg backdrop-blur-sm", isUni ? "bg-indigo-500/20 text-indigo-300" : isSMA ? "bg-teal-500/20" : "bg-white/20")}>
-                     <Sparkles size={24} className={isUni ? "text-indigo-300" : isSMA ? "text-teal-300" : "text-yellow-300"} />
+                  <div className={cn("p-2 rounded-lg backdrop-blur-sm", 
+                      isUni ? "bg-indigo-500/20 text-indigo-300" : 
+                      isSMA ? "bg-teal-500/20" : 
+                      "bg-white/20")}>
+                     <Sparkles size={24} className={isUni ? "text-indigo-300" : isSMA ? "text-teal-300" : "text-white"} />
                   </div>
                   <span className="font-bold tracking-widest text-sm uppercase opacity-80">SKOOLA LMS</span>
                </div>
+               
                <h1 className="text-5xl font-black leading-tight mb-4">
                   {isUni ? (
                       <>
@@ -258,6 +272,11 @@ export default function AuthClient() {
                         Elevate Your <br/>
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-emerald-300">Learning.</span>
                      </>
+                  ) : isKids ? (
+                     <>
+                        Belajar Jadi <br/>
+                        <span className="text-white drop-shadow-md">Petualangan!</span>
+                     </>
                   ) : (
                       <>
                         Belajar Jadi <br/>
@@ -265,9 +284,11 @@ export default function AuthClient() {
                       </>
                   )}
                </h1>
-               <p className={cn("text-lg max-w-sm leading-relaxed", (isSMA || isUni) ? "text-slate-400" : "text-indigo-100/80")}>
+               
+               <p className={cn("text-lg max-w-sm leading-relaxed", (isSMA || isUni) ? "text-slate-400" : "text-indigo-100/90")}>
                   {isUni ? "Ekosistem akademik digital untuk mahasiswa modern dan dosen profesional." :
                    isSMA ? "Platform digital terintegrasi untuk produktivitas akademik maksimal." : 
+                   isKids ? "Dunia belajar yang penuh warna dan permainan seru untukmu!" :
                    "Platform sekolah digital dengan gamifikasi yang bikin kamu ketagihan belajar."}
                </p>
             </div>
@@ -275,7 +296,7 @@ export default function AuthClient() {
             <div className="relative z-10 flex gap-4 text-xs font-medium opacity-60">
                <span>© 2024 Skoola Edukasi</span>
                <span>•</span>
-               <span>Versi 2.0</span>
+               <span>Versi 2.0 Adaptive</span>
             </div>
         </div>
 
@@ -290,7 +311,7 @@ export default function AuthClient() {
                       {view === "login" ? "Selamat Datang Kembali!" : "Mulai Petualangan Baru"}
                    </h2>
                    <p className={cn("text-sm", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>
-                      {view === "login" ? "Masuk untuk melanjutkan progress belajarmu." : "Daftar akun gratis sekarang juga."}
+                      {view === "login" ? "Masuk untuk melanjutkan." : "Pilih peran & jenjang untuk pengalaman terbaik."}
                    </p>
                 </div>
 
@@ -332,49 +353,29 @@ export default function AuthClient() {
                    >
                       {view === "register" && (
                          <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
+                            
                             {/* Role Selection */}
                             <div className="grid grid-cols-3 gap-2">
-                               <div 
-                                  onClick={() => setRole("student")}
-                                  className={cn(
-                                     "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 text-center transition-all",
-                                     role === "student" 
-                                        ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
-                                        : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
-                                  )}
-                               >
-                                  <GraduationCap size={20} />
-                                  <span className="text-[10px] font-bold">Murid</span>
-                               </div>
-                               <div 
-                                  onClick={() => setRole("teacher")}
-                                  className={cn(
-                                     "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 text-center transition-all",
-                                     role === "teacher" 
-                                        ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
-                                        : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
-                                  )}
-                               >
-                                  <Presentation size={20} />
-                                  <span className="text-[10px] font-bold">Guru</span>
-                               </div>
-                               <div 
-                                  onClick={() => setRole("admin")}
-                                  className={cn(
-                                     "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 text-center transition-all",
-                                     role === "admin" 
-                                        ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
-                                        : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
-                                  )}
-                               >
-                                  <ShieldCheck size={20} />
-                                  <span className="text-[10px] font-bold">Operator</span>
-                               </div>
+                               {[{id: 'student', label: 'Murid', icon: GraduationCap}, {id: 'teacher', label: 'Guru/Dosen', icon: Presentation}, {id: 'admin', label: 'Operator', icon: ShieldCheck}].map(item => (
+                                 <div 
+                                    key={item.id}
+                                    onClick={() => setRole(item.id as any)}
+                                    className={cn(
+                                       "cursor-pointer p-3 rounded-xl border-2 flex flex-col items-center gap-1 text-center transition-all",
+                                       role === item.id 
+                                         ? (isUni ? "border-indigo-600 bg-indigo-900/30 text-indigo-400" : isSMA ? "border-teal-600 bg-teal-900/30 text-teal-400" : "border-violet-500 bg-violet-50 text-violet-700")
+                                         : ((isSMA || isUni) ? "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
+                                    )}
+                                 >
+                                    <item.icon size={20} />
+                                    <span className="text-[10px] font-bold">{item.label}</span>
+                                 </div>
+                               ))}
                             </div>
 
                             {/* Level Selection */}
                             <div>
-                               <label className={cn("text-xs font-bold uppercase ml-1 mb-1 block", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>Jenjang</label>
+                               <label className={cn("text-xs font-bold uppercase ml-1 mb-1 block", (isSMA || isUni) ? "text-slate-400" : "text-slate-500")}>Jenjang Sekolah</label>
                                <div className="grid grid-cols-4 gap-2">
                                   {[
                                      { id: 'sd', label: 'SD', color: 'red' },
@@ -388,10 +389,10 @@ export default function AuthClient() {
                                         className={cn(
                                            "cursor-pointer py-2 rounded-lg border-2 text-center text-xs font-bold transition-all",
                                            schoolLevel === lvl.id 
-                                              ? (isUni ? "border-indigo-500 bg-indigo-900/30 text-indigo-400" : isSMA ? `border-teal-500 bg-teal-900/30 text-teal-400` : `border-${lvl.color}-500 bg-${lvl.color}-50 text-${lvl.color}-700`) 
-                                              : ((isSMA || isUni) ? "border-slate-700 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
+                                             ? (isUni ? "border-indigo-500 bg-indigo-900/30 text-indigo-400" : isSMA ? `border-teal-500 bg-teal-900/30 text-teal-400` : `border-${lvl.color}-500 bg-${lvl.color}-50 text-${lvl.color}-700`) 
+                                             : ((isSMA || isUni) ? "border-slate-700 text-slate-400 hover:border-slate-600" : "border-slate-200 hover:border-slate-300")
                                         )}
-                                        // Override style dynamic untuk selain SMA/Uni agar warna asli tetap muncul
+                                        // Override style for light mode colors
                                         style={schoolLevel === lvl.id && !isSMA && !isUni ? { borderColor: `var(--color-primary)`, color: `var(--color-primary)`, backgroundColor: `var(--color-secondary)` } : {}}
                                      >
                                         {lvl.label}

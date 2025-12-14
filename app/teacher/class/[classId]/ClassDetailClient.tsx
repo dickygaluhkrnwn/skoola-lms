@@ -4,26 +4,40 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, Users, BookOpen, LayoutDashboard, 
-  CalendarCheck, Loader2, ClipboardList, GraduationCap, Palette
+  CalendarCheck, Loader2, ClipboardList, GraduationCap, Palette,
+  Info
 } from "lucide-react";
 // Import Storage untuk upload file
-import { db, storage } from "../../../../lib/firebase"; 
+import { db, storage, auth } from "../../../../lib/firebase"; 
 import { 
-  doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, deleteDoc, serverTimestamp, Timestamp, getCountFromServer 
+  doc, getDoc, collection, addDoc, query, orderBy, onSnapshot, deleteDoc, serverTimestamp, Timestamp, getCountFromServer, where, getDocs 
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // New Imports
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { cn } from "../../../../lib/utils";
+import { onAuthStateChanged } from "firebase/auth";
 
 // --- IMPORT TIPE DATA SENTRAL ---
-import { Classroom, MaterialType } from "../../../../lib/types/course.types"; // Added MaterialType
+import { Classroom as BaseClassroom, MaterialType, CourseSubject } from "../../../../lib/types/course.types"; 
+
+// --- PERBAIKAN INTERFACE ---
+// Menggunakan Omit untuk menghapus definisi 'gradeLevel' lama agar bisa di-override menjadi string
+interface Classroom extends Omit<BaseClassroom, 'gradeLevel'> {
+  schoolId?: string;
+  gradeLevel?: string; 
+}
 
 // --- IMPORT KOMPONEN PECAHAN ---
 import DashboardView from "../../../../components/teacher/class-detail/DashboardView";
 import AttendanceView from "../../../../components/teacher/class-detail/AttendanceView";
 import StudentListView from "../../../../components/teacher/class-detail/StudentListView";
 import MaterialsView from "../../../../components/teacher/class-detail/MaterialsView";
-import AssignmentsView, { AssignmentData } from "../../../../components/teacher/class-detail/AssignmentsView";
+import AssignmentsView, { AssignmentData as BaseAssignmentData } from "../../../../components/teacher/class-detail/AssignmentsView";
 import UploadMaterialModal from "../../../../components/teacher/class-detail/UploadMaterialModal";
+
+// Extend AssignmentData locally
+interface AssignmentData extends BaseAssignmentData {
+  subjectId?: string;
+}
 
 // --- TIPE DATA LOKAL ---
 interface StudentData {
@@ -43,10 +57,13 @@ interface MaterialData {
   id: string;
   title: string;
   type: MaterialType; 
-  content?: string; // Untuk Rich Text
-  url?: string;     // Untuk Video, Link, PDF, Image
-  locationData?: any; // Untuk Map
+  content?: string; 
+  url?: string;     
+  locationData?: any; 
   createdAt: Timestamp;
+  subjectId?: string; // New: Tag Materi ini milik mapel apa
+  subjectName?: string; // New
+  createdBy?: string; // New: ID Guru pembuat
 }
 
 interface ClassDetailClientProps {
@@ -60,6 +77,12 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
   const [classData, setClassData] = useState<Classroom | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "attendance" | "students" | "materials" | "assignments">("dashboard");
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Context State (Peran Guru di Kelas Ini)
+  const [teacherRole, setTeacherRole] = useState<'homeroom' | 'subject'>('subject');
+  const [mySubject, setMySubject] = useState<{id: string, name: string} | null>(null);
+  const [schoolType, setSchoolType] = useState<'sd' | 'smp' | 'sma' | 'uni'>('sd');
 
   // Data Real
   const [materials, setMaterials] = useState<MaterialData[]>([]);
@@ -76,12 +99,21 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
   useEffect(() => {
     if (!classId) return;
 
-    const initData = async () => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        router.push("/");
+        return;
+      }
+      setCurrentUser(user);
+
       try {
-        // A. Hitung Total Modul Global (untuk progress bar)
-        const coll = collection(db, "global_modules");
-        const snapshot = await getCountFromServer(coll);
-        setTotalModules(snapshot.data().count || 10);
+        const currentAppId = (typeof window !== 'undefined' && (window as any).__app_id) || 'skoola-lms-default';
+
+        // A. Hitung Total Modul Global (untuk progress bar) - Placeholder logic
+        // const coll = collection(db, "global_modules");
+        // const snapshot = await getCountFromServer(coll);
+        // setTotalModules(snapshot.data().count || 10);
+        setTotalModules(10); // Default sementara
 
         // B. Fetch Data Kelas
         const docRef = doc(db, "classrooms", classId);
@@ -89,9 +121,42 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
         
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setClassData({ id: docSnap.id, ...data } as Classroom);
+          // Casting data ke tipe Classroom lokal
+          const classroom = { id: docSnap.id, ...data } as Classroom;
+          setClassData(classroom);
           
-          // C. Fetch Detail Murid
+          // C. Tentukan Peran Guru & Konteks Mapel
+          if (classroom.teacherId === user.uid) {
+             setTeacherRole('homeroom'); // Wali Kelas = Dewa (Bisa lihat semua)
+          } else {
+             // Cek di jadwal, guru ini mengajar apa di kelas ini?
+             const scheduleRef = collection(db, 'artifacts', currentAppId, 'public', 'data', 'schedules');
+             const qSchedule = query(
+                scheduleRef, 
+                where("classId", "==", classId),
+                where("teacherId", "==", user.uid)
+             );
+             const scheduleSnap = await getDocs(qSchedule);
+             
+             if (!scheduleSnap.empty) {
+                const sData = scheduleSnap.docs[0].data();
+                setTeacherRole('subject');
+                setMySubject({ id: sData.subjectId, name: sData.subjectName });
+             } else {
+                // Guru tidak terdaftar di kelas ini (Harusnya tidak bisa akses, tapi kita biarkan view only)
+                setTeacherRole('subject');
+             }
+          }
+
+          // D. Fetch School Type untuk UI Adaptif
+          if (classroom.schoolId) {
+             const schoolDoc = await getDoc(doc(db, "schools", classroom.schoolId));
+             if (schoolDoc.exists()) {
+                setSchoolType(schoolDoc.data().level || 'sd');
+             }
+          }
+
+          // E. Fetch Detail Murid
           if (data.students && data.students.length > 0) {
             const studentPromises = data.students.map(async (uid: string) => {
                const userSnap = await getDoc(doc(db, "users", uid));
@@ -123,74 +188,81 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
       } finally {
         setLoading(false);
       }
-    };
+    });
 
-    initData();
+    return () => unsubscribeAuth();
+  }, [classId, router]);
+
+  // --- 2. REALTIME LISTENERS (MATERIALS & ASSIGNMENTS) ---
+  useEffect(() => {
+    if (!classId) return;
 
     // D. Real-time Listener: MATERI
     const materialsRef = collection(db, "classrooms", classId, "materials");
-    const qMat = query(materialsRef, orderBy("createdAt", "desc"));
-    const unsubMat = onSnapshot(qMat, (snapshot) => {
+    // const qMat = query(materialsRef, orderBy("createdAt", "desc")); // Fetch All dulu, filter di client
+    const unsubMat = onSnapshot(materialsRef, (snapshot) => {
       const mats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as MaterialData[];
-      setMaterials(mats);
+      
+      // Filter Logic:
+      // Jika Wali Kelas -> Lihat Semua
+      // Jika Guru Mapel -> Lihat Materi Mapel Sendiri
+      // (Untuk sementara kita fetch semua, filtering tampilan ada di render)
+      setMaterials(mats.sort((a:any, b:any) => b.createdAt - a.createdAt));
     });
 
-    // E. Real-time Listener: TUGAS (Assignments)
+    // E. Real-time Listener: TUGAS
     const assignmentsRef = collection(db, "classrooms", classId, "assignments");
-    const qAss = query(assignmentsRef, orderBy("createdAt", "desc"));
-    const unsubAss = onSnapshot(qAss, (snapshot) => {
+    const unsubAss = onSnapshot(assignmentsRef, (snapshot) => {
       const asses = snapshot.docs.map(doc => ({ id: doc.id, status: "active", ...doc.data() })) as AssignmentData[];
-      setAssignments(asses);
+      setAssignments(asses.sort((a:any, b:any) => b.createdAt - a.createdAt));
     });
 
     return () => {
       unsubMat();
       unsubAss();
     };
-  }, [classId, router]);
+  }, [classId]); // Dependencies minimal agar tidak re-subscribe terus
 
-  // --- 2. ACTIONS / HANDLERS ---
+  // --- 3. ACTIONS / HANDLERS ---
   
-  // Create Content (Materi atau Tugas) - DENGAN DUKUNGAN STORAGE & LOGIKA BARU
   const handleCreateContent = async (data: any) => {
     setIsUploading(true);
     try {
-      // Tentukan koleksi tujuan berdasarkan kategori
       const collectionName = data.category === "assignment" ? "assignments" : "materials";
-      
-      // Destructuring data untuk memisahkan file dan category
       const { category, file, ...basePayload } = data;
-      const payload = { ...basePayload };
+      
+      const payload: any = { ...basePayload };
 
-      // 1. HANDLE FILE UPLOAD (Jika ada file PDF/Image)
+      // Tagging Subject ID (Critical for Context)
+      if (teacherRole === 'subject' && mySubject) {
+         payload.subjectId = mySubject.id;
+         payload.subjectName = mySubject.name;
+      }
+      payload.createdBy = currentUser?.uid;
+
+      // 1. Upload File
       if (file) {
          try {
-            // Buat path unik: classrooms/{classId}/uploads/{timestamp}_{filename}
             const uniqueName = `${Date.now()}_${file.name}`;
             const storageRef = ref(storage, `classrooms/${classId}/uploads/${uniqueName}`);
-            
-            // Upload ke Firebase Storage
             const snapshot = await uploadBytes(storageRef, file);
             const downloadUrl = await getDownloadURL(snapshot.ref);
-            
-            // Masukkan URL ke payload
             payload.url = downloadUrl;
          } catch (uploadError) {
              console.error("Upload failed", uploadError);
-             alert("Gagal mengupload file. Silakan coba lagi.");
+             alert("Gagal mengupload file.");
              setIsUploading(false);
              return;
          }
       }
 
-      // 2. NORMALISASI DATA (Agar konsisten dengan Types)
-      // Jika tipe Video atau Link, 'content' dari form kita pindahkan ke field 'url'
+      // 2. Normalisasi
       if (payload.type === 'video' || payload.type === 'link') {
-          payload.url = payload.content; 
-          delete payload.content; // Bersihkan field content karena sudah jadi url
+         payload.url = payload.content; 
+         delete payload.content;
       }
 
-      // 3. SIMPAN KE FIRESTORE
+      // 3. Simpan
       const docRef = await addDoc(collection(db, "classrooms", classId, collectionName), {
         ...payload,
         createdAt: serverTimestamp(),
@@ -198,39 +270,30 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
       
       setIsUploadModalOpen(false);
       
-      // 4. LOGIKA REDIRECT
       if (category === "assignment") {
-        // Redirect ke halaman Assignment Builder untuk input soal
         router.push(`/teacher/class/${classId}/assignment/${docRef.id}`);
-      } else {
-        // Notifikasi sederhana (bisa diganti Toast nanti)
-        // alert("Materi berhasil ditambahkan!"); 
       }
 
     } catch (error) {
       console.error("Gagal buat konten:", error);
-      alert("Terjadi kesalahan saat menyimpan data.");
+      alert("Terjadi kesalahan.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Hapus Materi
   const handleDeleteMaterial = async (materialId: string) => {
     if (confirm("Hapus materi ini?")) {
       await deleteDoc(doc(db, "classrooms", classId, "materials", materialId));
-      // Note: Idealnya kita juga hapus file di Storage jika ada, tapi untuk tahap ini Firestore dulu cukup.
     }
   };
 
-  // Hapus Tugas
   const handleDeleteAssignment = async (assignmentId: string) => {
-    if (confirm("Hapus tugas ini? Semua pengumpulan siswa akan hilang.")) {
+    if (confirm("Hapus tugas ini?")) {
       await deleteDoc(doc(db, "classrooms", classId, "assignments", assignmentId));
     }
   };
 
-  // Salin Kode Kelas
   const handleCopyCode = () => {
     if (classData?.code) {
         navigator.clipboard.writeText(classData.code);
@@ -238,19 +301,30 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
     }
   };
 
-  // Hapus Murid (Placeholder)
   const handleDeleteStudent = (studentId: string) => {
-    if(confirm("Keluarkan murid ini dari kelas?")) {
+    if(confirm(`Keluarkan ${schoolType === 'uni' ? 'mahasiswa' : 'murid'} ini dari kelas?`)) {
       alert("Fitur segera aktif!");
     }
   };
 
-  // Helper Stats
   const averageXP = students.length > 0 
     ? Math.round(students.reduce((acc, curr) => acc + (curr.xp || 0), 0) / students.length)
     : 0;
 
-  // --- RENDER UTAMA ---
+  // --- FILTERED DATA (CONTEXT AWARE) ---
+  // Jika Wali Kelas -> Tampilkan Semua
+  // Jika Guru Mapel -> Tampilkan hanya milik Mapel dia
+  const filteredMaterials = teacherRole === 'homeroom' 
+    ? materials 
+    : materials.filter(m => !m.subjectId || m.subjectId === mySubject?.id);
+
+  const filteredAssignments = teacherRole === 'homeroom'
+    ? assignments
+    : assignments.filter(a => !a.subjectId || a.subjectId === mySubject?.id);
+
+  // --- UI LABELS ---
+  const getStudentLabel = () => schoolType === 'uni' ? 'Mahasiswa' : 'Siswa';
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 text-blue-600">
         <Loader2 className="animate-spin w-8 h-8 mr-2"/> 
@@ -289,10 +363,10 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
             active={activeTab === "students"} 
             onClick={() => setActiveTab("students")} 
             icon={<Users size={20} />} 
-            label="Daftar Murid" 
+            label={`Daftar ${getStudentLabel()}`} 
           />
           <div className="pt-4 pb-2 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Akademik
+            Akademik {mySubject ? `(${mySubject.name})` : ''}
           </div>
           <SidebarItem 
             active={activeTab === "materials"} 
@@ -310,10 +384,10 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
 
         <div className="p-4 border-t border-slate-100">
           <button 
-             onClick={() => router.push("/teacher")}
-             className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors px-4 py-2 text-sm font-medium w-full"
+              onClick={() => router.push("/teacher")}
+              className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors px-4 py-2 text-sm font-medium w-full"
           >
-            <ArrowLeft size={18} /> Keluar Kelas
+            <ArrowLeft size={18} /> Kembali ke Menu
           </button>
         </div>
       </aside>
@@ -325,7 +399,6 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              {/* Back Button for Mobile */}
               <button onClick={() => router.push("/teacher")} className="md:hidden text-slate-500"><ArrowLeft size={20}/></button>
               
               <h1 className="text-2xl font-bold text-slate-900">{classData?.name}</h1>
@@ -337,11 +410,13 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
             </div>
             
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <Palette size={14} className="text-slate-400"/> 
-                {classData?.category || 'Umum'}
-              </span>
-              <span className="hidden md:inline text-slate-300">•</span>
+              {mySubject && (
+                 <span className="flex items-center gap-1.5 text-indigo-600 font-medium bg-indigo-50 px-2 py-0.5 rounded-md">
+                    <BookOpen size={14}/> 
+                    Mapel Anda: {mySubject.name}
+                 </span>
+              )}
+              
               <div className="flex items-center gap-2">
                 <span className="opacity-70">Kode Kelas:</span>
                 <button 
@@ -360,9 +435,9 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
         
         {activeTab === "dashboard" && (
           <DashboardView 
-            classData={classData}
+            classData={classData as BaseClassroom} // Explicit cast for DashboardView compatibility
             students={students}
-            materials={materials}
+            materials={filteredMaterials}
             averageXP={averageXP}
             onCopyCode={handleCopyCode}
             onChangeTab={(tab: any) => setActiveTab(tab)}
@@ -383,7 +458,7 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
 
         {activeTab === "materials" && (
           <MaterialsView 
-            materials={materials}
+            materials={filteredMaterials}
             onOpenUploadModal={() => {
               setInitialModalTab("material");
               setIsUploadModalOpen(true);
@@ -394,16 +469,16 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
 
         {activeTab === "assignments" && (
           <AssignmentsView 
-             assignments={assignments}
+             assignments={filteredAssignments}
              onOpenCreateModal={() => {
                 setInitialModalTab("assignment");
                 setIsUploadModalOpen(true);
              }}
              onDeleteAssignment={handleDeleteAssignment}
-             onViewDetail={(assignmentId) => {
+             onViewDetail={(assignmentId: string) => {
                 router.push(`/teacher/class/${classId}/assignment/${assignmentId}`);
              }}
-             onGradeAssignment={(assignmentId) => {
+             onGradeAssignment={(assignmentId: string) => {
                 router.push(`/teacher/class/${classId}/assignment/${assignmentId}/grade`);
              }}
           />
@@ -418,6 +493,7 @@ export default function ClassDetailClient({ classId }: ClassDetailClientProps) {
         onUpload={handleCreateContent}
         isUploading={isUploading}
         initialTab={initialModalTab}
+        {...({ subjectName: mySubject?.name } as any)} 
       />
 
     </div>

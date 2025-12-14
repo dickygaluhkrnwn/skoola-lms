@@ -20,6 +20,7 @@ interface UploadMaterialModalProps {
   onUpload: (data: any) => Promise<void>; 
   isUploading: boolean;
   initialTab?: "material" | "assignment"; // Tab awal saat dibuka
+  subjectName?: string; // Optional prop to display subject context (Fixed Error)
 }
 
 export default function UploadMaterialModal({
@@ -27,7 +28,8 @@ export default function UploadMaterialModal({
   onClose,
   onUpload,
   isUploading,
-  initialTab = "material"
+  initialTab = "material",
+  subjectName // Destructure prop baru
 }: UploadMaterialModalProps) {
   
   const [activeTab, setActiveTab] = useState<"material" | "assignment">(initialTab);
@@ -169,6 +171,14 @@ export default function UploadMaterialModal({
         <div className="p-6 overflow-y-auto">
           <form id="create-content-form" onSubmit={handleSubmit} className="space-y-5">
             
+            {/* Context Badge (New Feature) */}
+            {subjectName && (
+              <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2 mb-2 animate-in slide-in-from-top-1">
+                <FileText size={16} />
+                <span>Menambahkan konten untuk: <strong>{subjectName}</strong></span>
+              </div>
+            )}
+
             {/* Common Fields */}
             <div className="grid grid-cols-1 gap-4">
                 <div>
@@ -351,10 +361,10 @@ export default function UploadMaterialModal({
                   
                   {assignmentType === "quiz" && (
                     <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 text-xs text-orange-700 flex gap-2">
-                       <div className="shrink-0 pt-0.5">💡</div>
-                       <p>
-                         Setelah menyimpan, Anda akan diarahkan ke <strong>Pembuat Soal</strong> untuk menambahkan pertanyaan.
-                       </p>
+                        <div className="shrink-0 pt-0.5">💡</div>
+                        <p>
+                          Setelah menyimpan, Anda akan diarahkan ke <strong>Pembuat Soal</strong> untuk menambahkan pertanyaan.
+                        </p>
                     </div>
                   )}
               </div>
