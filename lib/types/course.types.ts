@@ -109,3 +109,23 @@ export interface Submission {
   grade?: number;
   feedback?: string;
 }
+
+// --- COURSE MANAGEMENT (Dynamic Subjects for Admin School) ---
+
+export interface CourseSubjectInfo {
+  id: string;
+  label: string; // e.g., "Fakultas", "SKS", "KKM", "Prodi"
+  value: string; // e.g., "Teknik", "3", "75", "Informatika"
+}
+
+export interface CourseSubject {
+  id: string;
+  name: string; // e.g., "Matematika Diskrit" or "Bahasa Indonesia"
+  level: ClassLevel; // Menggunakan tipe ClassLevel agar konsisten (SD, SMP, SMA, University)
+  
+  // Fitur Fleksibel: Array of Objects untuk menampung atribut dinamis
+  additionalInfo: CourseSubjectInfo[];
+
+  createdAt: number;
+  updatedAt: number;
+}

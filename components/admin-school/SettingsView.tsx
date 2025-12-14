@@ -13,7 +13,9 @@ import {
   Key,
   RefreshCw,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Clock,
+  GraduationCap
 } from "lucide-react";
 import { 
   collection, 
@@ -41,6 +43,7 @@ interface SchoolSettings {
   semester: "Ganjil" | "Genap";
   logoUrl?: string;
   level: 'sd' | 'smp' | 'sma' | 'uni'; // Tambahan level
+  lessonDuration: number; // Durasi per jam pelajaran (menit) - NEW
 }
 
 const DEFAULT_SETTINGS: SchoolSettings = {
@@ -52,7 +55,8 @@ const DEFAULT_SETTINGS: SchoolSettings = {
   website: "",
   academicYear: "2024/2025",
   semester: "Ganjil",
-  level: "sma"
+  level: "sma",
+  lessonDuration: 45 // Default SMA
 };
 
 export default function SettingsView() {
@@ -92,6 +96,7 @@ export default function SettingsView() {
         const docSnap = querySnapshot.docs[0];
         const data = docSnap.data();
         setSchoolDocId(docSnap.id);
+        // Merge data with defaults to ensure new fields like lessonDuration exist
         setFormData({ ...DEFAULT_SETTINGS, ...data } as SchoolSettings);
         if (data.updatedAt) {
           setLastUpdated(data.updatedAt.toDate());
@@ -136,6 +141,26 @@ export default function SettingsView() {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  // SMART LEVEL HANDLER
+  const handleLevelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLevel = e.target.value as SchoolSettings['level'];
+    let defaultDuration = 45;
+
+    // Set default duration based on level
+    switch(newLevel) {
+      case 'sd': defaultDuration = 35; break;
+      case 'smp': defaultDuration = 40; break;
+      case 'sma': defaultDuration = 45; break;
+      case 'uni': defaultDuration = 50; break; // SKS biasanya 50 menit
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      level: newLevel,
+      lessonDuration: defaultDuration
+    }));
   };
 
   // 3. Cek Ketersediaan Kode
@@ -205,7 +230,7 @@ export default function SettingsView() {
       }
 
       setLastUpdated(new Date());
-      alert("Pengaturan sekolah berhasil disimpan!");
+      alert("Pengaturan sekolah berhasil disimpan! Sistem akan menyesuaikan fitur berdasarkan jenjang.");
     } catch (error) {
       console.error("Gagal menyimpan pengaturan:", error);
       alert("Terjadi kesalahan saat menyimpan.");
@@ -229,7 +254,7 @@ export default function SettingsView() {
       <header className="mb-8">
         <h2 className="text-2xl font-bold text-slate-900">Pengaturan Sekolah</h2>
         <p className="text-slate-500 text-sm">
-          Kelola identitas sekolah dan kode akses untuk siswa/guru.
+          Kelola identitas, jenjang, dan konfigurasi dasar sekolah.
         </p>
       </header>
 
@@ -244,7 +269,7 @@ export default function SettingsView() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* KODE SEKOLAH (FITUR BARU) */}
+            {/* KODE SEKOLAH */}
             <div className="md:col-span-2 bg-indigo-50 p-6 rounded-xl border border-indigo-100">
               <label className="block text-sm font-bold text-indigo-900 mb-2">
                 Kode Unik Sekolah
@@ -310,13 +335,13 @@ export default function SettingsView() {
               />
             </div>
             
-             {/* Jenjang */}
-             <div>
+            {/* Jenjang */}
+            <div>
               <label className="block text-sm font-bold text-slate-700 mb-1">Jenjang Pendidikan</label>
               <select
                 name="level"
                 value={formData.level}
-                onChange={handleChange}
+                onChange={handleLevelChange} // Gunakan handler khusus
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none bg-white"
               >
                 <option value="sd">SD / MI</option>
@@ -324,6 +349,10 @@ export default function SettingsView() {
                 <option value="sma">SMA / SMK / MA</option>
                 <option value="uni">Universitas / Perguruan Tinggi</option>
               </select>
+              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                <GraduationCap size={12}/> 
+                {formData.level === 'uni' ? 'Mengaktifkan mode SKS & Prodi' : 'Mode Kelas Reguler'}
+              </p>
             </div>
 
             {/* Email */}
@@ -381,6 +410,29 @@ export default function SettingsView() {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Durasi Jam Pelajaran (NEW FEATURE) */}
+            <div className="md:col-span-2">
+               <label className="block text-sm font-bold text-slate-700 mb-1">
+                 Durasi per Jam Pelajaran / SKS (Menit)
+               </label>
+               <div className="relative max-w-xs">
+                 <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                 <input 
+                   type="number"
+                   name="lessonDuration"
+                   value={formData.lessonDuration}
+                   onChange={handleChange}
+                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                 />
+                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Menit</span>
+               </div>
+               <p className="text-xs text-slate-500 mt-1">
+                 Digunakan sebagai default oleh Generator Jadwal Otomatis.
+                 {formData.level === 'uni' ? ' (1 SKS)' : ' (1 Jam Pelajaran)'}
+               </p>
+            </div>
+
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-1">Tahun Ajaran Aktif</label>
               <select

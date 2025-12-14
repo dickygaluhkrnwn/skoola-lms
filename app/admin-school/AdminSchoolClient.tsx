@@ -14,7 +14,8 @@ import {
   TrendingUp,
   Calendar,
   AlertCircle,
-  BookOpen // Import Icon Buku
+  BookOpen, // Import Icon Buku untuk Kelas
+  Library   // Import Icon Library untuk Mata Pelajaran
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { signOut, onAuthStateChanged } from "firebase/auth";
@@ -27,7 +28,8 @@ import UserManagementView from "@/components/admin-school/UserManagementView";
 import ForumManagementView from "@/components/admin-school/ForumManagementView";
 import SettingsView from "@/components/admin-school/SettingsView";
 import ScheduleManagementView from "@/components/admin-school/ScheduleManagementView";
-import ClassManagementView from "@/components/admin-school/ClassManagementView"; // Import View Baru
+import ClassManagementView from "@/components/admin-school/ClassManagementView"; 
+import CourseManagementView from "@/components/admin-school/CourseManagementView"; // Import View Baru
 
 // --- KOMPONEN SIDEBAR ITEM ---
 function SidebarItem({ 
@@ -107,8 +109,8 @@ export default function AdminSchoolClient() {
   const [adminSchoolId, setAdminSchoolId] = useState<string | null>(null);
   const [schoolName, setSchoolName] = useState<string>("");
 
-  // Tambahkan 'classes' ke activeTab state
-  const [activeTab, setActiveTab] = useState<"dashboard" | "users" | "forum" | "settings" | "schedule" | "classes">("dashboard");
+  // Tambahkan 'courses' ke activeTab state
+  const [activeTab, setActiveTab] = useState<"dashboard" | "users" | "forum" | "settings" | "schedule" | "classes" | "courses">("dashboard");
 
   // State Statistik Realtime
   const [stats, setStats] = useState({
@@ -250,8 +252,8 @@ export default function AdminSchoolClient() {
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col fixed inset-y-0 z-50">
         <div className="p-6">
            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100">
-              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-              <span className="text-xs font-bold text-indigo-700 tracking-wide uppercase">Operator Sekolah</span>
+             <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+             <span className="text-xs font-bold text-indigo-700 tracking-wide uppercase">Operator Sekolah</span>
            </div>
         </div>
         
@@ -273,6 +275,13 @@ export default function AdminSchoolClient() {
              onClick={() => setActiveTab("classes")} 
              icon={<BookOpen size={20} />} 
              label="Manajemen Kelas" 
+           />
+           {/* NEW SIDEBAR ITEM: COURSES */}
+           <SidebarItem 
+             active={activeTab === "courses"} 
+             onClick={() => setActiveTab("courses")} 
+             icon={<Library size={20} />} 
+             label="Mata Pelajaran" 
            />
            <SidebarItem 
              active={activeTab === "schedule"} 
@@ -296,13 +305,13 @@ export default function AdminSchoolClient() {
 
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
            <div className="flex items-center gap-3 px-2 py-2 mb-2">
-              <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold border border-indigo-200">
-                {userProfile?.displayName?.[0] || "A"}
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-bold truncate text-slate-800">{userProfile?.displayName}</p>
-                <p className="text-xs text-slate-500 truncate">Administrator</p>
-              </div>
+             <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold border border-indigo-200">
+               {userProfile?.displayName?.[0] || "A"}
+             </div>
+             <div className="flex-1 overflow-hidden">
+               <p className="text-sm font-bold truncate text-slate-800">{userProfile?.displayName}</p>
+               <p className="text-xs text-slate-500 truncate">Administrator</p>
+             </div>
            </div>
            <button 
              onClick={handleLogout} 
@@ -322,7 +331,7 @@ export default function AdminSchoolClient() {
               <header className="mb-8">
                  <h1 className="text-2xl font-bold text-slate-900">Selamat Datang, Admin! 👋</h1>
                  <p className="text-slate-500">
-                    Panel Kontrol untuk <span className="font-bold text-indigo-600">{schoolName || "Sekolah Anda"}</span>
+                   Panel Kontrol untuk <span className="font-bold text-indigo-600">{schoolName || "Sekolah Anda"}</span>
                  </p>
               </header>
 
@@ -332,103 +341,103 @@ export default function AdminSchoolClient() {
                     <div>
                        <h3 className="font-bold text-yellow-800 mb-1">Konfigurasi Sekolah Diperlukan</h3>
                        <p className="text-sm text-yellow-700 mb-3">
-                          Anda belum mengatur identitas sekolah. Silakan atur nama dan kode sekolah agar siswa & guru dapat bergabung.
+                         Anda belum mengatur identitas sekolah. Silakan atur nama dan kode sekolah agar siswa & guru dapat bergabung.
                        </p>
                        <button 
-                          onClick={() => setActiveTab("settings")}
-                          className="px-4 py-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg text-sm font-bold transition-colors"
+                         onClick={() => setActiveTab("settings")}
+                         className="px-4 py-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg text-sm font-bold transition-colors"
                        >
-                          Ke Pengaturan Sekolah
+                         Ke Pengaturan Sekolah
                        </button>
                     </div>
                  </div>
               ) : (
                  <>
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                       <StatCard 
-                         title="Total Siswa" 
-                         value={stats.students} 
-                         loading={loadingStats}
-                         icon={<Users size={24} />} 
-                         color="blue"
-                       />
-                       <StatCard 
-                         title="Total Guru" 
-                         value={stats.teachers} 
-                         loading={loadingStats}
-                         icon={<School size={24} />} 
-                         color="indigo"
-                       />
-                       <StatCard 
-                         title="Kelas Aktif" 
-                         value={stats.classes} 
-                         loading={loadingStats}
-                         icon={<BarChart3 size={24} />} 
-                         color="green"
-                       />
-                       <StatCard 
-                         title="Forum Aktif" 
-                         value={stats.forums} 
-                         loading={loadingStats}
-                         icon={<MessageSquare size={24} />} 
-                         color="orange"
-                       />
-                    </div>
+                   {/* Stats Grid */}
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                      <StatCard 
+                        title="Total Siswa" 
+                        value={stats.students} 
+                        loading={loadingStats}
+                        icon={<Users size={24} />} 
+                        color="blue"
+                      />
+                      <StatCard 
+                        title="Total Guru" 
+                        value={stats.teachers} 
+                        loading={loadingStats}
+                        icon={<School size={24} />} 
+                        color="indigo"
+                      />
+                      <StatCard 
+                        title="Kelas Aktif" 
+                        value={stats.classes} 
+                        loading={loadingStats}
+                        icon={<BarChart3 size={24} />} 
+                        color="green"
+                      />
+                      <StatCard 
+                        title="Forum Aktif" 
+                        value={stats.forums} 
+                        loading={loadingStats}
+                        icon={<MessageSquare size={24} />} 
+                        color="orange"
+                      />
+                   </div>
 
-                    {/* Status Sistem */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                       <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 min-h-[300px]">
-                          <div className="flex items-center justify-between mb-6">
-                             <h3 className="font-bold text-slate-800">Aktivitas Terkini</h3>
-                             <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full flex items-center gap-1">
-                                <TrendingUp size={12} /> Live
-                             </span>
-                          </div>
-                          <div className="space-y-4">
-                             <div className="flex gap-4 items-start p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
-                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs shrink-0">S</div>
-                                <div>
-                                   <p className="text-sm font-bold text-slate-800">Sistem siap digunakan</p>
-                                   <p className="text-xs text-slate-500 mt-0.5">Database dan layanan cloud berjalan normal.</p>
-                                </div>
-                                <span className="text-[10px] text-slate-400 ml-auto whitespace-nowrap">Baru saja</span>
-                             </div>
-                             
-                             {stats.forums > 0 && (
-                                <div className="flex gap-4 items-start p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
-                                   <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-xs shrink-0">F</div>
-                                   <div>
-                                      <p className="text-sm font-bold text-slate-800">Forum Sekolah Aktif</p>
-                                      <p className="text-xs text-slate-500 mt-0.5">{stats.forums} forum komunitas telah dibuat.</p>
-                                   </div>
-                                   <span className="text-[10px] text-slate-400 ml-auto whitespace-nowrap">Info</span>
-                                </div>
-                             )}
-                          </div>
-                       </div>
-                       
-                       <div className="bg-white p-6 rounded-2xl border border-slate-100">
-                          <h3 className="font-bold text-slate-800 mb-4">Status Layanan</h3>
-                          <div className="space-y-4">
-                             <div className="flex items-center justify-between text-sm p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
-                                <span className="text-slate-600 font-medium">Database</span>
-                                <span className="text-emerald-700 font-bold flex items-center gap-1.5 text-xs bg-white px-2 py-1 rounded-md shadow-sm">
-                                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online
-                                </span>
-                             </div>
-                             <div className="flex items-center justify-between text-sm p-3 bg-blue-50/50 rounded-xl border border-blue-100">
-                                <span className="text-slate-600 font-medium">Storage</span>
-                                <span className="text-blue-700 font-bold flex items-center gap-1.5 text-xs bg-white px-2 py-1 rounded-md shadow-sm">
-                                   <span className="w-2 h-2 rounded-full bg-blue-500"></span> Aman
-                                </span>
-                             </div>
-                             <div className="mt-6 pt-4 border-t border-slate-100">
-                                <p className="text-xs text-slate-400 text-center">Skoola LMS v2.0</p>
-                             </div>
-                          </div>
-                       </div>
-                    </div>
+                   {/* Status Sistem */}
+                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 min-h-[300px]">
+                         <div className="flex items-center justify-between mb-6">
+                            <h3 className="font-bold text-slate-800">Aktivitas Terkini</h3>
+                            <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full flex items-center gap-1">
+                               <TrendingUp size={12} /> Live
+                            </span>
+                         </div>
+                         <div className="space-y-4">
+                            <div className="flex gap-4 items-start p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
+                               <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs shrink-0">S</div>
+                               <div>
+                                  <p className="text-sm font-bold text-slate-800">Sistem siap digunakan</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">Database dan layanan cloud berjalan normal.</p>
+                               </div>
+                               <span className="text-[10px] text-slate-400 ml-auto whitespace-nowrap">Baru saja</span>
+                            </div>
+                            
+                            {stats.forums > 0 && (
+                               <div className="flex gap-4 items-start p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
+                                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-xs shrink-0">F</div>
+                                  <div>
+                                     <p className="text-sm font-bold text-slate-800">Forum Sekolah Aktif</p>
+                                     <p className="text-xs text-slate-500 mt-0.5">{stats.forums} forum komunitas telah dibuat.</p>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 ml-auto whitespace-nowrap">Info</span>
+                               </div>
+                            )}
+                         </div>
+                      </div>
+                      
+                      <div className="bg-white p-6 rounded-2xl border border-slate-100">
+                         <h3 className="font-bold text-slate-800 mb-4">Status Layanan</h3>
+                         <div className="space-y-4">
+                            <div className="flex items-center justify-between text-sm p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                               <span className="text-slate-600 font-medium">Database</span>
+                               <span className="text-emerald-700 font-bold flex items-center gap-1.5 text-xs bg-white px-2 py-1 rounded-md shadow-sm">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online
+                               </span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                               <span className="text-slate-600 font-medium">Storage</span>
+                               <span className="text-blue-700 font-bold flex items-center gap-1.5 text-xs bg-white px-2 py-1 rounded-md shadow-sm">
+                                  <span className="w-2 h-2 rounded-full bg-blue-500"></span> Aman
+                               </span>
+                            </div>
+                            <div className="mt-6 pt-4 border-t border-slate-100">
+                               <p className="text-xs text-slate-400 text-center">Skoola LMS v2.0</p>
+                            </div>
+                         </div>
+                      </div>
+                   </div>
                  </>
               )}
            </div>
@@ -439,9 +448,14 @@ export default function AdminSchoolClient() {
            <UserManagementView />
         )}
 
-        {/* VIEW: CLASS MANAGEMENT (NEW) */}
+        {/* VIEW: CLASS MANAGEMENT */}
         {activeTab === "classes" && (
            <ClassManagementView />
+        )}
+
+        {/* VIEW: COURSE MANAGEMENT (NEW) */}
+        {activeTab === "courses" && (
+           <CourseManagementView />
         )}
 
         {/* VIEW: SCHEDULE MANAGEMENT */}

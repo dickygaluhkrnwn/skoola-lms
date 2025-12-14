@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, Users, BookOpen, Settings, LogOut, Copy, School, Loader2, 
-  GraduationCap, Palette, MessageSquare, Hash
+  GraduationCap, Palette, MessageSquare, Hash, Calendar, Briefcase
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../lib/firebase"; 
@@ -12,53 +12,34 @@ import { signOut, onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs, addDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { Button } from "../../components/ui/button";
 import { UserProfile } from "../../lib/types/user.types";
-import { Classroom, ClassLevel } from "../../lib/types/course.types"; 
+import { Classroom, ClassLevel, CourseSubject } from "../../lib/types/course.types"; 
 
-// Opsi Kategori Mata Pelajaran
-const SUBJECT_CATEGORIES = [
-  "Matematika", "IPA (Sains)", "IPS (Sosial)", "Bahasa Indonesia", 
-  "Bahasa Inggris", "Seni Budaya", "TIK / Coding", "Pendidikan Agama", 
-  "Olah Raga", "Umum / Lainnya"
-];
-
-// Opsi Jenjang (Sesuaikan value ID dengan tipe ClassLevel di course.types.ts)
-const GRADE_LEVELS: { id: ClassLevel | 'umum', label: string }[] = [
-  { id: 'SD', label: 'SD (Sekolah Dasar)' },
-  { id: 'SMP', label: 'SMP (Sekolah Menengah)' },
-  { id: 'SMA', label: 'SMA / SMK' },
-  { id: 'University', label: 'Universitas / Kuliah' },
-  { id: 'umum', label: 'Umum' }, // Opsi tambahan jika perlu
-];
+// --- TYPES ---
+interface ExtendedClassroom extends Classroom {
+  role: 'homeroom' | 'teacher'; // Peran guru di kelas ini
+  subjectName?: string; // Jika role teacher, mengajar apa?
+}
 
 export default function TeacherClient() {
   const router = useRouter();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [classrooms, setClassrooms] = useState<ExtendedClassroom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [appId, setAppId] = useState<string>("");
+  const [schoolType, setSchoolType] = useState<'sd' | 'smp' | 'sma' | 'uni'>('sd');
   
   // Tab State
   const [activeTab, setActiveTab] = useState<"classes" | "community">("classes");
 
-  // Modal States
+  // Modal States (Simplified for now, focus on Dashboard Logic)
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
   const [isForumModalOpen, setIsForumModalOpen] = useState(false);
-  
-  // Form Buat Kelas
-  const [newClassName, setNewClassName] = useState("");
-  const [newClassDesc, setNewClassDesc] = useState("");
-  const [newCategory, setNewCategory] = useState(SUBJECT_CATEGORIES[0]);
-  
-  // State level harus sesuai tipe ClassLevel, default 'SD'
-  const [newLevel, setNewLevel] = useState<ClassLevel | 'umum'>("SD");
-  
-  // Form Buat Forum
-  const [newForumName, setNewForumName] = useState("");
-  const [newForumType, setNewForumType] = useState<"school" | "major">("school");
 
-  const [isCreating, setIsCreating] = useState(false);
-
-  // Load Data
+  // 1. INITIAL FETCH
   useEffect(() => {
+    const currentAppId = (typeof window !== 'undefined' && (window as any).__app_id) || 'skoola-lms-default';
+    setAppId(currentAppId);
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.push("/");
@@ -66,23 +47,79 @@ export default function TeacherClient() {
       }
 
       try {
+        setLoading(true);
+
+        // A. Get User Profile & School ID
         const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data() as UserProfile;
-          if (userData.role !== "teacher") {
-            router.push("/learn");
-            return;
-          }
-          setUserProfile(userData);
+        if (!userDoc.exists()) return;
+        
+        const userData = userDoc.data() as UserProfile;
+        if (userData.role !== "teacher") {
+          router.push("/learn");
+          return;
+        }
+        setUserProfile(userData);
+
+        // B. Get School Settings (For Adaptive UI)
+        if (userData.schoolId) {
+           const schoolDoc = await getDoc(doc(db, "schools", userData.schoolId));
+           if (schoolDoc.exists()) {
+              setSchoolType(schoolDoc.data().level || 'sd');
+           }
         }
 
-        const q = query(collection(db, "classrooms"), where("teacherId", "==", user.uid));
-        const querySnapshot = await getDocs(q);
-        const classes: Classroom[] = [];
-        querySnapshot.forEach((doc) => {
-          classes.push({ id: doc.id, ...doc.data() } as Classroom);
+        // C. FETCH CLASSES (DUAL SOURCE STRATEGY)
+        const myClassesMap = new Map<string, ExtendedClassroom>();
+
+        // C1. Source 1: Sebagai Wali Kelas (Homeroom)
+        const homeroomQuery = query(collection(db, "classrooms"), where("teacherId", "==", user.uid));
+        const homeroomSnap = await getDocs(homeroomQuery);
+        
+        homeroomSnap.forEach((doc) => {
+           const data = doc.data() as Classroom;
+           myClassesMap.set(doc.id, {
+             ...data,
+             id: doc.id, // Explicit ID assignment
+             role: 'homeroom'
+           });
         });
-        setClassrooms(classes);
+
+        // C2. Source 2: Sebagai Pengajar Mapel (Subject Teacher from Schedules)
+        // Query schedules where teacherId == uid
+        const scheduleRef = collection(db, 'artifacts', currentAppId, 'public', 'data', 'schedules');
+        const scheduleQuery = query(scheduleRef, where("teacherId", "==", user.uid));
+        const scheduleSnap = await getDocs(scheduleQuery);
+
+        // Kumpulkan ID kelas unik dari jadwal
+        const scheduleClassIds = new Set<string>();
+        const classSubjects = new Map<string, string>(); // Map ClassID -> SubjectName
+
+        scheduleSnap.forEach((doc) => {
+           const sData = doc.data();
+           scheduleClassIds.add(sData.classId);
+           // Simpan nama mapel (bisa multiple, ambil yg pertama atau join)
+           classSubjects.set(sData.classId, sData.subjectName); 
+        });
+
+        // Fetch detail kelas untuk jadwal tersebut (jika belum ada di map)
+        for (const classId of Array.from(scheduleClassIds)) {
+           if (!myClassesMap.has(classId)) {
+              const classDoc = await getDoc(doc(db, "classrooms", classId));
+              if (classDoc.exists()) {
+                 const data = classDoc.data() as Classroom;
+                 myClassesMap.set(classId, {
+                    ...data,
+                    id: classId, // Explicit ID assignment
+                    role: 'teacher',
+                    subjectName: classSubjects.get(classId)
+                 });
+              }
+           }
+        }
+
+        // Convert Map to Array & Sort
+        const combinedClasses = Array.from(myClassesMap.values()).sort((a, b) => b.createdAt - a.createdAt);
+        setClassrooms(combinedClasses);
 
       } catch (err) {
         console.error("Gagal ambil data:", err);
@@ -99,94 +136,17 @@ export default function TeacherClient() {
     router.push("/");
   };
 
-  const generateClassCode = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  };
-
-  // --- CREATE CLASS ---
-  const handleCreateClass = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsCreating(true);
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      const code = generateClassCode();
-      
-      // Pastikan objek sesuai dengan interface Classroom
-      // Note: Omit 'id' karena id didapat dari Firestore setelah addDoc
-      const newClassData = {
-        name: newClassName,
-        description: newClassDesc,
-        code: code,
-        teacherId: user.uid,
-        teacherName: userProfile?.displayName || "Guru",
-        studentCount: 0,
-        createdAt: Date.now(), // Gunakan number timestamp sesuai interface baru
-        category: newCategory,
-        gradeLevel: newLevel,
-        level: newLevel === 'umum' ? 'SD' : newLevel, // Fallback level wajib jika umum
-        students: []
-      };
-
-      const docRef = await addDoc(collection(db, "classrooms"), newClassData);
-      
-      // Update state lokal
-      setClassrooms([...classrooms, { id: docRef.id, ...newClassData } as Classroom]);
-      
-      setIsClassModalOpen(false);
-      setNewClassName("");
-      setNewClassDesc("");
-      alert(`Kelas berhasil dibuat! Kode: ${code}`);
-    } catch (err) {
-      console.error("Gagal buat kelas:", err);
-      alert("Terjadi kesalahan.");
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  // --- CREATE FORUM CHANNEL ---
-  const handleCreateForum = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsCreating(true);
-    try {
-        await addDoc(collection(db, "groups"), { 
-            name: newForumName,
-            type: newForumType, 
-            createdBy: auth.currentUser?.uid,
-            createdAt: serverTimestamp(),
-            members: [], 
-            isOfficial: true 
-        });
-        
-        setIsForumModalOpen(false);
-        setNewForumName("");
-        alert("Forum diskusi berhasil dibuat!");
-    } catch (err) {
-        console.error("Gagal buat forum:", err);
-    } finally {
-        setIsCreating(false);
-    }
-  };
-
-  const copyCode = (code?: string) => {
-    if (code) {
-        navigator.clipboard.writeText(code);
-        alert("Kode kelas disalin!");
-    }
-  };
+  // Helper Labels
+  const getStudentLabel = () => schoolType === 'uni' ? 'Mahasiswa' : 'Siswa';
+  const getClassLabel = () => schoolType === 'uni' ? 'Kelas / Seksi' : 'Kelas';
+  // Helper for teacher label inside component scope
+  const getTeacherLabel = () => schoolType === 'uni' ? 'Dosen' : 'Guru';
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50 text-blue-600">
         <Loader2 className="animate-spin w-8 h-8 mr-2" />
-        <span>Memuat Ruang Guru...</span>
+        <span>Memuat Ruang {schoolType === 'uni' ? 'Dosen' : 'Guru'}...</span>
       </div>
     );
   }
@@ -197,9 +157,11 @@ export default function TeacherClient() {
       {/* SIDEBAR GURU */}
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col fixed inset-y-0 z-50">
         <div className="p-6">
-           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100">
-              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              <span className="text-sm font-bold text-blue-600 tracking-wide">RUANG GURU</span>
+           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+              <span className="text-xs font-bold text-blue-600 tracking-wide uppercase">
+                PORTAL {schoolType === 'uni' ? 'DOSEN' : 'GURU'}
+              </span>
            </div>
         </div>
         
@@ -208,7 +170,7 @@ export default function TeacherClient() {
              active={activeTab === "classes"} 
              onClick={() => setActiveTab("classes")} 
              icon={<School size={20} />} 
-             label="Manajemen Kelas" 
+             label={`Daftar ${getClassLabel()}`} 
            />
            <SidebarItem 
              active={activeTab === "community"} 
@@ -220,9 +182,9 @@ export default function TeacherClient() {
            <SidebarItem icon={<Settings size={20} />} label="Pengaturan" onClick={() => {}} />
         </nav>
 
-        <div className="p-4 border-t border-slate-100">
-           <div className="flex items-center gap-3 px-4 py-3 mb-2">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold overflow-hidden">
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+           <div className="flex items-center gap-3 px-3 py-3 mb-2">
+              <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold overflow-hidden border border-blue-200">
                 {userProfile?.photoURL ? (
                     <img src={userProfile.photoURL} alt="Guru" className="w-full h-full object-cover" />
                 ) : (
@@ -230,12 +192,12 @@ export default function TeacherClient() {
                 )}
               </div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-bold truncate">{userProfile?.displayName}</p>
-                <p className="text-xs text-slate-500 truncate">Guru</p>
+                <p className="text-sm font-bold truncate text-slate-800">{userProfile?.displayName}</p>
+                <p className="text-xs text-slate-500 truncate">{schoolType === 'uni' ? 'Dosen' : 'Guru Pengajar'}</p>
               </div>
            </div>
-           <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-2 text-red-500 hover:bg-red-50 rounded-lg w-full text-sm font-medium transition-all">
-             <LogOut size={18} /> Keluar
+           <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 hover:border-red-100 border border-transparent rounded-xl w-full text-xs font-bold transition-all">
+             <LogOut size={16} /> Keluar
            </button>
         </div>
       </aside>
@@ -246,222 +208,96 @@ export default function TeacherClient() {
         {/* VIEW: CLASS MANAGEMENT */}
         {activeTab === "classes" && (
             <>
-                <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Daftar Kelas</h1>
-                    <p className="text-slate-500 text-sm">Kelola murid dan materi pembelajaran Anda di sini.</p>
-                </div>
-                <Button onClick={() => setIsClassModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-lg shadow-blue-200">
-                    <Plus size={20} /> Buat Kelas Baru
-                </Button>
+                <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 animate-in fade-in slide-in-from-bottom-4">
+                  <div>
+                      <h1 className="text-2xl font-bold text-slate-900">Jadwal & Kelas Anda</h1>
+                      <p className="text-slate-500 text-sm">
+                        Kelola {getStudentLabel().toLowerCase()} dan materi pembelajaran untuk kelas yang Anda ampu.
+                      </p>
+                  </div>
+                  {/* Tombol Buat Kelas dihilangkan agar Guru fokus pada kelas yang di-assign Admin. 
+                      Jika ingin dikembalikan, uncomment logic modal class. */}
                 </header>
 
                 {/* CLASS GRID */}
                 {classrooms.length === 0 ? (
-                <div className="text-center py-20 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
-                    <School size={48} className="mx-auto text-slate-300 mb-4" />
-                    <h3 className="text-lg font-bold text-slate-700">Belum ada kelas</h3>
-                    <p className="text-slate-500 text-sm mb-6">Mulai mengajar dengan membuat kelas pertama Anda.</p>
-                    <Button variant="outline" onClick={() => setIsClassModalOpen(true)}>Buat Kelas Sekarang</Button>
-                </div>
+                  <div className="text-center py-20 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
+                      <School size={48} className="mx-auto text-slate-300 mb-4" />
+                      <h3 className="text-lg font-bold text-slate-700">Belum ada kelas aktif</h3>
+                      <p className="text-slate-500 text-sm mb-6 max-w-md mx-auto">
+                        Anda belum ditambahkan sebagai Wali {getClassLabel()} atau Pengajar di jadwal manapun. Hubungi Admin Sekolah.
+                      </p>
+                  </div>
                 ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {classrooms.map((cls) => (
-                    <motion.div 
-                        key={cls.id}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        whileHover={{ y: -4 }}
-                        className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group cursor-pointer relative overflow-hidden"
-                        onClick={() => router.push(`/teacher/class/${cls.id}`)}
-                    >
-                        <div className="absolute top-0 right-0 bg-blue-50 text-blue-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-wider">
-                            {cls.category}
-                        </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {classrooms.map((cls) => (
+                      <motion.div 
+                          key={cls.id}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          whileHover={{ y: -4 }}
+                          className="bg-white p-0 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group cursor-pointer relative overflow-hidden flex flex-col"
+                          onClick={() => router.push(`/teacher/class/${cls.id}`)}
+                      >
+                          {/* Banner Card */}
+                          <div className={`h-24 ${
+                            cls.role === 'homeroom' 
+                              ? 'bg-gradient-to-r from-blue-500 to-indigo-600' 
+                              : 'bg-gradient-to-r from-emerald-500 to-teal-600'
+                          } p-5 relative overflow-hidden`}>
+                             
+                             {/* Badge Role */}
+                             <div className="absolute top-3 right-3 bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg border border-white/10 shadow-sm uppercase tracking-wider">
+                                {cls.role === 'homeroom' ? (schoolType === 'uni' ? 'Dosen Wali' : 'Wali Kelas') : 'Pengajar'}
+                             </div>
 
-                        <div className="flex justify-between items-start mb-4 mt-2">
-                        <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600">
-                            <BookOpen size={24} />
-                        </div>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); copyCode(cls.code); }}
-                            className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-mono font-medium text-slate-600 transition-colors mr-16"
-                            title="Salin Kode Kelas"
-                        >
-                            {cls.code} <Copy size={12} />
-                        </button>
-                        </div>
-                        
-                        <h3 className="text-lg font-bold text-slate-800 mb-1 group-hover:text-blue-600 transition-colors truncate pr-4">{cls.name}</h3>
-                        <p className="text-sm text-slate-500 line-clamp-2 mb-4 h-10">{cls.description || "Tidak ada deskripsi."}</p>
-                        
-                        <div className="flex items-center gap-4 text-xs font-medium text-slate-500 pt-4 border-t border-slate-100">
-                        <span className="flex items-center gap-1"><Users size={14} /> {cls.studentCount} Murid</span>
-                        <span className="flex items-center gap-1 uppercase"><GraduationCap size={14} /> {cls.gradeLevel}</span>
-                        </div>
-                    </motion.div>
-                    ))}
-                </div>
+                             <h3 className="text-xl font-bold text-white mb-1 relative z-10">{cls.name}</h3>
+                             <p className="text-white/80 text-xs relative z-10 flex items-center gap-1">
+                                <GraduationCap size={12}/> {cls.gradeLevel} 
+                                {cls.role === 'teacher' && cls.subjectName && (
+                                   <span className="font-semibold text-white ml-1">• {cls.subjectName}</span>
+                                )}
+                             </p>
+
+                             {/* Decoration */}
+                             <BookOpen className="absolute -bottom-4 -right-4 w-24 h-24 text-white/10 rotate-12" />
+                          </div>
+
+                          {/* Content */}
+                          <div className="p-5 flex-1 flex flex-col">
+                             <p className="text-sm text-slate-500 line-clamp-2 mb-4 h-10 flex-1">
+                               {cls.description || "Tidak ada deskripsi kelas."}
+                             </p>
+                             
+                             <div className="flex items-center justify-between text-xs font-medium text-slate-500 pt-4 border-t border-slate-100 mt-auto">
+                                <span className="flex items-center gap-1.5">
+                                   <Users size={14} className="text-slate-400" /> 
+                                   <strong className="text-slate-700">{cls.studentCount || 0}</strong> {getStudentLabel()}
+                                </span>
+                                {cls.role === 'homeroom' && (
+                                   <span className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                                      <Briefcase size={12}/> Full Access
+                                   </span>
+                                )}
+                             </div>
+                          </div>
+                      </motion.div>
+                      ))}
+                  </div>
                 )}
             </>
         )}
 
-        {/* VIEW: COMMUNITY MANAGEMENT */}
+        {/* VIEW: COMMUNITY (Placeholder) */}
         {activeTab === "community" && (
-            <>
-                <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Forum Komunitas</h1>
-                    <p className="text-slate-500 text-sm">Buat ruang diskusi untuk sekolah atau jurusan.</p>
-                </div>
-                <Button onClick={() => setIsForumModalOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-lg shadow-purple-200">
-                    <Plus size={20} /> Buat Forum Baru
-                </Button>
-                </header>
-
-                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-                    <MessageSquare size={48} className="mx-auto text-purple-200 mb-4" />
-                    <h3 className="text-lg font-bold text-slate-800">Pusat Kontrol Forum</h3>
-                    <p className="text-slate-500 text-sm max-w-md mx-auto mb-6">
-                        Di sini Anda bisa membuat channel diskusi resmi (Sekolah/Jurusan) yang akan muncul di menu sosial semua siswa.
-                    </p>
-                    <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto text-left">
-                        <div className="p-4 border rounded-xl bg-slate-50">
-                            <h4 className="font-bold flex items-center gap-2"><School size={16}/> Forum Sekolah</h4>
-                            <p className="text-xs text-slate-500 mt-1">Untuk pengumuman global dan diskusi umum satu sekolah.</p>
-                        </div>
-                        <div className="p-4 border rounded-xl bg-slate-50">
-                            <h4 className="font-bold flex items-center gap-2"><Hash size={16}/> Forum Jurusan</h4>
-                            <p className="text-xs text-slate-500 mt-1">Untuk diskusi spesifik bidang studi (IPA, IPS, Bahasa, dll).</p>
-                        </div>
-                    </div>
-                </div>
-            </>
+            <div className="flex flex-col items-center justify-center h-96 text-slate-400 text-center">
+               <MessageSquare size={48} className="mb-4 text-slate-300" />
+               <h3 className="text-lg font-bold text-slate-700">Forum Komunitas</h3>
+               <p className="text-sm max-w-sm">Fitur diskusi antar {getTeacherLabel().toLowerCase()} dan {getStudentLabel().toLowerCase()} sedang dikembangkan.</p>
+            </div>
         )}
 
       </main>
-
-      {/* MODAL BUAT KELAS */}
-      <AnimatePresence>
-        {isClassModalOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setIsClassModalOpen(false)}
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
-            />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-lg relative z-10 shadow-2xl"
-            >
-              <h2 className="text-xl font-bold mb-4 text-slate-900 flex items-center gap-2">
-                <School className="text-blue-600" /> Buat Kelas Baru
-              </h2>
-              <form onSubmit={handleCreateClass} className="space-y-4">
-                <div>
-                  <label className="text-sm font-bold text-slate-700 block mb-1">Nama Kelas</label>
-                  <input 
-                    required autoFocus placeholder="Contoh: Matematika Diskrit A" 
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all font-medium"
-                    value={newClassName} onChange={e => setNewClassName(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-1">Mata Pelajaran</label>
-                        <select 
-                            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none appearance-none bg-white"
-                            value={newCategory} onChange={e => setNewCategory(e.target.value)}
-                        >
-                            {SUBJECT_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-1">Jenjang</label>
-                        <select 
-                            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none appearance-none bg-white"
-                            value={newLevel} onChange={e => setNewLevel(e.target.value as ClassLevel)}
-                        >
-                            {GRADE_LEVELS.map(lvl => <option key={lvl.id} value={lvl.id}>{lvl.label}</option>)}
-                        </select>
-                    </div>
-                </div>
-                <div>
-                  <label className="text-sm font-bold text-slate-700 block mb-1">Deskripsi Singkat</label>
-                  <textarea 
-                    placeholder="Jelaskan secara singkat..." 
-                    className="w-full px-4 py-2 rounded-xl border border-slate-300 outline-none min-h-[80px]"
-                    value={newClassDesc} onChange={e => setNewClassDesc(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-3 pt-4 border-t border-slate-100 mt-4">
-                  <Button type="button" variant="ghost" onClick={() => setIsClassModalOpen(false)} className="flex-1 rounded-xl">Batal</Button>
-                  <Button type="submit" disabled={isCreating} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-200">
-                    {isCreating ? "Membuat..." : "Buat Kelas Sekarang"}
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL BUAT FORUM */}
-      <AnimatePresence>
-        {isForumModalOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setIsForumModalOpen(false)}
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
-            />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-md relative z-10 shadow-2xl"
-            >
-              <h2 className="text-xl font-bold mb-4 text-slate-900 flex items-center gap-2">
-                <MessageSquare className="text-purple-600" /> Buat Forum Diskusi
-              </h2>
-              <form onSubmit={handleCreateForum} className="space-y-4">
-                <div>
-                  <label className="text-sm font-bold text-slate-700 block mb-1">Nama Forum</label>
-                  <input 
-                    required autoFocus placeholder="Contoh: Info Akademik, Klub Robotik..." 
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all font-medium"
-                    value={newForumName} onChange={e => setNewForumName(e.target.value)}
-                  />
-                </div>
-                <div>
-                    <label className="text-sm font-bold text-slate-700 block mb-1">Tipe Forum</label>
-                    <div className="flex gap-2">
-                        <button 
-                           type="button"
-                           onClick={() => setNewForumType("school")}
-                           className={`flex-1 py-2 rounded-lg text-sm font-bold border-2 ${newForumType === 'school' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 text-slate-500'}`}
-                        >
-                           Tingkat Sekolah
-                        </button>
-                        <button 
-                           type="button"
-                           onClick={() => setNewForumType("major")}
-                           className={`flex-1 py-2 rounded-lg text-sm font-bold border-2 ${newForumType === 'major' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 text-slate-500'}`}
-                        >
-                           Tingkat Jurusan
-                        </button>
-                    </div>
-                </div>
-                <div className="flex gap-3 pt-4 border-t border-slate-100 mt-4">
-                  <Button type="button" variant="ghost" onClick={() => setIsForumModalOpen(false)} className="flex-1 rounded-xl">Batal</Button>
-                  <Button type="submit" disabled={isCreating} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-200">
-                    {isCreating ? "Membuat..." : "Buat Forum"}
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
     </div>
   );
 }
