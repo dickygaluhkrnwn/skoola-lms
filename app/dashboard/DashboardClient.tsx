@@ -4,19 +4,23 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { 
-  BookOpen, Trophy, Users, Star, 
-  Compass, Clock, ArrowRight, Zap, 
-  Layout, Calendar, Flame
+  Calendar, Clock, Flame, Layout, 
+  Sparkles, Star, Trophy 
 } from "lucide-react";
 import { useTheme } from "@/lib/theme-context"; 
 import { cn } from "@/lib/utils";
 import { db, auth } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs, limit, orderBy } from "firebase/firestore";
+import { doc, getDoc, collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { UserProfile } from "@/lib/types/user.types";
-import { XPBar } from "@/components/gamification/xp-bar";
 import { StudentSidebar } from "@/components/layout/student-sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
+
+// Import Widgets Baru
+import { StreakCard } from "@/components/dashboard-widgets/StreakCard";
+import { DailyChallengeCard } from "@/components/dashboard-widgets/DailyChallengeCard";
+import { SeasonProgress } from "@/components/dashboard-widgets/SeasonProgress";
+import { QuickMenu } from "@/components/dashboard-widgets/QuickMenu";
 
 // Animation Variants
 const containerVariants = {
@@ -31,37 +35,6 @@ const itemVariants = {
   hidden: { y: 20, opacity: 0 },
   visible: { y: 0, opacity: 1 }
 };
-
-// Shortcut Card
-const ShortcutCard = ({ title, subtitle, icon, color, onClick, isUni, isSMA }: any) => (
-  <motion.button
-    variants={itemVariants}
-    whileHover={{ scale: 1.02 }}
-    whileTap={{ scale: 0.98 }}
-    onClick={onClick}
-    className={cn(
-      "relative overflow-hidden p-5 rounded-2xl text-left border transition-all h-full w-full flex flex-col justify-between group",
-      isUni 
-        ? "bg-slate-900/50 border-white/10 hover:border-indigo-500/50 hover:bg-slate-800/80" 
-        : isSMA
-          ? "bg-slate-900/60 border-teal-500/20 hover:border-teal-500/50 backdrop-blur-md"
-          : "bg-white border-slate-100 shadow-sm hover:shadow-md"
-    )}
-  >
-    <div className={cn("absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 transition-transform group-hover:scale-110", color)} />
-    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-colors",
-      isUni ? "bg-white/5 text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white" :
-      isSMA ? "bg-teal-500/10 text-teal-400 group-hover:bg-teal-500 group-hover:text-slate-900" :
-      "bg-slate-50 text-slate-600 group-hover:bg-slate-900 group-hover:text-white"
-    )}>
-      {icon}
-    </div>
-    <div>
-      <h3 className={cn("font-bold text-base mb-1", (isUni || isSMA) ? "text-slate-200" : "text-slate-800")}>{title}</h3>
-      <p className={cn("text-xs leading-relaxed", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>{subtitle}</p>
-    </div>
-  </motion.button>
-);
 
 export default function DashboardClient() {
   const router = useRouter();
@@ -90,7 +63,7 @@ export default function DashboardClient() {
            const data = userDoc.data() as UserProfile;
            setUserProfile(data);
 
-           // Fetch recent assignments (Example logic)
+           // Fetch recent assignments logic (unchanged)
            if (data.enrolledClasses && data.enrolledClasses.length > 0) {
               const assignPromises = data.enrolledClasses.slice(0, 3).map(async (cid) => {
                   const q = query(collection(db, "classrooms", cid, "assignments"), orderBy("deadline", "asc"), limit(2));
@@ -98,6 +71,8 @@ export default function DashboardClient() {
                   return snap.docs.map(d => ({ id: d.id, classId: cid, ...d.data() }));
               });
               const assigns = (await Promise.all(assignPromises)).flat();
+              // Sort by closest deadline manually because we fetched from multiple collections
+              assigns.sort((a: any, b: any) => (a.deadline?.seconds || 0) - (b.deadline?.seconds || 0));
               setUpcomingAssignments(assigns.slice(0, 4));
            }
         }
@@ -118,7 +93,22 @@ export default function DashboardClient() {
       return "Selamat Malam";
   };
 
-  const bgStyle = isKids ? "bg-yellow-50" : isUni ? "bg-slate-950 text-slate-100" : isSMP ? "bg-slate-50/50" : isSMA ? "bg-slate-950 text-slate-200" : "bg-slate-50";
+  // Logic Dummy untuk Widget (Nanti bisa dihubungkan ke Firebase)
+  const currentMonth = new Date().toLocaleString('id-ID', { month: 'long' });
+  const seasonName = `Musim ${currentMonth}`;
+  
+  // Handlers Placeholder
+  const handlePlayDaily = () => {
+    // TODO: Arahkan ke modal game
+    alert("Fitur Game Harian akan segera hadir! Persiapkan dirimu!");
+  };
+
+  const handleClaimBadge = () => {
+    // TODO: Update Firebase
+    alert("Badge berhasil diklaim! (Simulasi)");
+  };
+
+  const bgStyle = isKids ? "bg-yellow-50" : isUni ? "bg-slate-950 text-slate-100" : isSMA ? "bg-slate-950 text-slate-200" : "bg-slate-50";
 
   if (loading) return <div className={cn("min-h-screen flex items-center justify-center", bgStyle)}>Loading...</div>;
 
@@ -130,74 +120,142 @@ export default function DashboardClient() {
         <StudentSidebar />
 
         <motion.div 
-            className="flex-1 md:ml-64 relative pb-24 p-4 md:p-8 z-10 overflow-y-auto h-screen"
+            className="flex-1 md:ml-64 relative pb-24 p-4 md:p-8 z-10 overflow-y-auto h-screen scrollbar-hide"
             initial="hidden" animate="visible" variants={containerVariants}
         >
-            <div className="max-w-6xl mx-auto space-y-8">
+            <div className="max-w-6xl mx-auto space-y-6">
             
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+            {/* HEADER AREA */}
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
                 <div>
                     <div className="flex items-center gap-2 text-sm font-bold opacity-60 uppercase tracking-wider mb-2">
                         <Calendar size={16} /> {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </div>
-                    <h1 className={cn("text-3xl md:text-5xl font-black mb-2", (isUni || isSMA) ? "text-white" : "text-slate-900")}>
+                    <h1 className={cn("text-3xl md:text-4xl font-black mb-1", (isUni || isSMA) ? "text-white" : "text-slate-900")}>
                         {getGreeting()}, <span className={cn(isKids ? "text-orange-500" : isUni ? "text-indigo-400" : isSMA ? "text-teal-400" : "text-blue-600")}>{userProfile?.displayName?.split(" ")[0]}</span>!
                     </h1>
-                    <p className={cn("text-lg", (isUni || isSMA) ? "text-slate-400" : "text-slate-600")}>
-                        {isUni ? "Siap produktif hari ini?" : "Ayo lanjutkan petualangan belajarmu!"}
+                    <p className={cn("text-base", (isUni || isSMA) ? "text-slate-400" : "text-slate-600")}>
+                         {isUni ? "Targetkan produktivitas maksimal hari ini." : "Siap untuk petualangan baru?"}
                     </p>
                 </div>
 
-                {/* Stats Widget */}
-                <motion.div variants={itemVariants} className={cn("flex items-center gap-6 p-4 rounded-2xl border backdrop-blur-md", 
-                    isUni ? "bg-slate-900/50 border-white/10" : isSMA ? "bg-slate-900/50 border-teal-500/20" : "bg-white/80 border-slate-200 shadow-sm"
+                {/* Level Badge (Simple Profile Summary) */}
+                <div className={cn(
+                  "flex items-center gap-3 px-4 py-2 rounded-full border backdrop-blur-sm",
+                  (isUni || isSMA) ? "bg-slate-800/50 border-slate-700" : "bg-white border-slate-200 shadow-sm"
                 )}>
-                    <div className="text-center px-2">
-                        <div className="text-xs font-bold opacity-50 uppercase mb-1">Level</div>
-                        <div className={cn("text-2xl font-black", (isUni || isSMA) ? "text-white" : "text-slate-900")}>{userProfile?.gamification?.level || 1}</div>
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-yellow-400 text-yellow-900 font-bold text-xs shadow-sm">
+                       <Star size={14} fill="currentColor"/>
                     </div>
-                    <div className="w-px h-8 bg-slate-500/20" />
-                    <div className="text-center px-2">
-                        <div className="text-xs font-bold opacity-50 uppercase mb-1">Streak</div>
-                        <div className="text-2xl font-black text-orange-500 flex items-center gap-1">
-                            <Flame size={20} fill="currentColor" /> {userProfile?.gamification?.currentStreak || 0}
-                        </div>
+                    <div>
+                        <p className={cn("text-xs uppercase font-bold opacity-70", (isUni || isSMA) ? "text-slate-400" : "text-slate-500")}>Current Level</p>
+                        <p className={cn("text-sm font-bold", (isUni || isSMA) ? "text-white" : "text-slate-900")}>{userProfile?.gamification?.level || 1} - Explorer</p>
                     </div>
-                    <div className="w-px h-8 bg-slate-500/20" />
-                    <div className="text-center px-2 min-w-[100px]">
-                        <div className="text-xs font-bold opacity-50 uppercase mb-2">XP Progress</div>
-                        <XPBar currentXP={userProfile?.gamification?.xp || 0} maxXP={1000} level={userProfile?.gamification?.level || 1} className="h-2"/>
-                    </div>
-                </motion.div>
+                </div>
+            </header>
+
+            {/* WIDGET GRID ROW 1: GAMIFICATION CENTER */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                
+                {/* Kiri: Streak & Season (4 Kolom pada Desktop) */}
+                <div className="md:col-span-5 lg:col-span-4 space-y-6">
+                    <motion.div variants={itemVariants}>
+                      <StreakCard 
+                        streak={userProfile?.gamification?.currentStreak || 0}
+                        isActive={false} // Logic cek apakah sudah login/main hari ini
+                      />
+                    </motion.div>
+                    
+                    <motion.div variants={itemVariants}>
+                      <SeasonProgress 
+                         seasonName={seasonName}
+                         month={currentMonth}
+                         currentPoints={350} // Dummy data progress sementara
+                         maxPoints={1000}
+                         level={userProfile?.gamification?.level || 1}
+                         onClaim={handleClaimBadge}
+                      />
+                    </motion.div>
+                </div>
+
+                {/* Kanan: Daily Challenge & Shortcuts (8 Kolom pada Desktop) */}
+                <div className="md:col-span-7 lg:col-span-8 space-y-6">
+                    <motion.div variants={itemVariants}>
+                      <DailyChallengeCard 
+                        isCompleted={false} // Logic cek apakah sudah main
+                        onPlay={handlePlayDaily}
+                      />
+                    </motion.div>
+
+                    <motion.div variants={itemVariants}>
+                       <h3 className={cn("font-bold mb-4 flex items-center gap-2", (isUni || isSMA) ? "text-white" : "text-slate-800")}>
+                          <Sparkles size={18} className="text-yellow-500 fill-yellow-500" />
+                          Akses Cepat
+                       </h3>
+                       <QuickMenu /> 
+                       {/* QuickMenu menggunakan default items yang sudah di-set di komponennya */}
+                    </motion.div>
+                </div>
+
             </div>
 
-            {/* SHORTCUTS */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <ShortcutCard title="Kelas Saya" subtitle="Akses materi & modul" icon={<BookOpen size={20} />} color="bg-blue-500" onClick={() => router.push("/learn")} isUni={isUni} isSMA={isSMA} />
-                <ShortcutCard title="Arena Sosial" subtitle="Tanding & Diskusi" icon={<Trophy size={20} />} color="bg-yellow-500" onClick={() => router.push("/social")} isUni={isUni} isSMA={isSMA} />
-                <ShortcutCard title="Profil Kamu" subtitle="Cek Badge & Statistik" icon={<Users size={20} />} color="bg-purple-500" onClick={() => router.push("/profile")} isUni={isUni} isSMA={isSMA} />
-                <ShortcutCard title="Survey / Quiz" subtitle="Tugas Pending" icon={<Zap size={20} />} color="bg-green-500" onClick={() => router.push("/survey")} isUni={isUni} isSMA={isSMA} />
-            </div>
+            {/* WIDGET ROW 2: CONTENT & TASKS */}
+            <motion.div variants={itemVariants} className="pt-4">
+                 <div className="flex items-center justify-between mb-4">
+                    <h3 className={cn("font-bold text-lg", (isUni || isSMA) ? "text-white" : "text-slate-800")}>
+                      Tugas & Agenda
+                    </h3>
+                    <button className={cn("text-xs font-bold hover:underline", (isUni || isSMA) ? "text-indigo-400" : "text-blue-600")}>
+                      Lihat Semua
+                    </button>
+                 </div>
 
-            {/* UPCOMING TASKS (Optional Widget) */}
-            <motion.div variants={itemVariants} className={cn("p-6 rounded-3xl border", isUni ? "bg-slate-900/30 border-white/10" : "bg-white border-slate-200")}>
-                <h3 className={cn("font-bold mb-4", (isUni || isSMA) ? "text-white" : "text-slate-800")}>Tugas Terdekat</h3>
-                {upcomingAssignments.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {upcomingAssignments.map(task => (
-                            <div key={task.id} className="p-3 rounded-xl border border-slate-200/50 bg-slate-50/50 dark:bg-white/5 dark:border-white/10 flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/classroom/${task.classId}/assignment/${task.id}`)}>
-                                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><Clock size={18}/></div>
-                                <div>
-                                    <p className={cn("text-sm font-bold", (isUni || isSMA) ? "text-slate-200" : "text-slate-800")}>{task.title}</p>
-                                    <p className="text-xs opacity-60">Deadline: {task.deadline ? new Date(task.deadline.seconds * 1000).toLocaleDateString() : "-"}</p>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {upcomingAssignments.length > 0 ? (
+                       upcomingAssignments.map((task, index) => (
+                          <div 
+                            key={task.id}
+                            onClick={() => router.push(`/classroom/${task.classId}/assignment/${task.id}`)} 
+                            className={cn(
+                              "group cursor-pointer relative p-4 rounded-2xl border transition-all hover:-translate-y-1 hover:shadow-md",
+                              (isUni || isSMA) 
+                                ? "bg-slate-900/40 border-slate-800 hover:border-indigo-500/50" 
+                                : "bg-white border-slate-200 hover:border-blue-300"
+                            )}
+                          >
+                             <div className="flex items-start justify-between mb-3">
+                                <div className={cn(
+                                  "w-10 h-10 rounded-xl flex items-center justify-center",
+                                  index === 0 ? "bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400" :
+                                  "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                                )}>
+                                   <Clock size={20} />
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-sm opacity-50">Tidak ada tugas mendesak.</p>
-                )}
+                                {index === 0 && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wide bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-2 py-1 rounded-full">
+                                    Segera
+                                  </span>
+                                )}
+                             </div>
+                             
+                             <h4 className={cn("font-bold text-sm mb-1 line-clamp-1", (isUni || isSMA) ? "text-slate-200 group-hover:text-white" : "text-slate-800")}>
+                                {task.title}
+                             </h4>
+                             <p className={cn("text-xs mb-3", (isUni || isSMA) ? "text-slate-500" : "text-slate-500")}>
+                                Deadline: {task.deadline ? new Date(task.deadline.seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }) : "-"}
+                             </p>
+
+                             <div className="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div className={cn("h-full w-2/3 rounded-full", index===0 ? "bg-red-500" : "bg-blue-500")} />
+                             </div>
+                          </div>
+                       ))
+                    ) : (
+                       <div className={cn("col-span-full p-8 rounded-2xl border border-dashed text-center", (isUni || isSMA) ? "border-slate-800 text-slate-500" : "border-slate-300 text-slate-500")}>
+                          <p>Tidak ada tugas yang mendesak. Nikmati harimu!</p>
+                       </div>
+                    )}
+                 </div>
             </motion.div>
 
             </div>
